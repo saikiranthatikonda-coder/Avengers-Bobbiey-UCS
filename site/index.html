@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AVENGERS × BOBBIEY — Unified Command System</title>
+<meta name="description" content="The next-generation AI-powered command center. Data, systems, cameras, sensors and AI — unified into one decision-making platform."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   AVENGERS × BOBBIEY · Launch site
+   ═══════════════════════════════════════════════════════ */
+:root{
+  --bg:#04060c; --bg2:#070b14;
+  --ink:#dbeeff; --dim:#7e96b3;
+  --cy:#00d9ff; --cy-soft:rgba(0,217,255,.45);
+  --vio:#8b7cf8; --gold:#ffb35c; --grn:#50fa7b; --red:#ff5555;
+  --edge:rgba(0,217,255,.16); --edge2:rgba(0,217,255,.34);
+  --disp:'Orbitron',sans-serif; --body:'Rajdhani',sans-serif; --mono:'Share Tech Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--body);
+  font-size:17px; line-height:1.6; overflow-x:hidden;
+}
+::selection{background:rgba(0,217,255,.3)}
+::-webkit-scrollbar{width:8px}
+::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--cy),#0a3450);border-radius:4px}
+::-webkit-scrollbar-track{background:#03050a}
+
+/* ambient */
+#stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+.bg-glow{position:fixed;z-index:0;pointer-events:none;border-radius:50%;filter:blur(110px);opacity:.35}
+.bg-glow.a{width:60vw;height:60vw;top:-25vw;left:-15vw;background:radial-gradient(circle,#0a3a5c,transparent 70%)}
+.bg-glow.b{width:50vw;height:50vw;bottom:-20vw;right:-12vw;background:radial-gradient(circle,#241b4d,transparent 70%)}
+.grid-layer{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(0,217,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,217,255,.035) 1px,transparent 1px);
+  background-size:56px 56px;
+  mask-image:radial-gradient(ellipse at 50% 30%,black 20%,transparent 75%);
+}
+
+/* nav */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:50;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.9rem 4vw;
+  background:rgba(4,6,12,.55); backdrop-filter:blur(14px);
+  border-bottom:1px solid transparent;
+  transition:border-color .4s, background .4s;
+}
+nav.scrolled{border-bottom-color:var(--edge);background:rgba(4,6,12,.88)}
+.logo{font-family:var(--disp);font-weight:900;font-size:1.02rem;letter-spacing:.22em;text-decoration:none;
+  background:linear-gradient(110deg,#c084fc,#818cf8 35%,#00d9ff 70%,#7ff7ff);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 14px rgba(0,217,255,.35));}
+.logo small{font-size:.55rem;letter-spacing:.3em;display:block;color:var(--dim);-webkit-text-fill-color:var(--dim);margin-top:2px}
+.nav-links{display:flex;gap:2rem;align-items:center}
+.nav-links a{color:var(--dim);text-decoration:none;font-family:var(--disp);font-size:.62rem;letter-spacing:.22em;transition:color .25s}
+.nav-links a:hover{color:var(--cy)}
+.nav-cta{
+  font-family:var(--disp);font-size:.6rem;letter-spacing:.2em;font-weight:700;
+  color:#02141c;background:linear-gradient(110deg,var(--cy),#6ee7ff);
+  padding:.55rem 1.1rem;border-radius:6px;text-decoration:none;
+  box-shadow:0 0 18px rgba(0,217,255,.35);transition:transform .25s,box-shadow .25s;
+}
+.nav-cta:hover{transform:translateY(-1px);box-shadow:0 0 28px rgba(0,217,255,.55)}
+@media(max-width:880px){.nav-links a:not(.nav-cta){display:none}}
+
+section{position:relative;z-index:1}
+.wrap{max-width:1180px;margin:0 auto;padding:0 4vw}
+
+/* reveal animation */
+.reveal{opacity:0;transform:translateY(34px);transition:opacity .8s cubic-bezier(.2,.7,.3,1),transform .8s cubic-bezier(.2,.7,.3,1)}
+.reveal.in{opacity:1;transform:none}
+
+.eyebrow{font-family:var(--disp);font-size:.6rem;letter-spacing:.42em;color:var(--cy);text-shadow:0 0 12px var(--cy-soft);margin-bottom:1rem}
+h2.sect{font-family:var(--disp);font-weight:900;font-size:clamp(1.6rem,3.6vw,2.6rem);letter-spacing:.06em;line-height:1.15;margin-bottom:1.1rem}
+.sect-sub{color:var(--dim);font-size:1.08rem;max-width:640px;font-weight:400}
+
+/* ═══ HERO ═══ */
+.hero{min-height:100vh;display:flex;align-items:center;padding:7.5rem 0 4rem}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:4rem;align-items:center}
+@media(max-width:980px){.hero-grid{grid-template-columns:1fr}}
+.hero-tag{display:inline-flex;align-items:center;gap:.5rem;font-family:var(--disp);font-size:.58rem;letter-spacing:.3em;color:var(--cy);
+  border:1px solid var(--edge2);border-radius:999px;padding:.45rem 1rem;margin-bottom:1.6rem;background:rgba(0,217,255,.05)}
+.hero-tag .dot{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 10px var(--grn);animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+h1{
+  font-family:var(--disp);font-weight:900;
+  font-size:clamp(2.1rem,5vw,3.6rem);
+  line-height:1.12;letter-spacing:.02em;margin-bottom:1.4rem;
+}
+h1 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 65%,#7ff7ff);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 22px rgba(0,217,255,.3))}
+.hero-sub{color:var(--dim);font-size:1.18rem;max-width:560px;margin-bottom:2.2rem;font-weight:400}
+.cta-row{display:flex;gap:.9rem;flex-wrap:wrap;margin-bottom:2.6rem}
+.btn{
+  font-family:var(--disp);font-size:.66rem;letter-spacing:.18em;font-weight:700;
+  padding:.95rem 1.7rem;border-radius:8px;text-decoration:none;cursor:pointer;border:none;
+  transition:transform .25s,box-shadow .25s,background .25s;
+}
+.btn.primary{color:#02141c;background:linear-gradient(110deg,var(--cy),#6ee7ff);box-shadow:0 0 26px rgba(0,217,255,.4)}
+.btn.primary:hover{transform:translateY(-2px);box-shadow:0 0 40px rgba(0,217,255,.6)}
+.btn.ghost{color:var(--cy);background:rgba(0,217,255,.06);border:1px solid var(--edge2)}
+.btn.ghost:hover{background:rgba(0,217,255,.12);transform:translateY(-2px)}
+.btn.dark{color:var(--ink);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12)}
+.btn.dark:hover{background:rgba(255,255,255,.1);transform:translateY(-2px)}
+.hero-stats{display:flex;gap:2.4rem;flex-wrap:wrap}
+.hstat .n{font-family:var(--disp);font-weight:900;font-size:1.5rem;color:var(--cy);text-shadow:0 0 14px var(--cy-soft)}
+.hstat .l{font-family:var(--disp);font-size:.52rem;letter-spacing:.26em;color:var(--dim);margin-top:.2rem}
+
+/* hero HUD mock */
+.hud-mock{
+  position:relative;border:1px solid var(--edge2);border-radius:14px;
+  background:linear-gradient(160deg,rgba(10,30,48,.55),rgba(4,8,16,.9));
+  box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 50px rgba(0,217,255,.12),inset 0 0 0 1px rgba(0,217,255,.05);
+  padding:1.1rem;backdrop-filter:blur(8px);
+  animation:float 7s ease-in-out infinite;
+}
+@keyframes float{0%,100%{transform:translateY(0) rotateX(0)}50%{transform:translateY(-12px)}}
+.hud-mock::before{content:'';position:absolute;left:8%;right:8%;top:-1px;height:1px;background:linear-gradient(90deg,transparent,var(--cy),transparent)}
+.mock-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.9rem;font-family:var(--disp);font-size:.52rem;letter-spacing:.26em;color:var(--dim)}
+.mock-head .live{color:var(--grn);display:flex;gap:.4rem;align-items:center}
+.mock-head .live::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:pulse 1.6s infinite}
+.mock-grid{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:.7rem}
+.mock-cell{border:1px solid var(--edge);border-radius:8px;background:rgba(0,0,0,.45);padding:.6rem;min-height:86px;position:relative;overflow:hidden}
+.mock-cell .t{font-family:var(--disp);font-size:.44rem;letter-spacing:.24em;color:var(--dim);margin-bottom:.35rem}
+.mock-orb{display:flex;align-items:center;justify-content:center;min-height:150px;grid-row:span 2}
+.morb{position:relative;width:104px;height:104px}
+.morb i{position:absolute;inset:0;border-radius:50%;border:1px dashed var(--cy);opacity:.45;animation:spin 14s linear infinite}
+.morb i:nth-child(2){inset:14px;border-style:solid;opacity:.7;animation:spin 9s linear infinite reverse}
+.morb i:nth-child(3){inset:30px;border-width:2px;opacity:.95;animation:spin 6s linear infinite}
+.morb b{position:absolute;inset:40px;border-radius:50%;background:radial-gradient(circle,rgba(0,217,255,.95),rgba(0,217,255,.12) 70%);box-shadow:0 0 30px rgba(0,217,255,.6);animation:pulse 3s infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mbar{height:5px;border-radius:3px;background:rgba(0,217,255,.13);margin:.32rem 0;overflow:hidden}
+.mbar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--grn),var(--cy));box-shadow:0 0 8px var(--cy-soft);animation:barpulse 3.4s ease-in-out infinite}
+.mbar:nth-child(3) i{width:62%;animation-delay:.5s}
+.mbar:nth-child(4) i{width:84%;animation-delay:1s}
+.mbar:nth-child(5) i{width:41%;animation-delay:1.5s}
+@keyframes barpulse{0%,100%{opacity:.7}50%{opacity:1}}
+.mock-wave{display:flex;align-items:flex-end;gap:2px;height:42px}
+.mock-wave i{flex:1;background:var(--cy);opacity:.8;border-radius:1px;animation:wv 1.3s ease-in-out infinite}
+.mock-wave i:nth-child(odd){animation-delay:.25s}
+.mock-wave i:nth-child(3n){animation-delay:.5s}
+@keyframes wv{0%,100%{height:18%}50%{height:92%}}
+.mock-scan{position:absolute;left:0;right:0;height:46px;top:-46px;background:linear-gradient(180deg,transparent,rgba(0,217,255,.08),transparent);animation:scan 4.6s linear infinite;pointer-events:none}
+@keyframes scan{to{transform:translateY(360px)}}
+.mock-log{font-family:var(--mono);font-size:.55rem;color:var(--dim);line-height:1.7}
+.mock-log .c{color:var(--cy)}
+.mock-foot{display:flex;justify-content:space-between;margin-top:.8rem;font-family:var(--disp);font-size:.46rem;letter-spacing:.22em;color:var(--dim)}
+.mock-foot span b{color:var(--grn)}
+
+/* floating chips around the mock */
+.hud-float{position:absolute;font-family:var(--disp);font-size:.5rem;letter-spacing:.2em;color:var(--cy);
+  border:1px solid var(--edge2);background:rgba(3,10,18,.85);border-radius:6px;padding:.4rem .7rem;
+  box-shadow:0 0 18px rgba(0,217,255,.18);backdrop-filter:blur(6px);animation:float 6s ease-in-out infinite}
+.hud-float.f1{top:-18px;right:6%;animation-delay:1.2s}
+.hud-float.f2{bottom:-16px;left:4%;animation-delay:2.4s}
+.hud-float b{color:var(--grn)}
+
+/* ═══ VISION ═══ */
+.vision{padding:7rem 0}
+.prob-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:2.6rem 0}
+@media(max-width:880px){.prob-grid{grid-template-columns:1fr}}
+.prob{
+  border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:1.4rem;
+  background:linear-gradient(160deg,rgba(255,255,255,.03),rgba(0,0,0,.25));
+}
+.prob .x{font-family:var(--disp);color:var(--red);font-size:.9rem;margin-bottom:.6rem}
+.prob h4{font-family:var(--disp);font-size:.8rem;letter-spacing:.1em;margin-bottom:.5rem}
+.prob p{color:var(--dim);font-size:.95rem}
+.vision-narrative{
+  border-left:2px solid var(--cy);padding:1.4rem 1.8rem;margin-top:2.6rem;
+  background:linear-gradient(90deg,rgba(0,217,255,.05),transparent);
+  border-radius:0 12px 12px 0;max-width:840px;
+}
+.vision-narrative p{color:var(--ink);font-size:1.12rem;font-weight:400}
+.vision-narrative p+p{margin-top:.9rem;color:var(--dim);font-size:1.02rem}
+
+/* ═══ CAPABILITIES ═══ */
+.caps{padding:6.5rem 0;background:linear-gradient(180deg,transparent,rgba(7,12,22,.7) 18%,rgba(7,12,22,.7) 82%,transparent)}
+.cap-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:2.8rem}
+@media(max-width:980px){.cap-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.cap-grid{grid-template-columns:1fr}}
+.cap{
+  position:relative;border:1px solid var(--edge);border-radius:12px;padding:1.5rem 1.4rem;
+  background:linear-gradient(160deg,rgba(8,22,36,.5),rgba(3,7,14,.8));
+  transition:transform .35s cubic-bezier(.2,.7,.3,1),border-color .35s,box-shadow .35s;
+  overflow:hidden;
+}
+.cap::after{content:'';position:absolute;inset:0;background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),rgba(0,217,255,.1),transparent 45%);opacity:0;transition:opacity .3s;pointer-events:none}
+.cap:hover{transform:translateY(-6px);border-color:var(--edge2);box-shadow:0 18px 44px rgba(0,0,0,.5),0 0 26px rgba(0,217,255,.12)}
+.cap:hover::after{opacity:1}
+.cap .ic{
+  width:44px;height:44px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--edge2);background:rgba(0,217,255,.07);margin-bottom:1rem;
+  color:var(--cy);filter:drop-shadow(0 0 8px var(--cy-soft));
+}
+.cap .ic svg{width:22px;height:22px}
+.cap h4{font-family:var(--disp);font-size:.82rem;letter-spacing:.12em;margin-bottom:.5rem}
+.cap p{color:var(--dim);font-size:.95rem}
+
+/* ═══ FOUNDER ═══ */
+.founder{padding:7rem 0}
+.founder-grid{display:grid;grid-template-columns:340px 1fr;gap:3.4rem;align-items:center}
+@media(max-width:920px){.founder-grid{grid-template-columns:1fr}}
+.f-portrait{
+  position:relative;aspect-ratio:1;border-radius:16px;
+  border:1px solid var(--edge2);
+  background:
+    radial-gradient(circle at 50% 38%,rgba(0,217,255,.18),transparent 60%),
+    linear-gradient(160deg,rgba(10,28,46,.7),rgba(3,7,14,.95));
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 26px 70px rgba(0,0,0,.55),0 0 44px rgba(0,217,255,.1);
+  overflow:hidden;
+}
+.f-portrait::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(0,217,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,217,255,.05) 1px,transparent 1px);background-size:26px 26px}
+.f-portrait::after{content:'';position:absolute;left:0;right:0;height:54px;top:-54px;background:linear-gradient(180deg,transparent,rgba(0,217,255,.12),transparent);animation:scan 5s linear infinite}
+.f-mono{
+  font-family:var(--disp);font-weight:900;font-size:6rem;
+  background:linear-gradient(110deg,#c084fc,#00d9ff);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 30px rgba(0,217,255,.4));
+}
+.f-tagline{position:absolute;bottom:14px;left:0;right:0;text-align:center;font-family:var(--disp);font-size:.52rem;letter-spacing:.3em;color:var(--dim)}
+.role-chips{display:flex;gap:.5rem;flex-wrap:wrap;margin:1.2rem 0 1.6rem}
+.role-chip{font-family:var(--disp);font-size:.52rem;letter-spacing:.2em;color:var(--cy);border:1px solid var(--edge2);border-radius:999px;padding:.4rem .9rem;background:rgba(0,217,255,.05)}
+.founder p{color:var(--dim);font-size:1.05rem;margin-bottom:1rem;max-width:640px}
+.founder p strong{color:var(--ink)}
+.f-quote{
+  border-left:2px solid var(--gold);padding:.9rem 1.3rem;margin-top:1.4rem;
+  background:linear-gradient(90deg,rgba(255,179,92,.07),transparent);border-radius:0 10px 10px 0;
+  font-size:1.12rem;color:var(--ink);font-style:italic;max-width:620px;
+}
+.f-quote small{display:block;margin-top:.5rem;font-family:var(--disp);font-style:normal;font-size:.55rem;letter-spacing:.26em;color:var(--gold)}
+
+/* ═══ PREVIEW ═══ */
+.preview{padding:6.5rem 0;background:linear-gradient(180deg,transparent,rgba(7,12,22,.7) 18%,rgba(7,12,22,.7) 82%,transparent)}
+.shot{
+  border:1px solid var(--edge2);border-radius:14px;overflow:hidden;
+  box-shadow:0 36px 90px rgba(0,0,0,.65),0 0 60px rgba(0,217,255,.1);
+  background:#04070d;margin-top:2.6rem;
+}
+.shot-bar{display:flex;gap:.45rem;align-items:center;padding:.6rem .9rem;border-bottom:1px solid var(--edge);background:rgba(255,255,255,.025)}
+.shot-bar i{width:10px;height:10px;border-radius:50%;background:#2a3a4a}
+.shot-bar i:nth-child(1){background:#ff5f57}.shot-bar i:nth-child(2){background:#febc2e}.shot-bar i:nth-child(3){background:#28c840}
+.shot-bar span{font-family:var(--mono);font-size:.6rem;color:var(--dim);margin-left:.6rem}
+.shot-body{display:grid;grid-template-columns:.8fr 1.6fr .9fr;gap:.7rem;padding:.8rem;min-height:330px}
+@media(max-width:760px){.shot-body{grid-template-columns:1fr}}
+.shot-col{display:flex;flex-direction:column;gap:.7rem}
+.shot-card{border:1px solid var(--edge);border-radius:8px;background:linear-gradient(160deg,rgba(8,22,36,.5),rgba(0,0,0,.5));padding:.65rem;flex:1;position:relative;overflow:hidden}
+.shot-card .t{font-family:var(--disp);font-size:.46rem;letter-spacing:.24em;color:var(--cy);margin-bottom:.5rem}
+.rowline{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.6rem;color:var(--dim);padding:.22rem 0;border-bottom:1px dotted rgba(0,217,255,.12)}
+.rowline b{color:var(--cy);font-weight:400}
+.rowline .g{color:var(--grn)}
+.shot-orbwrap{display:flex;align-items:center;justify-content:center;min-height:170px}
+.walkthrough{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-top:2.4rem}
+@media(max-width:880px){.walkthrough{grid-template-columns:repeat(2,1fr)}}
+.walk{border-top:2px solid var(--edge2);padding-top:.9rem}
+.walk b{font-family:var(--disp);font-size:.62rem;letter-spacing:.18em;color:var(--cy);display:block;margin-bottom:.4rem}
+.walk p{color:var(--dim);font-size:.9rem}
+
+/* ═══ ROADMAP ═══ */
+.roadmap{padding:7rem 0}
+.timeline{position:relative;margin-top:3rem;padding-left:2.2rem}
+.timeline::before{content:'';position:absolute;left:9px;top:6px;bottom:6px;width:2px;background:linear-gradient(180deg,var(--cy),var(--vio) 60%,transparent)}
+.phase{position:relative;padding:0 0 2.4rem 1.6rem}
+.phase::before{
+  content:'';position:absolute;left:-2.2rem;top:4px;width:20px;height:20px;border-radius:50%;
+  border:2px solid var(--cy);background:var(--bg);
+  box-shadow:0 0 14px rgba(0,217,255,.4);
+}
+.phase.now::before{background:var(--cy);animation:pulse 1.8s infinite}
+.phase .ph{font-family:var(--disp);font-size:.55rem;letter-spacing:.3em;color:var(--cy);margin-bottom:.35rem}
+.phase .now-badge{display:inline-block;font-size:.5rem;letter-spacing:.2em;color:#02141c;background:linear-gradient(110deg,var(--grn),#9bffbb);border-radius:999px;padding:.16rem .6rem;margin-left:.6rem;font-weight:700}
+.phase h4{font-family:var(--disp);font-size:1.05rem;letter-spacing:.08em;margin-bottom:.4rem}
+.phase p{color:var(--dim);max-width:560px;font-size:.98rem}
+
+/* ═══ ACCESS ═══ */
+.access{padding:6.5rem 0 7rem}
+.access-card{
+  border:1px solid var(--edge2);border-radius:18px;
+  background:
+    radial-gradient(800px circle at 15% 0%,rgba(0,217,255,.1),transparent 50%),
+    radial-gradient(700px circle at 90% 100%,rgba(139,124,248,.12),transparent 50%),
+    linear-gradient(160deg,rgba(8,22,36,.6),rgba(3,7,14,.92));
+  padding:3rem;display:grid;grid-template-columns:1fr 1fr;gap:3rem;
+  box-shadow:0 34px 90px rgba(0,0,0,.6);
+}
+@media(max-width:920px){.access-card{grid-template-columns:1fr;padding:2rem}}
+.intent-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1.6rem}
+.intent{
+  font-family:var(--disp);font-size:.56rem;letter-spacing:.18em;
+  border:1px solid var(--edge2);border-radius:999px;padding:.5rem 1rem;
+  color:var(--cy);background:transparent;cursor:pointer;transition:all .25s;
+}
+.intent.active,.intent:hover{background:rgba(0,217,255,.12);box-shadow:0 0 14px rgba(0,217,255,.2)}
+form .field{margin-bottom:1rem}
+form label{font-family:var(--disp);font-size:.54rem;letter-spacing:.24em;color:var(--dim);display:block;margin-bottom:.4rem}
+form input,form textarea{
+  width:100%;background:rgba(0,0,0,.45);border:1px solid var(--edge);border-radius:8px;
+  color:var(--ink);font-family:var(--body);font-size:1rem;padding:.75rem .9rem;outline:none;
+  transition:border-color .25s,box-shadow .25s;
+}
+form input:focus,form textarea:focus{border-color:var(--cy);box-shadow:0 0 16px rgba(0,217,255,.18)}
+form textarea{min-height:84px;resize:vertical}
+.form-msg{font-family:var(--mono);font-size:.78rem;margin-top:.8rem;min-height:1.2em}
+.form-msg.ok{color:var(--grn)}
+.form-msg.err{color:var(--red)}
+
+/* pricing */
+.pricing{padding:6.5rem 0;background:linear-gradient(180deg,transparent,rgba(7,12,22,.7) 18%,rgba(7,12,22,.7) 82%,transparent)}
+.price-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.2rem;margin-top:2.8rem;align-items:stretch}
+@media(max-width:920px){.price-grid{grid-template-columns:1fr}}
+.price-card{position:relative;border:1px solid var(--edge);border-radius:14px;padding:1.9rem 1.5rem 1.6rem;background:linear-gradient(160deg,rgba(8,22,36,.5),rgba(3,7,14,.85));display:flex;flex-direction:column;gap:1rem;transition:transform .3s,border-color .3s,box-shadow .3s}
+.price-card:hover{transform:translateY(-6px);border-color:var(--edge2);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.price-card.featured{border-color:var(--cy);box-shadow:0 0 34px rgba(0,217,255,.16);background:linear-gradient(160deg,rgba(0,40,60,.55),rgba(3,7,14,.9))}
+.pc-badge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);font-family:var(--disp);font-size:.5rem;letter-spacing:.22em;color:#02141c;background:linear-gradient(110deg,var(--cy),#6ee7ff);padding:.28rem .8rem;border-radius:999px;white-space:nowrap}
+.pc-name{font-family:var(--disp);font-size:.8rem;letter-spacing:.3em;color:var(--dim)}
+.price-card.featured .pc-name{color:var(--cy)}
+.pc-price{font-family:var(--disp);font-weight:900;font-size:2.1rem;color:var(--ink)}
+.pc-price small{display:block;font-size:.6rem;font-weight:400;letter-spacing:.18em;color:var(--dim);margin-top:.3rem}
+.pc-feats{list-style:none;display:flex;flex-direction:column;gap:.5rem;flex:1}
+.pc-feats li{color:var(--dim);font-size:.96rem;padding-left:1.2rem;position:relative}
+.pc-feats li::before{content:'◆';position:absolute;left:0;color:var(--cy);font-size:.6rem;top:.35em}
+.price-card .btn{text-align:center}
+
+/* footer */
+footer{border-top:1px solid var(--edge);padding:2.2rem 4vw;display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center;position:relative;z-index:1;background:rgba(3,5,10,.7)}
+footer .fl{font-family:var(--disp);font-size:.6rem;letter-spacing:.24em;color:var(--dim)}
+footer .fl b{color:var(--cy)}
+footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
+</style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+<div class="bg-glow a"></div>
+<div class="bg-glow b"></div>
+<div class="grid-layer"></div>
+
+<nav id="nav">
+  <a class="logo" href="#top">AVENGERS × BOBBIEY<small>UNIFIED COMMAND SYSTEM</small></a>
+  <div class="nav-links">
+    <a href="#vision">VISION</a>
+    <a href="#caps">CAPABILITIES</a>
+    <a href="#founder">FOUNDER</a>
+    <a href="#preview">PREVIEW</a>
+    <a href="#roadmap">ROADMAP</a>
+    <a href="#pricing">PRICING</a>
+    <a class="nav-cta" href="#access">REQUEST EARLY ACCESS</a>
+  </div>
+</nav>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="hero-tag"><span class="dot"></span>NOW IN ACTIVE DEVELOPMENT · HYDERABAD</div>
+      <h1>Meet The Future Of <span class="grad">Human-AI Command Systems</span></h1>
+      <p class="hero-sub">An intelligent operational command center that transforms data, systems, cameras, sensors, and AI into one unified decision-making platform.</p>
+      <div class="cta-row">
+        <a class="btn primary" href="#access" data-intent="early-access">REQUEST EARLY ACCESS</a>
+        <a class="btn ghost" href="#preview">WATCH DEMO</a>
+        <a class="btn dark" href="#access" data-intent="waitlist">JOIN WAITLIST</a>
+      </div>
+      <div class="hero-stats">
+        <div class="hstat"><div class="n">8+</div><div class="l">AI AGENTS</div></div>
+        <div class="hstat"><div class="n">24/7</div><div class="l">AUTONOMOUS OPS</div></div>
+        <div class="hstat"><div class="n">&lt;1s</div><div class="l">VOICE RESPONSE</div></div>
+        <div class="hstat"><div class="n">100%</div><div class="l">LOCAL AI OPTION</div></div>
+      </div>
+    </div>
+
+    <div style="position:relative">
+      <div class="hud-float f1">THREAT LEVEL · <b>LOW</b></div>
+      <div class="hud-mock">
+        <div class="mock-scan"></div>
+        <div class="mock-head"><span>UNIFIED COMMAND · v3.2</span><span class="live">LIVE TELEMETRY</span></div>
+        <div class="mock-grid">
+          <div class="mock-cell">
+            <div class="t">SYSTEMS</div>
+            <div class="mbar"><i style="width:74%"></i></div>
+            <div class="mbar"><i></i></div>
+            <div class="mbar"><i></i></div>
+            <div class="mbar"><i></i></div>
+          </div>
+          <div class="mock-cell mock-orb">
+            <div class="morb"><i></i><i></i><i></i><b></b></div>
+          </div>
+          <div class="mock-cell">
+            <div class="t">VOICE LINK</div>
+            <div class="mock-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+          <div class="mock-cell">
+            <div class="t">AI INSIGHT</div>
+            <div class="mock-log"><span class="c">»</span> telemetry nominal<br><span class="c">»</span> 3 agents engaged<br><span class="c">»</span> forecast: stable</div>
+          </div>
+          <div class="mock-cell">
+            <div class="t">OPS FEED</div>
+            <div class="mock-log">14:32 <span class="c">[stark]</span> scan ok<br>14:31 <span class="c">[widow]</span> intel +12<br>14:30 <span class="c">[cap]</span> brief sent</div>
+          </div>
+        </div>
+        <div class="mock-foot"><span>READINESS <b>96%</b></span><span>AGENTS <b>8/8</b></span><span>SHIELD <b>ACTIVE</b></span></div>
+      </div>
+      <div class="hud-float f2">PRESENCE · <b>OPERATOR DETECTED</b></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ VISION ═══ -->
+<section class="vision" id="vision">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="eyebrow">— THE PROBLEM</div>
+      <h2 class="sect">Dashboards show you data.<br>They don't help you decide.</h2>
+      <p class="sect-sub">Modern operations run on dozens of disconnected tools — monitoring panels, communication apps, camera systems, schedulers, news feeds. Humans are left to stitch the picture together.</p>
+    </div>
+    <div class="prob-grid">
+      <div class="prob reveal"><div class="x">✕</div><h4>FRAGMENTED SIGNALS</h4><p>Metrics, mail, meetings, sensors and security all live in different windows. Context dies between tabs.</p></div>
+      <div class="prob reveal"><div class="x">✕</div><h4>PASSIVE INTERFACES</h4><p>Traditional dashboards wait to be read. They never watch, never reason, never speak up when it matters.</p></div>
+      <div class="prob reveal"><div class="x">✕</div><h4>CLOUD-LOCKED AI</h4><p>Most AI assistants ship your operational data to someone else's servers. Sensitive operations can't accept that.</p></div>
+    </div>
+    <div class="vision-narrative reveal">
+      <p><strong>Avengers × Bobbiey Unified Command System</strong> is built on a simple conviction: the interface to your operations should behave like a trusted chief-of-staff — perceiving everything, reasoning continuously, speaking when it matters, and acting on your command.</p>
+      <p>One screen. Eight specialist AI agents. Live telemetry, vision awareness, voice command, predictive analytics and a local-first AI core — fused into a single cinematic operations console. This is the JARVIS blueprint, made real.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CAPABILITIES ═══ -->
+<section class="caps" id="caps">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="eyebrow">— CORE CAPABILITIES</div>
+      <h2 class="sect">Everything an operations brain needs.<br><span style="color:var(--dim)">Nothing it doesn't.</span></h2>
+    </div>
+    <div class="cap-grid">
+      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></div><h4>UNIFIED COMMAND CENTER</h4><p>Telemetry, agenda, comms, news, weather, maps and security — one live HUD, zero tab-switching.</p></div>
+      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18" opacity=".5"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></div><h4>AI INTELLIGENCE LAYER</h4><p>Eight specialist agents observe, summarize, alert and recommend — continuously, in plain language.</p></div>
+      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 17l5-6 4 4 6-8 3 4"/></svg></div><h4>REAL-TIME MONITORING</h4><p>CPU, memory, network, connectivity, presence and global activity streamed over WebSockets at 2-second cadence.</p></div>
+      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-8M21 19H3" opacity=".6"/><path d="M4 9l6-4 6 6 5-3" stroke-dasharray="3 2"/></svg></div><h4>PREDICTIVE ANALYTICS</h4><p>Trend regression projects resource pressure 15 minutes ahead — the system warns before things break.</p></div>
+      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><circle cx="12" cy="12" r="3"/></svg></div><h4>COMPUTER VISION OPS</h4><p>Identity-free presence awareness — the console knows when its operator arrives, idles or leaves. Nothing leaves the machine.</p></div>
+      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="5" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/><path d="M6.5 6.5l4 4M17.5 6.5l-4 4M6.5 17.5l4-4M17.5 17.5l-4-4"/></svg></div><h4>MULTI-SYSTEM CONNECTIVITY</h4><p>WiFi, Bluetooth, satellites-of-record, news APIs, weather services and browsers — orchestrated from one place.</p></div>
+      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z" fill="currentColor" opacity=".7"/></svg></div><h4>LOCAL AI DEPLOYMENT</h4><p>Runs Llama 3, Qwen, Mistral, Phi or DeepSeek through any OpenAI-compatible endpoint. Your data never leaves the premises.</p></div>
+      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 2l8 3v7c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V5z"/><path d="M9 12l2 2 4-4"/></svg></div><h4>ENTERPRISE SECURITY</h4><p>Loopback-first architecture, AES-grade channel posture, full audit trail — built for environments where trust is earned.</p></div>
+      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg></div><h4>TACTICAL OPERATIONS UI</h4><p>A cinematic HUD with voice command, wake-words per agent, and spoken responses — beautiful and battle-ready.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FOUNDER ═══ -->
+<section class="founder" id="founder">
+  <div class="wrap founder-grid">
+    <div class="f-portrait reveal">
+      <div class="f-mono">S</div>
+      <div class="f-tagline">FOUNDER · PRODUCT ARCHITECT</div>
+    </div>
+    <div class="reveal">
+      <div class="eyebrow">— THE BUILDER</div>
+      <h2 class="sect">Built by one founder<br>with one obsession.</h2>
+      <div class="role-chips">
+        <span class="role-chip">FOUNDER</span>
+        <span class="role-chip">BUILDER</span>
+        <span class="role-chip">PRODUCT ARCHITECT</span>
+        <span class="role-chip">VISIONARY</span>
+      </div>
+      <p><strong>Avengers × Bobbiey began as a question:</strong> what would it take to build a real-life JARVIS — not a movie prop, but a working system that watches your operations, reasons about them, and talks back?</p>
+      <p>Every layer of this platform was designed and engineered from the ground up by its founder, <strong>Sai</strong> — the agent architecture, the voice pipeline, the vision module, the local-AI core, the telemetry engine and the command interface. No template. No off-the-shelf dashboard. A single, coherent product vision executed end to end from Hyderabad, India.</p>
+      <p>The mission is bigger than a dashboard: <strong>redefine how humans interact with data and AI</strong> — from passive screens to active, intelligent command systems that work alongside their operators.</p>
+      <div class="f-quote">
+        "I didn't want another analytics tool. I wanted a colleague — one that never sleeps, never misses a signal, and always answers when I call."
+        <small>— SAI · FOUNDER, BOBBIEY</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ PREVIEW ═══ -->
+<section class="preview" id="preview">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="eyebrow">— PRODUCT PREVIEW</div>
+      <h2 class="sect">The console, live.</h2>
+      <p class="sect-sub">A working build of the command center runs today — eight agents, voice command, vision awareness, predictive telemetry and AI insights, rendered in a cinematic Stark-class HUD.</p>
+    </div>
+
+    <div class="shot reveal">
+      <div class="shot-bar"><i></i><i></i><i></i><span>avengers-command · unified console · live build</span></div>
+      <div class="shot-body">
+        <div class="shot-col">
+          <div class="shot-card">
+            <div class="t">AVENGERS ROSTER</div>
+            <div class="rowline"><span>JARVIS</span><b class="g">IDLE</b></div>
+            <div class="rowline"><span>STARK</span><b>WORKING</b></div>
+            <div class="rowline"><span>BLACK WIDOW</span><b class="g">IDLE</b></div>
+            <div class="rowline"><span>HAWKEYE</span><b>SCANNING</b></div>
+            <div class="rowline"><span>VISION</span><b class="g">IDLE</b></div>
+          </div>
+          <div class="shot-card">
+            <div class="t">CONNECTIVITY</div>
+            <div class="rowline"><span>WIFI</span><b class="g">ONLINE</b></div>
+            <div class="rowline"><span>PING</span><b>23 ms</b></div>
+            <div class="rowline"><span>BATTERY</span><b class="g">98%</b></div>
+          </div>
+        </div>
+        <div class="shot-col">
+          <div class="shot-card shot-orbwrap">
+            <div class="morb"><i></i><i></i><i></i><b></b></div>
+          </div>
+          <div class="shot-card">
+            <div class="t">JARVIS INSIGHTS</div>
+            <div class="mock-log"><span class="c">»</span> Memory pressure easing — projection stable for next 15 min.<br><span class="c">»</span> "Corporate Innovation Sync" begins in 12 minutes.<br><span class="c">»</span> Operator present · session active.</div>
+          </div>
+        </div>
+        <div class="shot-col">
+          <div class="shot-card">
+            <div class="t">MISSION READINESS</div>
+            <div class="rowline"><span>READINESS</span><b class="g">96%</b></div>
+            <div class="rowline"><span>STABILITY</span><b class="g">98%</b></div>
+            <div class="rowline"><span>ANOMALY</span><b>2</b></div>
+            <div class="rowline"><span>AGENTS</span><b class="g">8 / 8</b></div>
+          </div>
+          <div class="shot-card">
+            <div class="t">VOICE LINK</div>
+            <div class="mock-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="walkthrough">
+      <div class="walk reveal"><b>01 · SPEAK</b><p>"Hey Stark, system status." Wake-words route to specialist agents; replies come back in voice.</p></div>
+      <div class="walk reveal"><b>02 · SEE</b><p>Operator presence, global activity maps, live charts and camera awareness on one screen.</p></div>
+      <div class="walk reveal"><b>03 · KNOW</b><p>The insights engine reads every widget and surfaces the one observation that matters now.</p></div>
+      <div class="walk reveal"><b>04 · ACT</b><p>Quick-access commands, browser control and autonomous routines execute on your word.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ ROADMAP ═══ -->
+<section class="roadmap" id="roadmap">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="eyebrow">— ROADMAP</div>
+      <h2 class="sect">From console to<br>autonomous command platform.</h2>
+    </div>
+    <div class="timeline">
+      <div class="phase now reveal">
+        <div class="ph">PHASE 1 <span class="now-badge">IN DEVELOPMENT</span></div>
+        <h4>AI Command Dashboard</h4>
+        <p>The unified console: live telemetry, voice command, multi-agent roster, insights engine, vision awareness and cinematic HUD. Running today.</p>
+      </div>
+      <div class="phase reveal">
+        <div class="ph">PHASE 2</div>
+        <h4>Multi-Agent Intelligence</h4>
+        <p>Agents that collaborate — delegating tasks between specialists, sharing context, and resolving competing priorities autonomously.</p>
+      </div>
+      <div class="phase reveal">
+        <div class="ph">PHASE 3</div>
+        <h4>Computer Vision Operations Layer</h4>
+        <p>Multi-camera situational awareness, zone monitoring, activity analytics and event-driven response — privacy-first by design.</p>
+      </div>
+      <div class="phase reveal">
+        <div class="ph">PHASE 4</div>
+        <h4>Enterprise Command Platform</h4>
+        <p>Multi-operator, multi-site deployments with role-based command, audit trails, on-prem AI clusters and compliance tooling.</p>
+      </div>
+      <div class="phase reveal">
+        <div class="ph">PHASE 5</div>
+        <h4>Autonomous Decision Support System</h4>
+        <p>The full vision: a command platform that proposes, simulates and executes operational decisions under human authority.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ PRICING ═══ -->
+<section class="pricing" id="pricing">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="eyebrow">— PRICING</div>
+      <h2 class="sect">Simple plans.<br>Founding-member prices.</h2>
+      <p class="sect-sub">Early operators lock in founding pricing for life. Every plan ships the full cinematic command console.</p>
+    </div>
+    <div class="price-grid">
+      <div class="price-card reveal">
+        <div class="pc-name">OPERATOR</div>
+        <div class="pc-price">FREE<small>during beta</small></div>
+        <ul class="pc-feats">
+          <li>Full local command console</li>
+          <li>8 AI agents + voice command</li>
+          <li>Local AI (Ollama) support</li>
+          <li>Vision presence awareness</li>
+          <li>Community support</li>
+        </ul>
+        <a class="btn ghost" href="#access">JOIN THE BETA</a>
+      </div>
+      <div class="price-card featured reveal">
+        <div class="pc-badge">FOUNDING MEMBER</div>
+        <div class="pc-name">COMMANDER</div>
+        <div class="pc-price">$29<small>/month · or $290/year</small></div>
+        <ul class="pc-feats">
+          <li>Everything in Operator</li>
+          <li>Google Calendar + Gmail integrations</li>
+          <li>Threat Intelligence Center</li>
+          <li>Executive briefings + insights engine</li>
+          <li>Priority support · price locked forever</li>
+        </ul>
+        <a class="btn primary" href="#access">REQUEST EARLY ACCESS</a>
+      </div>
+      <div class="price-card reveal">
+        <div class="pc-name">ENTERPRISE</div>
+        <div class="pc-price">CUSTOM<small>annual contract</small></div>
+        <ul class="pc-feats">
+          <li>Multi-operator command floors</li>
+          <li>On-prem AI cluster deployment</li>
+          <li>Multi-camera vision operations</li>
+          <li>SSO, audit trail, compliance</li>
+          <li>Dedicated success engineer</li>
+        </ul>
+        <a class="btn dark" href="#access">TALK TO THE FOUNDER</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ EARLY ACCESS ═══ -->
+<section class="access" id="access">
+  <div class="wrap">
+    <div class="access-card reveal">
+      <div>
+        <div class="eyebrow">— EARLY ACCESS</div>
+        <h2 class="sect">Be first on the bridge.</h2>
+        <p class="sect-sub">We're onboarding a small group of early operators, design partners and investors. Tell us who you are — we'll reach out personally.</p>
+        <div class="intent-row" id="intent-row">
+          <button class="intent active" data-intent="waitlist">JOIN WAITLIST</button>
+          <button class="intent" data-intent="demo">REQUEST DEMO</button>
+          <button class="intent" data-intent="design-partner">BECOME DESIGN PARTNER</button>
+        </div>
+      </div>
+      <form id="access-form" name="waitlist" method="POST" data-netlify="true" netlify-honeypot="bot-field">
+        <input type="hidden" name="form-name" value="waitlist"/>
+        <p style="display:none"><label>do not fill: <input name="bot-field"/></label></p>
+        <input type="hidden" name="intent" id="intent-field" value="waitlist"/>
+        <div class="field"><label>NAME</label><input name="name" required placeholder="Tony Stark"/></div>
+        <div class="field"><label>EMAIL</label><input name="email" type="email" required placeholder="tony@stark.com"/></div>
+        <div class="field"><label>ORGANIZATION</label><input name="organization" placeholder="Stark Industries"/></div>
+        <div class="field"><label>USE CASE</label><textarea name="use_case" placeholder="What would you command with it?"></textarea></div>
+        <button class="btn primary" type="submit" style="width:100%">SUBMIT REQUEST</button>
+        <div class="form-msg" id="form-msg"></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span class="fl"><b>AVENGERS × BOBBIEY</b> · UNIFIED COMMAND SYSTEM</span>
+  <span class="fr">© 2026 Bobbiey · built in Hyderabad, India · jarvis-class systems for human operators</span>
+</footer>
+
+<script>
+/* nav scroll state */
+const nav = document.getElementById("nav");
+addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 30), { passive: true });
+
+/* reveal on scroll */
+const io = new IntersectionObserver((es) => {
+  es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
+}, { threshold: 0.12 });
+document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+
+/* capability card cursor glow */
+document.querySelectorAll(".cap").forEach(c => {
+  c.addEventListener("pointermove", (e) => {
+    const r = c.getBoundingClientRect();
+    c.style.setProperty("--mx", (e.clientX - r.left) + "px");
+    c.style.setProperty("--my", (e.clientY - r.top) + "px");
+  });
+});
+
+/* particle starfield */
+(() => {
+  const cv = document.getElementById("stars");
+  const ctx = cv.getContext("2d");
+  let W, H, pts = [];
+  function size() {
+    W = cv.width = innerWidth; H = cv.height = innerHeight;
+    const n = Math.min(110, Math.floor(W * H / 16000));
+    pts = Array.from({ length: n }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - .5) * .25, vy: (Math.random() - .5) * .25,
+      r: Math.random() * 1.4 + .3,
+    }));
+  }
+  size(); addEventListener("resize", size);
+  (function tick() {
+    ctx.clearRect(0, 0, W, H);
+    for (const p of pts) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx *= -1;
+      if (p.y < 0 || p.y > H) p.vy *= -1;
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(0,217,255,.55)";
+      ctx.arc(p.x, p.y, p.r, 0, 7);
+      ctx.fill();
+    }
+    // connective lines
+    ctx.strokeStyle = "rgba(0,217,255,.07)"; ctx.lineWidth = 1;
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+      const a = pts[i], b = pts[j], dx = a.x - b.x, dy = a.y - b.y;
+      if (dx * dx + dy * dy < 13000) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+    }
+    requestAnimationFrame(tick);
+  })();
+})();
+
+/* intent selection (incl. hero CTAs that deep-link with an intent) */
+let chosenIntent = "waitlist";
+function selectIntent(name) {
+  chosenIntent = name || "waitlist";
+  document.querySelectorAll(".intent").forEach(b =>
+    b.classList.toggle("active", b.dataset.intent === chosenIntent));
+  const fi = document.getElementById("intent-field");
+  if (fi) fi.value = chosenIntent;
+}
+document.querySelectorAll(".intent").forEach(b =>
+  b.addEventListener("click", (e) => { e.preventDefault(); selectIntent(b.dataset.intent); }));
+document.querySelectorAll("[data-intent]").forEach(a => {
+  if (a.classList.contains("intent")) return;
+  a.addEventListener("click", () => selectIntent(a.dataset.intent === "early-access" ? "demo" : a.dataset.intent));
+});
+
+/* form submit → /api/waitlist with graceful fallback */
+document.getElementById("access-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target, msg = document.getElementById("form-msg");
+  const payload = {
+    name: f.name.value.trim(), email: f.email.value.trim(),
+    organization: f.organization.value.trim(), use_case: f.use_case.value.trim(),
+    intent: chosenIntent,
+  };
+  msg.className = "form-msg"; msg.textContent = "transmitting…";
+  try {
+    // Netlify Forms: url-encoded POST back to the page
+    const body = new URLSearchParams({ "form-name": "waitlist", ...payload }).toString();
+    const r = await fetch("/", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    msg.className = "form-msg ok";
+    msg.textContent = "✓ request received — welcome to the bridge, " + (payload.name.split(" ")[0] || "operator") + ".";
+    f.reset();
+  } catch (err) {
+    msg.className = "form-msg err";
+    msg.textContent = "✕ transmission failed — please try again.";
+  }
+});
+</script>
+</body>
+</html>

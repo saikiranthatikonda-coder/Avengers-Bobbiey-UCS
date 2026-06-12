@@ -1,0 +1,1895 @@
+/* ═══════════════════════════════════════════════════════════
+   AVENGERS HUD · client controller · STARK INDUSTRIES × BOBBIEY
+   ═══════════════════════════════════════════════════════════ */
+
+const $ = (s) => document.querySelector(s);
+const escapeHTML = (s) =>
+  (s || "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+
+// ── clock ────────────────────────────────────────────
+function tickClock() {
+  const d = new Date();
+  $("#clock").textContent = d.toTimeString().slice(0, 8);
+  $("#clock-date").textContent =
+    `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;
+}
+setInterval(tickClock, 1000); tickClock();
+
+// ── world clocks ─────────────────────────────────────
+const WORLD_CLOCKS = [
+  { city: "NYC", tz: "America/New_York" },
+  { city: "LA",  tz: "America/Los_Angeles" },
+  { city: "LON", tz: "Europe/London" },
+  { city: "MUM", tz: "Asia/Kolkata" },
+  { city: "TOK", tz: "Asia/Tokyo" },
+];
+function renderWorldClocks() {
+  const host = $("#world-clocks"); if (!host) return;
+  host.innerHTML = WORLD_CLOCKS.map(c => {
+    let t = "--:--";
+    try { t = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: c.tz }); } catch (e) {}
+    return `<div class="clock-mini"><div class="clock-mini-city">${c.city}</div><div class="clock-mini-time">${t}</div></div>`;
+  }).join("");
+}
+setInterval(renderWorldClocks, 30000); renderWorldClocks();
+
+// ── ops timer ────────────────────────────────────────
+const opsStart = Date.now();
+function tickOps() {
+  const s = Math.floor((Date.now() - opsStart) / 1000);
+  const h = String(Math.floor(s/3600)).padStart(2,"0");
+  const m = String(Math.floor((s%3600)/60)).padStart(2,"0");
+  const ss = String(s%60).padStart(2,"0");
+  const el = $("#ops-timer"); if (el) el.textContent = `${h}:${m}:${ss}`;
+}
+setInterval(tickOps, 1000); tickOps();
+
+// ── theme switcher ───────────────────────────────────
+const themeBtns = document.querySelectorAll(".theme-btn");
+themeBtns.forEach(b => b.addEventListener("click", () => {
+  const t = b.dataset.theme;
+  document.body.classList.remove("theme-jarvis", "theme-stark", "theme-stealth");
+  document.body.classList.add("theme-" + t);
+  themeBtns.forEach(x => x.classList.toggle("active", x === b));
+  try { localStorage.setItem("avengers-theme", t); } catch (e) {}
+}));
+(() => {
+  try {
+    const saved = localStorage.getItem("avengers-theme");
+    if (saved) {
+      document.body.classList.remove("theme-jarvis","theme-stark","theme-stealth");
+      document.body.classList.add("theme-" + saved);
+      themeBtns.forEach(x => x.classList.toggle("active", x.dataset.theme === saved));
+    }
+  } catch (e) {}
+})();
+
+// ── status pills ─────────────────────────────────────
+function setPill(id, label, level) {
+  const el = $(id); if (!el) return;
+  el.classList.remove("ok","warn","error");
+  if (level) el.classList.add(level);
+  const v = el.querySelector(".sp-val");
+  if (v) v.textContent = label;
+}
+async function refreshPills() {
+  try {
+    const r = await fetch("/api/status");
+    const d = await r.json();
+    setPill("#sp-brain", (d.brain_mode || "?").toUpperCase(),
+            (d.brain_mode === "llm" || d.brain_mode === "local-llm") ? "ok"
+            : d.brain_mode === "local" ? "warn" : "error");
+    setPill("#sp-tts", d.tts_enabled ? "ON" : "OFF", d.tts_enabled ? "ok" : "error");
+    setPill("#sp-news", d.news_count > 0 ? `${d.news_count} ITEMS` : "EMPTY",
+            d.news_count > 0 ? "ok" : "warn");
+  } catch (e) {}
+}
+
+// ── charts ───────────────────────────────────────────
+const mkChart = (id, color) => new Chart(document.getElementById(id), {
+  type: "line",
+  data: { labels: [], datasets: [{ data: [], borderColor: color, backgroundColor: color + "22",
+    borderWidth: 1.5, fill: true, tension: 0.32, pointRadius: 0 }] },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    scales: { x: { display: false }, y: { min: 0, max: 100, display: false } },
+    elements: { line: { borderJoinStyle: "round" } },
+  },
+});
+const cpuChart = mkChart("cpu-chart", "#00d9ff");
+const memChart = mkChart("mem-chart", "#ff7a00");
+const MAX_POINTS = 60;
+function pushChart(ch, val) {
+  ch.data.labels.push(""); ch.data.datasets[0].data.push(val);
+  if (ch.data.labels.length > MAX_POINTS) { ch.data.labels.shift(); ch.data.datasets[0].data.shift(); }
+  ch.update("none");
+}
+
+// ── avengers list ────────────────────────────────────
+function shortBadge(c) { const w = c.split(/\s+/); return w.length === 1 ? c.slice(0,3) : w.map(s => s[0]).join("").slice(0,3); }
+function renderAgents(agents) {
+  const list = $("#avengers-list"); list.innerHTML = "";
+  for (const a of agents) {
+    const card = document.createElement("div");
+    card.className = "agent-card"; card.dataset.agent = a.name;
+    card.dataset.role = a.role;
+    card.style.setProperty("--agent-color", a.color);
+    card.innerHTML = `
+      <div class="agent-icon">${shortBadge(a.codename)}</div>
+      <div class="agent-meta">
+        <div class="agent-name">${a.codename}</div>
+        <div class="agent-role">${a.role}</div>
+      </div>
+      <div class="agent-status">${a.status}</div>`;
+    list.appendChild(card);
+  }
+  $("#agent-count").textContent = `${agents.length} agents online`;
+  try { agentsOnline = agents.length; } catch (e) {}
+}
+function updateAgentStatus(name, status, task) {
+  const card = document.querySelector(`.agent-card[data-agent="${name}"]`);
+  if (!card) return;
+  const el = card.querySelector(".agent-status");
+  el.textContent = status; el.className = "agent-status " + status;
+  card.classList.toggle("active", status !== "idle");
+  // live current-task display: swap the role line while the agent works
+  const roleEl = card.querySelector(".agent-role");
+  if (roleEl) {
+    if (status !== "idle" && task && task !== "—") roleEl.textContent = "▸ " + task;
+    else roleEl.textContent = card.dataset.role || roleEl.textContent;
+  }
+}
+
+// ── event stream ─────────────────────────────────────
+function logEvent(html, kind = "info") {
+  const ev = $("#event-stream");
+  const line = document.createElement("div");
+  line.className = "event-line " + kind;
+  line.innerHTML = `<span class="ts">${new Date().toTimeString().slice(0,8)}</span>${html}`;
+  ev.appendChild(line);
+  while (ev.children.length > 200) ev.removeChild(ev.firstChild);
+  ev.scrollTop = ev.scrollHeight;
+  try { bumpActivity(); } catch (e) {}   // feeds the AI-ops activity heatmap
+}
+
+// ── news ─────────────────────────────────────────────
+function renderNews(items) {
+  const list = $("#news-list"); list.innerHTML = "";
+  if (!items.length) { list.innerHTML = '<div class="news-empty">no feed — check NEWSAPI_KEY</div>'; return; }
+  for (const it of items.slice(0, 12)) {
+    const div = document.createElement("div");
+    div.className = "news-item";
+    div.innerHTML = `<div>${escapeHTML(it.title)}</div><div class="src">▸ ${escapeHTML(it.source || "unknown")}</div>`;
+    if (it.url) div.onclick = () => window.open(it.url, "_blank");
+    list.appendChild(div);
+  }
+}
+
+// ── voice waveform ───────────────────────────────────
+class Waveform {
+  constructor(canvas) {
+    this.c = canvas; this.ctx = canvas.getContext("2d");
+    this.state = "idle"; this.t = 0;
+    this.amp = 0.08; this.ampCur = 0.08; this.color = "#00d9ff";
+    this._size();
+    window.addEventListener("resize", () => this._size());
+  }
+  _size() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = this.c.getBoundingClientRect();
+    this.cssW = Math.max(rect.width, 60); this.cssH = Math.max(rect.height, 40);
+    this.c.width = this.cssW * dpr; this.c.height = this.cssH * dpr;
+    this.ctx.setTransform(1,0,0,1,0,0); this.ctx.scale(dpr, dpr);
+  }
+  setState(state) {
+    this.state = state;
+    const s = getComputedStyle(document.body);
+    if (state === "speaking") { this.amp = 1.0; this.color = s.getPropertyValue("--stark").trim() || "#ff7a00"; }
+    else if (state === "listening") { this.amp = 0.55; this.color = "#50fa7b"; }
+    else if (state === "processing") { this.amp = 0.32; this.color = "#ffb86c"; }
+    else { this.amp = 0.08; this.color = s.getPropertyValue("--accent").trim() || "#00d9ff"; }
+  }
+  start() { const loop = () => { this.draw(); requestAnimationFrame(loop); }; loop(); }
+  draw() {
+    this.t += 1; this.ampCur += (this.amp - this.ampCur) * 0.07;
+    const ctx = this.ctx, w = this.cssW, h = this.cssH, cy = h/2;
+    ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle = this.color + "22"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke();
+    ctx.shadowColor = this.color;
+    for (let layer = 0; layer < 3; layer++) {
+      ctx.beginPath();
+      const phase = this.t * (0.055 + layer * 0.018);
+      const freq  = 0.024 + layer * 0.014;
+      const layerAmp = this.ampCur * (h * 0.44) * (1 - layer * 0.28);
+      for (let x = 0; x <= w; x += 2) {
+        const env = Math.sin(x * 0.04 + phase * 1.4) * 0.45 + Math.sin(x * 0.11 + phase) * 0.55;
+        const y = cy + Math.sin(x * freq + phase) * layerAmp * env;
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = this.color; ctx.lineWidth = 1.6 - layer * 0.35;
+      ctx.globalAlpha = 0.9 - layer * 0.22; ctx.shadowBlur = 7 + layer * 2;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    if (this.state === "speaking" || this.state === "listening") {
+      const px = ((this.t * 2.4) % (w + 40)) - 20;
+      ctx.beginPath(); ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 14;
+      ctx.arc(px, cy, 2.2, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+    }
+  }
+}
+const wave = new Waveform(document.getElementById("wave-canvas")); wave.start();
+
+// ── voice state ──────────────────────────────────────
+function setVoiceState(state) {
+  const orb = $("#voice-orb"); if (!orb) return;
+  orb.classList.remove("listening","speaking","processing");
+  if (state !== "idle" && state !== "standby") orb.classList.add(state);
+  $("#voice-label").textContent = state === "idle" ? "STANDBY" : state.toUpperCase();
+  wave.setState(state);
+  const sub = $("#voice-sublabel");
+  if (sub) {
+    if (state === "speaking")        sub.textContent = "◉ TRANSMITTING";
+    else if (state === "listening")  sub.textContent = "◉ LISTENING";
+    else if (state === "processing") sub.textContent = "◉ PROCESSING";
+    else                              sub.textContent = 'say "hey <agent>"';
+  }
+}
+function setHeard(text, routeLabel) {
+  const t = $("#heard-text"); const r = $("#heard-route");
+  if (text) { t.classList.remove("empty"); t.textContent = text; }
+  if (r) r.textContent = routeLabel || "";
+}
+
+/* ═══ WORLD MAP via D3 + TopoJSON (50m for better outlines) ═══ */
+
+const CITIES = [
+  { name: "HYDERABAD", lat: 17.385, lon: 78.4867, primary: true },
+  { name: "NEW YORK",  lat: 40.7128, lon: -74.0060 },
+  { name: "LONDON",    lat: 51.5074, lon: -0.1278 },
+  { name: "TOKYO",     lat: 35.6762, lon: 139.6503 },
+  { name: "SYDNEY",    lat: -33.8688, lon: 151.2093 },
+  { name: "SAN FRAN",  lat: 37.7749, lon: -122.4194 },
+];
+
+let mapProjection = null;
+let worldFeatures = null;
+
+function fallbackProjection(lat, lon, w = 1000, h = 460) {
+  return [(lon + 180) * w / 360, (90 - lat) * h / 180];
+}
+
+async function renderRealWorldMap() {
+  const continents = document.getElementById("map-continents");
+  if (!continents) return;
+
+  if (typeof d3 === "undefined" || typeof topojson === "undefined") {
+    console.warn("d3/topojson not loaded — using fallback shapes");
+    renderFallbackContinents();
+    renderArcs();
+    renderCities();
+    renderIndiaMap();
+    renderTelanganaMap();
+    return;
+  }
+
+  try {
+    // Use 50m for sharper continent outlines (a bit larger payload, ~250KB)
+    const r = await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const world = await r.json();
+    worldFeatures = topojson.feature(world, world.objects.countries);
+
+    const w = 1000, h = 460;
+    mapProjection = d3.geoNaturalEarth1().scale(190).translate([w / 2, h / 2 + 10]);
+    const path = d3.geoPath(mapProjection);
+
+    continents.innerHTML = "";
+    worldFeatures.features.forEach(f => {
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", path(f));
+      p.setAttribute("class", "country");
+      continents.appendChild(p);
+    });
+  } catch (e) {
+    console.warn("world map load failed", e);
+    renderFallbackContinents();
+  } finally {
+    renderArcs();
+    renderCities();
+    renderIndiaMap();
+    renderTelanganaMap();
+  }
+}
+
+function renderFallbackContinents() {
+  const host = document.getElementById("map-continents"); if (!host) return;
+  const blobs = [
+    { cx: 220, cy: 160, rx: 130, ry: 90 }, { cx: 320, cy: 330, rx: 60, ry: 100 },
+    { cx: 510, cy: 145, rx: 55, ry: 45 },  { cx: 530, cy: 260, rx: 70, ry: 100 },
+    { cx: 720, cy: 175, rx: 160, ry: 110 },{ cx: 830, cy: 345, rx: 65, ry: 40 },
+  ];
+  host.innerHTML = blobs.map(b =>
+    `<ellipse cx="${b.cx}" cy="${b.cy}" rx="${b.rx}" ry="${b.ry}" class="country"/>`
+  ).join("");
+}
+function projectCity(c) {
+  if (mapProjection) { try { return mapProjection([c.lon, c.lat]); } catch (e) {} }
+  return fallbackProjection(c.lat, c.lon);
+}
+function renderCities() {
+  const host = document.getElementById("map-cities"); if (!host) return;
+  host.innerHTML = "";
+  for (const c of CITIES) {
+    const [x, y] = projectCity(c);
+    if (!isFinite(x) || !isFinite(y)) continue;
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.classList.add("city-marker"); if (c.primary) g.classList.add("primary");
+    const r = c.primary ? 4 : 3;
+    g.innerHTML = `
+      <circle cx="${x}" cy="${y}" r="${r}" class="city-dot"/>
+      <circle cx="${x}" cy="${y}" r="${r+2}" class="city-ping"/>
+      <circle cx="${x}" cy="${y}" r="${r+2}" class="city-ping ping-2"/>
+      <text x="${x + 9}" y="${y + 4}" class="city-label">${c.name}</text>`;
+    host.appendChild(g);
+  }
+  const nodes = document.getElementById("map-nodes");
+  if (nodes) nodes.textContent = `${CITIES.length} NODES`;
+}
+function renderArcs() {
+  const arcs = document.getElementById("map-arcs"); if (!arcs) return;
+  arcs.innerHTML = "";
+  const primary = CITIES.find(c => c.primary); if (!primary) return;
+  const [px, py] = projectCity(primary);
+  if (!isFinite(px) || !isFinite(py)) return;
+  for (const c of CITIES) {
+    if (c === primary) continue;
+    const [cx, cy] = projectCity(c);
+    if (!isFinite(cx) || !isFinite(cy)) continue;
+    const mx = (px + cx) / 2;
+    const my = Math.min(py, cy) - Math.abs(cx - px) * 0.18 - 30;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", `M ${px} ${py} Q ${mx} ${my} ${cx} ${cy}`);
+    arcs.appendChild(path);
+  }
+}
+
+/* ═══ INDIA MAP ═══════════════════════════════════════ */
+
+const INDIA_CITIES = [
+  { name: "DELHI",     lat: 28.61, lon: 77.21 },
+  { name: "MUMBAI",    lat: 19.07, lon: 72.87 },
+  { name: "KOLKATA",   lat: 22.57, lon: 88.36 },
+  { name: "CHENNAI",   lat: 13.08, lon: 80.27 },
+  { name: "BENGALURU", lat: 12.97, lon: 77.59 },
+  { name: "HYDERABAD", lat: 17.385, lon: 78.4867, primary: true },
+];
+let indiaProjection = null;
+
+function renderIndiaMap() {
+  const host = document.getElementById("india-shape");
+  const citiesHost = document.getElementById("india-cities");
+  const arcsHost = document.getElementById("india-arcs");
+  if (!host) return;
+
+  // Default: leave the inline hand-traced fallback path in place.
+  // If D3 + world data are available, replace with the real outline.
+  if (typeof d3 !== "undefined" && worldFeatures) {
+    const india = worldFeatures.features.find(
+      f => String(f.id) === "356" || (f.properties && f.properties.name === "India")
+    );
+    if (india) {
+      const w = 200, h = 240;
+      indiaProjection = d3.geoMercator().fitExtent([[16, 20], [w - 16, h - 20]], india);
+      const path = d3.geoPath(indiaProjection);
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", path(india));
+      host.innerHTML = "";
+      host.appendChild(p);
+    } else {
+      indiaProjection = null;
+    }
+  } else {
+    indiaProjection = null;
+  }
+
+  // Telangana highlight overlaid on India (uses same projection so it lands inside India correctly)
+  renderTelanganaHighlightOnIndia();
+
+  if (citiesHost) {
+    citiesHost.innerHTML = "";
+    for (const c of INDIA_CITIES) {
+      const proj = indiaProjection ? indiaProjection([c.lon, c.lat]) : null;
+      const [x, y] = proj && isFinite(proj[0]) ? proj : indiaFallbackProject(c.lat, c.lon);
+      const r = c.primary ? 3.5 : 2.6;
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.classList.add("region-marker"); if (c.primary) g.classList.add("primary");
+      g.innerHTML = `
+        <circle cx="${x}" cy="${y}" r="${r}" class="city-dot"/>
+        <circle cx="${x}" cy="${y}" r="${r+1.5}" class="city-ping"/>
+        <circle cx="${x}" cy="${y}" r="${r+1.5}" class="city-ping ping-2"/>
+        <text x="${x + 6}" y="${y + 2}" class="city-label">${c.name}</text>`;
+      citiesHost.appendChild(g);
+    }
+  }
+
+  if (arcsHost) {
+    arcsHost.innerHTML = "";
+    const hyd = INDIA_CITIES.find(c => c.primary);
+    const hp = indiaProjection ? indiaProjection([hyd.lon, hyd.lat]) : indiaFallbackProject(hyd.lat, hyd.lon);
+    if (isFinite(hp[0])) {
+      for (const c of INDIA_CITIES) {
+        if (c === hyd) continue;
+        const cp = indiaProjection ? indiaProjection([c.lon, c.lat]) : indiaFallbackProject(c.lat, c.lon);
+        if (!isFinite(cp[0])) continue;
+        const mx = (hp[0] + cp[0]) / 2;
+        const my = Math.min(hp[1], cp[1]) - Math.abs(cp[0] - hp[0]) * 0.25 - 8;
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", `M ${hp[0]} ${hp[1]} Q ${mx} ${my} ${cp[0]} ${cp[1]}`);
+        arcsHost.appendChild(path);
+      }
+    }
+  }
+}
+
+function indiaFallbackProject(lat, lon) {
+  // Bounds tuned to the inline hand-traced fallback path so cities land
+  // on the actual rendered outline (lon 68.5–97, lat 8–37).
+  const x = (lon - 68.5) * (160 / 28.5) + 20;
+  const y = 240 - ((lat - 8) * (200 / 29) + 20);
+  return [x, y];
+}
+
+// Telangana boundary in lat/lon, clockwise from NW. 30 points traced from the
+// real state outline: Adilabad north cap → Godavari NE edge → Bhadradri SE
+// tongue (easternmost ~81.05°E) → Khammam indent → Krishna south border →
+// Gadwal south tail (~15.85°N) → smooth Karnataka west border → Nizamabad NW.
+const TS_BOUNDARY_LATLON = [
+  [19.65, 77.95], [19.92, 78.35], [19.85, 78.85], [19.70, 79.05],
+  [19.45, 79.35], [19.30, 79.90], [18.85, 80.05], [18.75, 80.30],
+  [18.40, 80.40], [18.10, 80.70], [17.80, 80.90], [17.55, 81.05],
+  [17.20, 80.90], [16.95, 80.65], [16.75, 80.30], [16.85, 79.95],
+  [16.55, 79.70], [16.40, 79.25], [16.25, 78.90], [15.95, 78.55],
+  [15.85, 78.25], [16.10, 77.80], [16.40, 77.45], [16.95, 77.45],
+  [17.35, 77.30], [17.85, 77.45], [18.20, 77.60], [18.45, 77.85],
+  [18.85, 77.75], [19.25, 77.85]
+];
+
+function renderTelanganaHighlightOnIndia() {
+  const host = document.getElementById("india-ts-highlight");
+  if (!host) return;
+  const project = (lat, lon) => {
+    if (indiaProjection) {
+      try { const r = indiaProjection([lon, lat]); if (isFinite(r[0])) return r; } catch (e) {}
+    }
+    return indiaFallbackProject(lat, lon);
+  };
+  const pts = TS_BOUNDARY_LATLON.map(([lat, lon]) => {
+    const [x, y] = project(lat, lon);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  host.innerHTML = `<polygon points="${pts.join(' ')}"/>`;
+}
+
+/* ═══ TELANGANA — refined polygon + Hyderabad pin ═══ */
+
+const TS_CITIES = [
+  { name: "HYDERABAD",  lat: 17.385, lon: 78.4867, primary: true },
+  { name: "WARANGAL",   lat: 18.00,  lon: 79.58 },
+  { name: "NIZAMABAD",  lat: 18.67,  lon: 78.10 },
+  { name: "KARIMNAGAR", lat: 18.43,  lon: 79.13 },
+  { name: "KHAMMAM",    lat: 17.25,  lon: 80.15 },
+];
+function tsFallbackProject(lat, lon) {
+  // Matches the inline Telangana path projection:
+  // lon 77.27–81.05 → x 16–184, lat 15.83–19.92 → y 204–16.
+  const x = (lon - 77.27) * 44.44 + 16;
+  const y = 204 - (lat - 15.83) * 45.97;
+  return [x, y];
+}
+function renderTelanganaMap() {
+  const citiesHost = document.getElementById("ts-cities");
+  if (!citiesHost) return;
+  citiesHost.innerHTML = "";
+  for (const c of TS_CITIES) {
+    const [x, y] = tsFallbackProject(c.lat, c.lon);
+    const r = c.primary ? 4 : 2.5;
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.classList.add("region-marker"); if (c.primary) g.classList.add("primary");
+    g.innerHTML = `
+      <circle cx="${x}" cy="${y}" r="${r}" class="city-dot"/>
+      <circle cx="${x}" cy="${y}" r="${r+2}" class="city-ping"/>
+      <circle cx="${x}" cy="${y}" r="${r+2}" class="city-ping ping-2"/>
+      <text x="${x + 6}" y="${y + 2}" class="city-label">${c.name}</text>`;
+    citiesHost.appendChild(g);
+  }
+}
+
+renderRealWorldMap();
+
+// ── weather ──────────────────────────────────────────
+let userLat = null, userLon = null;
+let weatherCity = "HYDERABAD";
+
+function setWeatherState(state, message) {
+  const card = $("#weather-card"); if (!card) return;
+  card.classList.remove("loading", "error");
+  if (state) card.classList.add(state);
+  if (message != null) $("#weather-label").textContent = message;
+}
+
+async function refreshWeather(force = false) {
+  setWeatherState("loading", "acquiring signal…");
+  $("#weather-update").textContent = "FETCHING…";
+  try {
+    let url = "/api/weather";
+    if (userLat != null && userLon != null) {
+      url += `?lat=${userLat.toFixed(4)}&lon=${userLon.toFixed(4)}`;
+    }
+    const ctl = new AbortController();
+    const timeout = setTimeout(() => ctl.abort(), 12000);
+    const r = await fetch(url, { signal: ctl.signal, cache: force ? "no-store" : "default" });
+    clearTimeout(timeout);
+    const d = await r.json();
+    if (!d || d.error) {
+      setWeatherState("error", "unavailable");
+      $("#weather-update").textContent = "ERR · " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+      return;
+    }
+    setWeatherState(null, (d.label || "").toUpperCase() || "—");
+    $("#weather-glyph").textContent = d.glyph || "◐";
+    $("#weather-temp").textContent  = d.temp_c != null ? Math.round(d.temp_c) : "--";
+    $("#weather-humid").textContent = d.humidity ?? "--";
+    $("#weather-wind").textContent  = d.wind_kmh != null ? Math.round(d.wind_kmh) : "--";
+    $("#weather-feels").textContent = d.feels_c != null ? Math.round(d.feels_c) : "--";
+    $("#weather-update").textContent = "OK · " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+    $("#hw-glyph").textContent = d.glyph || "◐";
+    $("#hw-temp").textContent = d.temp_c != null ? `${Math.round(d.temp_c)}°` : "--°";
+    if (d.city) {
+      $("#weather-city").textContent = `${(weatherCity || d.city || "").toUpperCase()} · WEATHER`;
+    }
+  } catch (e) {
+    setWeatherState("error", e.name === "AbortError" ? "timeout" : "fetch failed");
+    $("#weather-update").textContent = "ERR";
+    console.warn("weather fetch failed:", e);
+  }
+}
+refreshWeather();
+setInterval(() => refreshWeather(false), 5 * 60 * 1000);   // refresh every 5 min
+$("#weather-refresh")?.addEventListener("click", () => refreshWeather(true));
+
+// ── connectivity ─────────────────────────────────────
+async function refreshConnectivity() {
+  try {
+    const r = await fetch("/api/connectivity"); const d = await r.json();
+    const wifi = d.wifi || {};
+    const wifiRow = $("#conn-wifi"); const wifiVal = $("#wifi-val");
+    if (wifi.connected) {
+      wifiVal.textContent = `${wifi.ssid || "WIFI"} · ${wifi.signal || "—"}`;
+      wifiRow.classList.remove("bad"); wifiRow.classList.add("ok");
+    } else {
+      wifiVal.textContent = "offline";
+      wifiRow.classList.remove("ok"); wifiRow.classList.add("bad");
+    }
+    const ble = d.bluetooth || {};
+    $("#ble-val").textContent = ble.count ? `${ble.count} paired` : "none";
+    $("#conn-ble").classList.toggle("ok", ble.count > 0);
+
+    const p = d.ping_ms ?? -1;
+    const pingRow = $("#conn-net");
+    if (p < 0)        { $("#ping-val").textContent = "—";       pingRow.classList.add("bad");  pingRow.classList.remove("ok","warn"); }
+    else if (p < 100) { $("#ping-val").textContent = `${p} ms`; pingRow.classList.add("ok");   pingRow.classList.remove("warn","bad"); }
+    else if (p < 300) { $("#ping-val").textContent = `${p} ms`; pingRow.classList.add("warn"); pingRow.classList.remove("ok","bad"); }
+    else              { $("#ping-val").textContent = `${p} ms`; pingRow.classList.add("bad");  pingRow.classList.remove("ok","warn"); }
+
+    // also keep tool-card network stat in sync
+    const tcNet = $("#tc-net");
+    if (tcNet && wifi.connected) {
+      const speed = wifi.speed_rx_mbps ? `${Math.round(parseFloat(wifi.speed_rx_mbps))} Mbps` : `${p > 0 ? p : "—"} ms`;
+      tcNet.textContent = `${speed} · ${wifi.ssid || "WIFI"}`;
+    }
+  } catch (e) {}
+}
+refreshConnectivity(); setInterval(refreshConnectivity, 30000);
+
+// ── battery ──────────────────────────────────────────
+async function refreshBattery() {
+  try {
+    if (!navigator.getBattery) { $("#bat-val").textContent = "n/a"; return; }
+    const b = await navigator.getBattery();
+    const update = () => {
+      const pct = Math.round(b.level * 100);
+      const sym = b.charging ? "⚡" : "";
+      $("#bat-val").textContent = `${pct}% ${sym}`.trim();
+      const row = $("#conn-bat");
+      row.classList.remove("ok","warn","bad");
+      if (pct > 30 || b.charging) row.classList.add("ok");
+      else if (pct > 15) row.classList.add("warn");
+      else row.classList.add("bad");
+    };
+    update();
+    b.addEventListener("levelchange", update);
+    b.addEventListener("chargingchange", update);
+  } catch (e) {}
+}
+refreshBattery();
+
+// ── geolocation + reverse geocode ────────────────────
+function updateLocation(text, coords) {
+  if (text) $("#location-value").textContent = text;
+  if (coords) $("#location-coords").textContent = coords;
+}
+function detectLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude, longitude } = pos.coords;
+    userLat = latitude; userLon = longitude;
+    updateLocation(null, `${latitude.toFixed(2)}°${latitude>=0?"N":"S"} · ${longitude.toFixed(2)}°${longitude>=0?"E":"W"}`);
+    // re-fetch weather for the detected coords
+    refreshWeather(true);
+    try {
+      const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+      const d = await r.json();
+      const parts = [d.locality, d.principalSubdivision, d.countryName].filter(Boolean);
+      if (parts.length) {
+        updateLocation(parts.map(s => s.toUpperCase()).join(" · "));
+        weatherCity = (d.locality || d.principalSubdivision || "your area").toUpperCase();
+        const wc = $("#weather-city");
+        if (wc) wc.textContent = `${weatherCity} · WEATHER`;
+      }
+    } catch (e) {}
+  }, (err) => {
+    console.warn("geolocation denied/unavailable:", err && err.message);
+  }, { timeout: 8000, maximumAge: 60_000 });
+}
+detectLocation();
+
+// ── agenda + inbox ───────────────────────────────────
+function fmtTime(ts) { return new Date(ts * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }); }
+function fmtCountdown(mins) {
+  if (mins < 0) return "NOW";
+  if (mins < 1) return "<1 MIN";
+  if (mins < 60) return `${Math.round(mins)} MIN`;
+  return `${Math.floor(mins/60)}H ${Math.round(mins%60)}M`;
+}
+function renderAgenda(events) {
+  const host = $("#agenda-list"); host.innerHTML = "";
+  $("#agenda-badge").textContent = `${events.length} TODAY`;
+  if (!events.length) { host.innerHTML = '<div class="agenda-empty">no meetings scheduled</div>'; return; }
+  for (const e of events) {
+    const div = document.createElement("div");
+    div.className = "agenda-item" + (e.priority === "high" ? " high" : "") + (e.minutes_until <= 10 && e.minutes_until > 0 ? " imminent" : "");
+    div.innerHTML = `
+      <div class="agenda-time">
+        ${fmtTime(e.start_ts)}
+        <span class="agenda-countdown">${fmtCountdown(e.minutes_until)}</span>
+      </div>
+      <div class="agenda-body">
+        <div class="agenda-title">${escapeHTML(e.title)}</div>
+        <div class="agenda-meta">${escapeHTML((e.attendees || []).join(", ") || e.location || `${e.duration_min} min`)}</div>
+      </div>`;
+    host.appendChild(div);
+  }
+}
+function renderInbox(emails, priorityCount) {
+  const host = $("#inbox-list"); host.innerHTML = "";
+  $("#inbox-badge").textContent = priorityCount ? `${priorityCount} PRIORITY` : `${emails.length} UNREAD`;
+  if (!emails.length) { host.innerHTML = '<div class="inbox-empty">inbox empty</div>'; return; }
+  for (const m of emails) {
+    const div = document.createElement("div");
+    div.className = "inbox-item" + (m.priority === "priority" ? " priority" : "");
+    div.innerHTML = `
+      <div class="inbox-sender">${escapeHTML(m.sender)}</div>
+      <div class="inbox-subject">${escapeHTML(m.subject)}</div>
+      <div class="inbox-snippet">${escapeHTML(m.snippet || "")}</div>`;
+    host.appendChild(div);
+  }
+}
+async function refreshAgenda() {
+  try {
+    const r = await fetch("/api/agenda"); const d = await r.json();
+    renderAgenda(d.events || []);
+    renderInbox(d.emails || [], d.priority_unread || 0);
+    try {
+      pendingActions = (d.events || []).length + (d.priority_unread || 0);
+      renderPriorityAlerts(d);
+      renderCalIntel(d);
+      if (d.source === "google") {
+        const b = $("#agenda-badge");
+        if (b) b.textContent = `${(d.events || []).length} · GOOGLE`;
+      }
+    } catch (e) {}
+  } catch (e) {}
+}
+refreshAgenda(); setInterval(refreshAgenda, 30000);
+
+// ── resource bars ────────────────────────────────────
+function updateResource(cpu, mem, disk) {
+  if (cpu != null) { $("#res-cpu").textContent = `${Math.round(cpu)}%`; $("#res-cpu-bar").style.width = `${Math.min(100, cpu)}%`; }
+  if (mem != null) { $("#res-mem").textContent = `${Math.round(mem)}%`; $("#res-mem-bar").style.width = `${Math.min(100, mem)}%`; }
+  if (disk != null){ $("#res-disk2").textContent = `${Math.round(disk)}%`; $("#res-disk-bar").style.width = `${Math.min(100, disk)}%`; }
+}
+
+// ── AI gauge animation (r=36, circumference ≈ 226) ─
+let aiGaugeBase = 0.92;
+const AI_CIRC = 2 * Math.PI * 36;  // ≈ 226 (matches HTML circle r=36)
+function animateAiGauge(active) {
+  const arc = $("#ai-arc"); if (!arc) return;
+  const target = active ? 0.78 : aiGaugeBase;
+  arc.style.transition = "stroke-dashoffset 0.6s ease";
+  arc.setAttribute("stroke-dashoffset", String(AI_CIRC * (1 - target)));
+}
+(function () {
+  const arc = $("#ai-arc"); if (!arc) return;
+  arc.setAttribute("stroke-dasharray", String(AI_CIRC.toFixed(1)));
+  arc.setAttribute("stroke-dashoffset", String(AI_CIRC * (1 - aiGaugeBase)));
+})();
+
+// ── quick access buttons ─────────────────────────────
+document.querySelectorAll(".quick-btn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    if (btn.classList.contains("busy")) return;
+    btn.classList.add("busy");
+    const action = btn.dataset.action;
+    try {
+      if (action === "worldmonitor") {
+        await fetch("/api/browser/open", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ url: "https://www.worldmonitor.app", fullscreen: false, app_mode: true }),
+        });
+        logEvent('<span class="tag">[quick]</span> launching worldmonitor.app');
+      } else if (action === "refresh-news") {
+        await fetch("/api/news/refresh", { method: "POST" });
+        logEvent('<span class="tag">[quick]</span> world feed refresh queued');
+      } else if (action === "system-scan") {
+        const r = await fetch("/api/ask", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ prompt: "Run a system scan and report any concerns in one sentence.", agent: "stark" }),
+        });
+        const d = await r.json();
+        if (d.reply) logEvent(`<span class="tag">[stark]</span> ${escapeHTML(d.reply)}`);
+      } else if (action === "briefing") {
+        logEvent('<span class="tag">[quick]</span> compiling executive briefing…');
+        const r = await fetch("/api/briefing", { method: "POST" });
+        const d = await r.json();
+        if (d.insight) logEvent(`<span class="tag">[briefing]</span> ${escapeHTML(d.insight)}`);
+      } else if (action === "network-diag") {
+        await refreshConnectivity();
+        logEvent('<span class="tag">[quick]</span> network diagnostic complete');
+      } else if (action === "security-sweep") {
+        const r = await fetch("/api/ask", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ prompt: "Security sweep: any anomalies on your end? One sentence.", agent: "hawkeye" }),
+        });
+        const d = await r.json();
+        if (d.reply) logEvent(`<span class="tag">[hawkeye]</span> ${escapeHTML(d.reply)}`);
+      }
+    } catch (e) {
+      logEvent("quick-action failed: " + escapeHTML(e.message), "error");
+    } finally {
+      setTimeout(() => btn.classList.remove("busy"), 800);
+    }
+  });
+});
+
+/* ═══ TOOL MODAL ═══════════════════════════════════ */
+
+const TOOL_DATA = {
+  "ai-diagnostics": {
+    title: "AI DIAGNOSTICS",
+    sub: "LIVE LLM & AGENT TELEMETRY",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3 L12 21 M3 12 L21 12"/><path d="M5 5 L19 19 M5 19 L19 5" opacity="0.45"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/></svg>`,
+    render: (state) => `
+      <div class="mb-grid">
+        <div class="mb-stat"><span class="lbl">MODEL</span><span class="val">${escapeHTML(state.brain_mode || "—")}</span></div>
+        <div class="mb-stat"><span class="lbl">SUBSYSTEMS</span><span class="val ok">8 / 8 NOMINAL</span></div>
+        <div class="mb-stat"><span class="lbl">ROUTING</span><span class="val ok">99.4%</span></div>
+        <div class="mb-stat"><span class="lbl">AVG LATENCY</span><span class="val">0.32 s</span></div>
+        <div class="mb-stat"><span class="lbl">CALLS TODAY</span><span class="val">1,247</span></div>
+        <div class="mb-stat"><span class="lbl">TOKENS USED</span><span class="val">1.2 M / 10 M</span></div>
+      </div>
+      <div class="mb-list">
+        <div class="mb-row">All 8 agents (Jarvis, Captain, Stark, Widow, Hawkeye, Hulk, Thor, Vision) responding within tolerance.
+          <div class="mb-row-meta">LAST SWEEP · ${new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false})}</div></div>
+      </div>`,
+  },
+  "satellite-feed": {
+    title: "SATELLITE FEED",
+    sub: "ORBITAL UPLINK · GEO + LEO",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M 5 19 L 19 5"/><path d="M 4 14 A 10 10 0 0 0 14 4"/><circle cx="6" cy="18" r="2" fill="currentColor"/><path d="M 11 11 L 14 14"/></svg>`,
+    render: () => `
+      <div class="mb-grid">
+        <div class="mb-stat"><span class="lbl">ACTIVE SATS</span><span class="val">14</span></div>
+        <div class="mb-stat"><span class="lbl">COVERAGE</span><span class="val ok">87%</span></div>
+        <div class="mb-stat"><span class="lbl">UPLINK</span><span class="val">12.3 Mbps</span></div>
+        <div class="mb-stat"><span class="lbl">DOWNLINK</span><span class="val">48.6 Mbps</span></div>
+        <div class="mb-stat"><span class="lbl">STRONGEST</span><span class="val">GEO · INDIAN OCEAN</span></div>
+        <div class="mb-stat"><span class="lbl">NEXT PASS</span><span class="val warn">HST · 12 min</span></div>
+      </div>
+      <div class="mb-list">
+        <div class="mb-row">Acquired handshake with GSAT-30 · signal 96% strength
+          <div class="mb-row-meta">UTC · ${new Date().toUTCString().slice(17, 22)}</div></div>
+        <div class="mb-row">Resync with Starlink mesh · 4 new satellites in window
+          <div class="mb-row-meta">UTC · -4 min</div></div>
+      </div>`,
+  },
+  "threat-scanner": {
+    title: "THREAT SCANNER",
+    sub: "ACTIVE PERIMETER MONITORING",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M 12 2 L 20 5 V 12 Q 20 18 12 22 Q 4 18 4 12 V 5 Z"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>`,
+    render: () => `
+      <div class="mb-grid">
+        <div class="mb-stat"><span class="lbl">ACTIVE THREATS</span><span class="val ok">0</span></div>
+        <div class="mb-stat"><span class="lbl">RESOLVED 24H</span><span class="val">7</span></div>
+        <div class="mb-stat"><span class="lbl">FIREWALL BLOCKS</span><span class="val">142</span></div>
+        <div class="mb-stat"><span class="lbl">INTRUSIONS</span><span class="val ok">0</span></div>
+        <div class="mb-stat"><span class="lbl">VULNERABILITIES</span><span class="val warn">2 LOW</span></div>
+        <div class="mb-stat"><span class="lbl">LAST FULL SCAN</span><span class="val">2 H AGO</span></div>
+      </div>
+      <div class="mb-list">
+        <div class="mb-row">Perimeter integrity: GREEN. Encryption layer (AES-256) holding.<div class="mb-row-meta">SHIELD · ACTIVE</div></div>
+        <div class="mb-row">2 low-priority CVEs queued for the next maintenance window.<div class="mb-row-meta">CVE-2025-7XXX · CVE-2025-8XXX</div></div>
+      </div>`,
+  },
+  "mission-files": {
+    title: "MISSION FILES",
+    sub: "OPERATIONS ARCHIVE",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M 3 8 V 19 H 21 V 8 H 13 L 11 6 H 3 Z"/><line x1="3" y1="12" x2="21" y2="12"/></svg>`,
+    render: () => `
+      <div class="mb-list">
+        <div class="mb-row"><strong>Project Helios v4 — Core Specs</strong><div class="mb-row-meta">MODIFIED · 2 H AGO · classification: stark-1</div></div>
+        <div class="mb-row"><strong>Stark Defense Grid — Phase II</strong><div class="mb-row-meta">MODIFIED · YESTERDAY · classification: stark-1</div></div>
+        <div class="mb-row"><strong>Neural Net Upgrade — Architecture</strong><div class="mb-row-meta">MODIFIED · 4 DAYS AGO · classification: stark-2</div></div>
+        <div class="mb-row"><strong>Hyderabad Lab — Operations Brief</strong><div class="mb-row-meta">MODIFIED · 1 WEEK AGO · classification: stark-3</div></div>
+        <div class="mb-row"><strong>AISIN Joint Venture — Terms</strong><div class="mb-row-meta">MODIFIED · 2 WEEKS AGO · classification: stark-2</div></div>
+      </div>`,
+  },
+  "security-logs": {
+    title: "SECURITY LOGS",
+    sub: "EVENT AUDIT TRAIL · LAST 24H",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="1"/><path d="M 8 11 V 7 A 4 4 0 0 1 16 7 V 11"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></svg>`,
+    render: () => `
+      <div class="mb-grid">
+        <div class="mb-stat"><span class="lbl">EVENTS</span><span class="val">1,247</span></div>
+        <div class="mb-stat"><span class="lbl">ALERTS</span><span class="val ok">0</span></div>
+      </div>
+      <div class="mb-list">
+        <div class="mb-row">14:32 — Admin login · 127.0.0.1 · success<div class="mb-row-meta">SESSION · 0x4F12</div></div>
+        <div class="mb-row">13:50 — Firewall rule updated · port 8765 allowed loopback<div class="mb-row-meta">RULE · WL-7</div></div>
+        <div class="mb-row">11:15 — Encrypted backup completed · 2.3 GB<div class="mb-row-meta">VAULT · A-7</div></div>
+        <div class="mb-row">09:40 — Security sweep run · 0 anomalies<div class="mb-row-meta">SWEEP · 4f12</div></div>
+        <div class="mb-row">08:00 — Daily integrity check · pass<div class="mb-row-meta">HASH · OK</div></div>
+      </div>`,
+  },
+  "network-activity": {
+    title: "NETWORK ACTIVITY",
+    sub: "LIVE TRAFFIC ANALYSIS",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M 7.5 7.5 L 10.5 10.5 M 16.5 7.5 L 13.5 10.5 M 7.5 16.5 L 10.5 13.5 M 16.5 16.5 L 13.5 13.5"/></svg>`,
+    render: (state) => `
+      <div class="mb-grid">
+        <div class="mb-stat"><span class="lbl">WAN SSID</span><span class="val">${escapeHTML(state.wifi_ssid || "—")}</span></div>
+        <div class="mb-stat"><span class="lbl">LINK SPEED</span><span class="val">${escapeHTML(state.wifi_speed || "—")}</span></div>
+        <div class="mb-stat"><span class="lbl">SIGNAL</span><span class="val ok">${escapeHTML(state.wifi_signal || "—")}</span></div>
+        <div class="mb-stat"><span class="lbl">PING</span><span class="val">${escapeHTML(state.ping || "—")} ms</span></div>
+        <div class="mb-stat"><span class="lbl">CONNECTIONS</span><span class="val">1,247</span></div>
+        <div class="mb-stat"><span class="lbl">TOP APP</span><span class="val">chrome.exe · 32%</span></div>
+      </div>
+      <div class="mb-list">
+        <div class="mb-row">Encryption: WPA2 · channel ${escapeHTML(state.wifi_channel || "—")}<div class="mb-row-meta">SECURE</div></div>
+      </div>`,
+  },
+};
+
+async function gatherNetworkSnapshot() {
+  let wifi = {}, ping = "—";
+  try {
+    const r = await fetch("/api/connectivity"); const d = await r.json();
+    wifi = d.wifi || {}; ping = d.ping_ms ?? "—";
+  } catch (e) {}
+  let brainMode = "—";
+  try {
+    const r = await fetch("/api/status"); const d = await r.json();
+    brainMode = (d.brain_mode || "—").toUpperCase();
+  } catch (e) {}
+  return {
+    brain_mode: brainMode,
+    wifi_ssid: wifi.ssid || "—",
+    wifi_speed: wifi.speed_rx_mbps ? `${wifi.speed_rx_mbps} Mbps` : "—",
+    wifi_signal: wifi.signal || "—",
+    wifi_channel: wifi.channel || "—",
+    ping: String(ping),
+  };
+}
+
+async function openToolModal(toolKey) {
+  const def = TOOL_DATA[toolKey]; if (!def) return;
+  const modal = $("#tool-modal"); if (!modal) return;
+  $("#modal-title").textContent = def.title;
+  $("#modal-sub").textContent = def.sub;
+  $("#modal-icon").innerHTML = def.icon;
+  $("#modal-body").innerHTML = '<div style="color:var(--text-dim);font-style:italic">acquiring live data…</div>';
+  modal.hidden = false;
+
+  const state = await gatherNetworkSnapshot();
+  try {
+    $("#modal-body").innerHTML = def.render(state);
+  } catch (e) {
+    $("#modal-body").innerHTML = `<div style="color:var(--error)">render error: ${escapeHTML(e.message)}</div>`;
+  }
+}
+function closeToolModal() {
+  const modal = $("#tool-modal"); if (modal) modal.hidden = true;
+}
+
+document.querySelectorAll(".tool-card").forEach(btn => {
+  btn.addEventListener("click", () => {
+    btn.classList.add("flash");
+    setTimeout(() => btn.classList.remove("flash"), 700);
+    openToolModal(btn.dataset.tool);
+  });
+});
+$("#modal-close")?.addEventListener("click", closeToolModal);
+$("#modal-backdrop")?.addEventListener("click", closeToolModal);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeToolModal(); });
+
+// keep AI tool-card stat in sync with live brain mode
+async function refreshToolCardStats() {
+  try {
+    const r = await fetch("/api/status"); const d = await r.json();
+    const ai = $("#tc-ai");
+    if (ai) ai.textContent = `BRAIN · ${(d.brain_mode || "?").toUpperCase()} · 8/8`;
+  } catch (e) {}
+}
+refreshToolCardStats();
+setInterval(refreshToolCardStats, 60000);
+
+// ── operator camera ──────────────────────────────────
+const camRoot   = $("#operator-cam");
+const camVideo  = $("#cam-video");
+const camStatus = $("#cam-status");
+const camToggle = $("#cam-toggle");
+const camResEl  = $("#cam-res");
+let camStream   = null;
+
+async function startCamera() {
+  if (camStream) return;
+  logEvent('<span class="tag">[cam]</span> requesting camera access…');
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    camStatus.textContent = "✕ UNSUPPORTED";
+    camRoot.classList.add("error");
+    logEvent('<span class="tag">[cam]</span> camera API not available — http:// origin may block it. Try http://127.0.0.1:8765 (not 0.0.0.0 / LAN ip)', "warn");
+    return;
+  }
+  camRoot.classList.remove("error");
+  camRoot.classList.add("requesting");
+  camStatus.textContent = "◌ REQUESTING…";
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width:  { ideal: 480 },
+        height: { ideal: 360 },
+        facingMode: "user",
+      },
+      audio: false,
+    });
+    camStream = stream;
+    camVideo.srcObject = stream;
+
+    // Explicit play() — autoplay can silently fail on display:none or unfocused tabs.
+    try {
+      await camVideo.play();
+    } catch (playErr) {
+      console.warn("[cam] play() failed:", playErr);
+      logEvent(`<span class="tag">[cam]</span> play blocked: ${escapeHTML(playErr.message || playErr.name)}`, "warn");
+    }
+
+    camRoot.classList.remove("requesting");
+    camRoot.classList.add("live");
+    camStatus.textContent = "◉ LIVE";
+
+    // Read actual stream dimensions once metadata arrives
+    const showRes = () => {
+      const w = camVideo.videoWidth, h = camVideo.videoHeight;
+      if (w && h && camResEl) camResEl.textContent = `${w}×${h}`;
+    };
+    if (camVideo.readyState >= 1) showRes();
+    else camVideo.addEventListener("loadedmetadata", showRes, { once: true });
+
+    logEvent('<span class="tag">[cam]</span> operator view online');
+    try { Presence.start(); } catch (e) { console.warn("[presence] start failed:", e); }
+
+    // If the user revokes permission or the device disappears, clean up.
+    stream.getVideoTracks().forEach(t => {
+      t.addEventListener("ended", () => stopCamera());
+    });
+  } catch (e) {
+    console.error("[cam] getUserMedia failed:", e);
+    camRoot.classList.remove("requesting", "live");
+    camRoot.classList.add("error");
+    const msg = e.name === "NotAllowedError" ? "PERMISSION DENIED"
+              : e.name === "NotFoundError"   ? "NO CAMERA FOUND"
+              : e.name === "NotReadableError"? "CAMERA IN USE"
+              : e.name === "OverconstrainedError" ? "CONSTRAINTS UNMET"
+              : e.name === "SecurityError"   ? "BLOCKED · USE HTTPS OR 127.0.0.1"
+              : (e.name || "ERROR");
+    camStatus.textContent = "✕ " + msg;
+    logEvent(`<span class="tag">[cam]</span> ${escapeHTML(msg)} · ${escapeHTML(e.message || "")}`, "warn");
+  }
+}
+
+function stopCamera() {
+  if (camStream) {
+    try { camStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    camStream = null;
+  }
+  if (camVideo) camVideo.srcObject = null;
+  camRoot.classList.remove("live", "requesting", "error");
+  camStatus.textContent = "◌ OFFLINE";
+  if (camResEl) camResEl.textContent = "--×--";
+  try { Presence.stop(); } catch (e) {}
+  logEvent('<span class="tag">[cam]</span> operator view offline');
+}
+
+camToggle?.addEventListener("click", () => {
+  if (camStream) stopCamera(); else startCamera();
+});
+
+// Tidy up if the user navigates away
+window.addEventListener("beforeunload", () => { if (camStream) stopCamera(); });
+
+/* ═══ PRESENCE MONITOR — motion-based, identity-free ═══
+   Samples the live video onto a 64×48 canvas every 450 ms, computes
+   frame-to-frame luminance difference (motion) and scene variance
+   (signal check). No face detection, no identification, no frames
+   leave the machine — only an abstract state string is reported. */
+
+function setChip(sel, base, text, cls) {
+  const el = $(sel); if (!el) return;
+  el.textContent = text;
+  el.className = base + (cls ? " " + cls : "");
+}
+
+const Presence = {
+  canvas: document.createElement("canvas"),
+  ctx: null, prev: null, timer: null,
+  ema: 0, lastMotion: 0, state: "offline",
+
+  start() {
+    this.canvas.width = 64; this.canvas.height = 48;
+    this.ctx = this.canvas.getContext("2d", { willReadFrequently: true });
+    this.prev = null; this.ema = 0; this.lastMotion = Date.now();
+    setChip("#v-cam", "v-chip", "CAM ONLINE", "ok");
+    this.setState("idle");
+    this.timer = setInterval(() => { try { this.sample(); } catch (e) {} }, 450);
+  },
+
+  stop() {
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.prev = null; this.ema = 0;
+    setChip("#v-cam", "v-chip", "CAM OFFLINE", "dim");
+    setChip("#chip-motion", "cam-chip", "MOTION 0", "dim");
+    const mf = $("#motion-fill"); if (mf) mf.style.width = "0%";
+    const mv = $("#motion-val"); if (mv) mv.textContent = "0";
+    this.setState("offline");
+  },
+
+  sample() {
+    if (!camStream || camVideo.readyState < 2) return;
+    this.ctx.drawImage(camVideo, 0, 0, 64, 48);
+    const d = this.ctx.getImageData(0, 0, 64, 48).data;
+    const N = 64 * 48;
+    const gray = new Uint8Array(N);
+    let sum = 0;
+    for (let i = 0; i < N; i++) {
+      const j = i * 4;
+      const g = (d[j] * 0.299 + d[j + 1] * 0.587 + d[j + 2] * 0.114) | 0;
+      gray[i] = g; sum += g;
+    }
+    const mean = sum / N;
+    let varSum = 0;
+    for (let i = 0; i < N; i += 4) { const dv = gray[i] - mean; varSum += dv * dv; }
+    const variance = varSum / (N / 4);
+
+    let motion = 0;
+    if (this.prev) {
+      let diff = 0;
+      for (let i = 0; i < N; i += 2) diff += Math.abs(gray[i] - this.prev[i]);
+      motion = diff / (N / 2);
+    }
+    this.prev = gray;
+    this.ema = this.ema * 0.6 + motion * 0.4;
+
+    // live UI
+    const mv = $("#motion-val");  if (mv) mv.textContent = this.ema.toFixed(1);
+    const mf = $("#motion-fill"); if (mf) mf.style.width = Math.min(100, this.ema * 8) + "%";
+    setChip("#chip-motion", "cam-chip", "MOTION " + Math.round(this.ema),
+            this.ema > 3.5 ? "ok" : "dim");
+
+    const now = Date.now();
+    let next;
+    // Hysteresis: enter ACTIVE above 3.5, only drop out below 2.0 — kills
+    // boundary oscillation that would otherwise spam state changes.
+    const activeThresh = this.state === "active" ? 2.0 : 3.5;
+    if (variance < 60) next = "no-user";                 // covered lens / black frame
+    else if (this.ema > activeThresh) { this.lastMotion = now; next = "active"; }
+    else if (now - this.lastMotion < 45000) next = "idle";
+    else next = "away";
+    this.setState(next);
+  },
+
+  setState(s) {
+    if (s === this.state) return;
+    const now = Date.now();
+    // Min dwell of 2s between transitions (offline always allowed through)
+    if (s !== "offline" && now - (this._lastChange || 0) < 2000) return;
+    this._lastChange = now;
+    this.state = s;
+    const labels = {
+      active: "USER DETECTED · ACTIVE", idle: "USER PRESENT · IDLE",
+      away: "NO USER · AWAY", "no-user": "NO SIGNAL", offline: "CAM OFFLINE",
+    };
+    const cls = s === "active" ? "ok" : s === "idle" ? "warn" : "dim";
+    setChip("#chip-presence", "cam-chip", labels[s] || s, cls);
+    setChip("#v-presence", "v-chip", labels[s] || s, cls);
+    const obs = {
+      active: "operator in frame — session active",
+      idle: "operator still — attention idle",
+      away: "frame vacant — operator away",
+      "no-user": "no usable signal from camera",
+      offline: "camera feed offline — presence monitoring paused",
+    }[s];
+    const vo = $("#vision-obs"); if (vo) vo.textContent = obs;
+    logEvent(`<span class="tag">[vision]</span> ${obs}`);
+    fetch("/api/presence", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ state: s, motion: Math.round(this.ema * 10) / 10 }),
+    }).catch(() => {});
+  },
+};
+
+/* ═══ AI OPERATIONS CENTER ═══════════════════════════ */
+
+const CONF_CIRC = 2 * Math.PI * 36;  // ≈ 226 (matches conf-arc r=36)
+
+function setConfidence(pct) {
+  const v = $("#conf-val");
+  if (v) v.textContent = pct != null ? Math.round(pct) : "--";
+  const arc = $("#conf-arc");
+  if (arc && pct != null) {
+    const p = Math.max(0, Math.min(100, pct)) / 100;
+    arc.setAttribute("stroke-dasharray", CONF_CIRC.toFixed(1));  // keep dasharray in sync with JS circumference
+    arc.setAttribute("stroke-dashoffset", String((CONF_CIRC * (1 - p)).toFixed(1)));
+  }
+}
+
+function setReasonState(stateStr) {
+  const card = $("#aiops-reasoning");
+  const el = $("#reason-state");
+  if (el) el.textContent = stateStr.toUpperCase();
+  if (card) card.classList.toggle("analyzing", stateStr === "analyzing");
+}
+
+function setEngineInfo(engine) {
+  if (!engine) return;
+  const model = $("#reason-model");
+  if (model && engine.model) model.textContent = String(engine.model).slice(0, 20);
+  const lat = $("#reason-latency");
+  if (lat) lat.textContent = engine.latency_ms != null ? engine.latency_ms + " ms" : "—";
+  const src = $("#insight-source");
+  if (src && engine.source) src.textContent = engine.source.toUpperCase();
+  if (engine.confidence != null) setConfidence(engine.confidence);
+}
+
+function addInsight(d, animate = true) {
+  const feed = $("#insights-feed"); if (!feed) return;
+  const empty = feed.querySelector(".insight-empty"); if (empty) empty.remove();
+  const div = document.createElement("div");
+  div.className = "insight-item " + (d.severity || "info");
+  const t = new Date((d.ts || Date.now() / 1000) * 1000)
+    .toTimeString().slice(0, 5);
+  div.innerHTML = `
+    <div class="insight-text"></div>
+    <div class="insight-rec">${d.recommendation ? "→ " + escapeHTML(d.recommendation) : ""}</div>
+    <div class="insight-meta">${t} · ${escapeHTML((d.source || "").toUpperCase())} · CONF ${d.confidence ?? "--"}%</div>`;
+  feed.prepend(div);
+  while (feed.children.length > 8) {
+    const old = feed.lastChild;
+    if (old && old._typeInterval) clearInterval(old._typeInterval);  // no orphaned typewriters
+    feed.removeChild(old);
+  }
+  const textEl = div.querySelector(".insight-text");
+  const full = d.insight || "";
+  if (animate) {
+    div.classList.add("typing");
+    let i = 0;
+    const iv = setInterval(() => {
+      i += 2;
+      textEl.textContent = full.slice(0, i);
+      if (i >= full.length) { clearInterval(iv); div._typeInterval = null; div.classList.remove("typing"); }
+    }, 24);
+    div._typeInterval = iv;
+  } else {
+    textEl.textContent = full;
+  }
+}
+
+async function seedAiops() {
+  try {
+    const r = await fetch("/api/insights"); const d = await r.json();
+    (d.insights || []).slice().reverse().forEach(it => addInsight(it, false));
+    setEngineInfo(d.engine);
+  } catch (e) {}
+}
+seedAiops();
+setInterval(async () => {
+  try {
+    const r = await fetch("/api/insights"); const d = await r.json();
+    setEngineInfo(d.engine);
+  } catch (e) {}
+}, 60000);
+
+/* — activity heatmap: 60 one-minute buckets of event volume — */
+const hmBuckets = new Array(60).fill(0);
+let hmDirty = true;
+function bumpActivity() { hmBuckets[0]++; hmDirty = true; }
+function renderHeatmap() {
+  const host = $("#activity-heatmap"); if (!host) return;
+  if (!host.children.length) {
+    for (let i = 0; i < 60; i++) {
+      const c = document.createElement("div");
+      c.className = "hm-cell";
+      host.appendChild(c);
+    }
+  }
+  const cells = host.children;
+  for (let i = 0; i < 60; i++) {
+    const v = hmBuckets[59 - i];   // oldest left, newest right
+    const cls = v === 0 ? "" : v === 1 ? "h1" : v < 4 ? "h2" : v < 7 ? "h3" : "h4";
+    cells[i].className = "hm-cell" + (cls ? " " + cls : "");
+  }
+}
+setInterval(() => { hmBuckets.pop(); hmBuckets.unshift(0); hmDirty = true; }, 60000);
+setInterval(() => { if (hmDirty) { renderHeatmap(); hmDirty = false; } }, 1500);
+renderHeatmap();
+
+/* — readiness / anomaly from live metrics — */
+function updateAiopsTele(msg) {
+  const ready = Math.max(0, Math.min(100, Math.round(
+    100 - Math.max(0, msg.cpu - 70) * 0.8
+        - Math.max(0, msg.mem - 80) * 1.2
+        - Math.max(0, msg.disk - 85) * 1.6)));
+  const anom = Math.min(100, Math.round(
+    Math.max(0, msg.cpu - 85) * 1.5
+    + Math.max(0, msg.mem - 88) * 2.0
+    + Math.max(0, msg.disk - 92) * 2.5));
+  const rv = $("#readiness-val"); if (rv) rv.textContent = ready + "%";
+  const rb = $("#readiness-bar"); if (rb) rb.style.width = ready + "%";
+  const av = $("#anomaly-val");  if (av) av.textContent = anom;
+  const ab = $("#anomaly-bar");  if (ab) ab.style.width = anom + "%";
+  // feed predictive analytics + mission readiness
+  metricHist.cpu.push(msg.cpu); metricHist.mem.push(msg.mem);
+  if (metricHist.cpu.length > 120) { metricHist.cpu.shift(); metricHist.mem.shift(); }
+  try { updateMissionReadiness(ready, anom); } catch (e) {}
+}
+
+/* ═══ STRATEGIC INTEL · PREDICTIVE · READINESS ═══════ */
+
+let agentsOnline = 0;          // set by renderAgents (snapshot)
+let pendingActions = 0;        // set by refreshAgenda
+
+const metricHist = { cpu: [], mem: [] };
+let forecastChart = null;
+
+function ensureForecastChart() {
+  if (forecastChart || typeof Chart === "undefined") return;
+  const el = document.getElementById("forecast-chart");
+  if (!el) return;
+  forecastChart = new Chart(el, {
+    type: "line",
+    data: { labels: [], datasets: [
+      { data: [], borderColor: "#00d9ff", backgroundColor: "rgba(0,217,255,0.10)",
+        borderWidth: 1.5, fill: true, tension: 0.3, pointRadius: 0 },
+      { data: [], borderColor: "#ffb86c", borderDash: [4, 3],
+        borderWidth: 1.4, fill: false, tension: 0.3, pointRadius: 0 },
+    ]},
+    options: { responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { display: false }, y: { min: 0, max: 100, display: false } } },
+  });
+}
+
+function slopePerMin(arr) {
+  // least-squares slope over ~2s samples → % per minute
+  const n = arr.length;
+  if (n < 8) return 0;
+  let sx = 0, sy = 0, sxy = 0, sxx = 0;
+  for (let i = 0; i < n; i++) { sx += i; sy += arr[i]; sxy += i * arr[i]; sxx += i * i; }
+  const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1);
+  return slope * 30;   // 30 samples per minute at 2s cadence
+}
+const trendGlyph = (d15) =>
+  d15 > 2 ? "↗ +" + d15.toFixed(0) + "%" : d15 < -2 ? "↘ " + d15.toFixed(0) + "%" : "→ STABLE";
+
+function updateForecast() {
+  ensureForecastChart();
+  if (!forecastChart) return;
+  const hist = metricHist.cpu.slice(-45);
+  if (hist.length < 8) return;
+  const cpuPerMin = slopePerMin(hist);
+  const memPerMin = slopePerMin(metricHist.mem.slice(-45));
+  const cpu15 = cpuPerMin * 15, mem15 = memPerMin * 15;
+  const last = hist[hist.length - 1];
+  const proj = [];
+  for (let i = 1; i <= 15; i++) proj.push(Math.max(0, Math.min(100, last + cpuPerMin * i)));
+  forecastChart.data.labels = new Array(hist.length + 15).fill("");
+  forecastChart.data.datasets[0].data = [...hist, ...new Array(15).fill(null)];
+  forecastChart.data.datasets[1].data = [...new Array(hist.length - 1).fill(null), last, ...proj];
+  forecastChart.update("none");
+
+  const tc = $("#trend-cpu"); if (tc) tc.textContent = trendGlyph(cpu15);
+  const tm = $("#trend-mem"); if (tm) tm.textContent = trendGlyph(mem15);
+  const ft = $("#forecast-text");
+  if (ft) {
+    const memNow = metricHist.mem[metricHist.mem.length - 1] || 0;
+    const cpuMsg = Math.abs(cpu15) < 2
+      ? `CPU holding near ${last.toFixed(0)}%`
+      : `CPU ${cpu15 > 0 ? "rising toward" : "easing toward"} ${Math.max(0, Math.min(100, last + cpu15)).toFixed(0)}%`;
+    const memMsg = Math.abs(mem15) < 2
+      ? `memory steady near ${memNow.toFixed(0)}%`
+      : `memory ${mem15 > 0 ? "climbing to" : "falling to"} ~${Math.max(0, Math.min(100, memNow + mem15)).toFixed(0)}%`;
+    ft.textContent = `Projection: ${cpuMsg}, ${memMsg} within 15 minutes.`;
+  }
+}
+setInterval(updateForecast, 10000);
+
+const MR_CIRC = 2 * Math.PI * 40;  // ≈ 251.3 (matches mr-arc r=40)
+function updateMissionReadiness(ready, anomaly) {
+  const val = $("#mr-val"); if (val) val.textContent = ready;
+  const arc = $("#mr-arc");
+  if (arc) {
+    arc.setAttribute("stroke-dasharray", MR_CIRC.toFixed(1));
+    arc.setAttribute("stroke-dashoffset", String((MR_CIRC * (1 - ready / 100)).toFixed(1)));
+  }
+  const g = document.querySelector(".mr-gauge");
+  if (g) {
+    g.classList.toggle("warn", ready < 75 && ready >= 50);
+    g.classList.toggle("bad", ready < 50);
+  }
+  const sys = $("#mr-systems"); if (sys) sys.textContent = `${agentsOnline || 8} / 8 AGENTS`;
+  const pen = $("#mr-pending"); if (pen) pen.textContent = String(pendingActions);
+  const stab = $("#mr-stability"); if (stab) stab.textContent = `${Math.max(0, 100 - anomaly)}%`;
+  const up = $("#mr-uptime"); const ops = $("#ops-timer");
+  if (up && ops) up.textContent = ops.textContent;
+}
+
+function renderPriorityAlerts(d) {
+  const host = $("#priority-alerts"); if (!host) return;
+  const items = [];
+  for (const e of (d.events || [])) {
+    if (e.minutes_until != null && e.minutes_until > 0 && e.minutes_until <= 30) {
+      items.push({ tag: "MEETING", critical: e.minutes_until <= 10,
+                   text: `${e.title} · in ${Math.round(e.minutes_until)} min` });
+    }
+  }
+  for (const m of (d.emails || [])) {
+    if (m.priority === "priority")
+      items.push({ tag: "MAIL", critical: false,
+                   text: `${(m.sender || "").split("@")[0]} — ${m.subject}` });
+  }
+  host.innerHTML = items.length
+    ? items.slice(0, 4).map(a =>
+        `<div class="alert-item${a.critical ? " critical" : ""}">` +
+        `<span class="al-tag">${a.tag}</span>` +
+        `<span class="al-text">${escapeHTML(a.text)}</span></div>`).join("")
+    : '<div class="alert-empty">no priority alerts</div>';
+}
+
+/* ═══ THREAT INTELLIGENCE BOARD ══════════════════════ */
+
+function addThreatEvent(ev, prepend = true) {
+  const feed = $("#threat-feed"); if (!feed) return;
+  const empty = feed.querySelector(".tf-empty"); if (empty) empty.remove();
+  const div = document.createElement("div");
+  div.className = "tf-item " + (ev.severity || "low");
+  const t = new Date((ev.ts || Date.now() / 1000) * 1000).toTimeString().slice(0, 5);
+  div.innerHTML =
+    `<span class="tf-cat">${escapeHTML((ev.category || "sys").toUpperCase().slice(0, 4))}</span>` +
+    `<span class="tf-title">${escapeHTML(ev.title || "")}</span>` +
+    `<span class="tf-time">${t}</span>`;
+  if (prepend) feed.prepend(div); else feed.appendChild(div);
+  while (feed.children.length > 5) feed.removeChild(feed.lastChild);
+}
+
+function updateRisk(score, level) {
+  const rs = $("#risk-score"); if (rs) rs.textContent = score;
+  const st = $("#threat-state");
+  const sh = $("#threat-shield");
+  const label = level === "secure" ? "SECURE" : level === "elevated" ? "ELEVATED" : "HIGH RISK";
+  if (st) { st.textContent = label; st.className = "threat-state " + level; }
+  if (sh) { sh.className.baseVal = "threat-shield " + level; }
+}
+
+async function seedThreats() {
+  try {
+    const r = await fetch("/api/threats"); const d = await r.json();
+    const feed = $("#threat-feed");
+    if (feed && !feed.querySelector(".tf-item")) {
+      (d.events || []).slice(0, 5).reverse().forEach(ev => addThreatEvent(ev));
+    }
+    updateRisk(d.risk_score ?? 5, d.level || "secure");
+    renderThreatCenter(d);
+  } catch (e) {}
+}
+seedThreats();
+setInterval(seedThreats, 45000);   // reconcile matrix/SOC/timeline; live events via WS
+
+/* ═══ THREAT INTELLIGENCE CENTER (matrix · SOC · timeline) ═══ */
+
+let threatRadar = null;
+const MX_LABELS = ["OPS", "INFRA", "NET", "AI", "RES", "SEC"];
+const MX_KEYS = ["operational", "infrastructure", "network", "ai", "resource", "security"];
+
+function ensureRadar() {
+  if (threatRadar || typeof Chart === "undefined") return;
+  const el = document.getElementById("threat-radar"); if (!el) return;
+  threatRadar = new Chart(el, {
+    type: "radar",
+    data: { labels: MX_LABELS, datasets: [{
+      data: [0, 0, 0, 0, 0, 0],
+      backgroundColor: "rgba(0,217,255,0.15)",
+      borderColor: "#00d9ff", borderWidth: 1.5,
+      pointRadius: 2.5, pointBackgroundColor: "#00d9ff",
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 700 },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { r: {
+        min: 0, max: 100,
+        ticks: { display: false },
+        grid: { color: "rgba(0,217,255,0.14)" },
+        angleLines: { color: "rgba(0,217,255,0.1)" },
+        pointLabels: { color: "#7e96b3", font: { family: "Orbitron", size: 8 } },
+      }},
+    },
+  });
+}
+
+function renderThreatCenter(d) {
+  // matrix
+  ensureRadar();
+  const mx = d.matrix || {};
+  if (threatRadar) {
+    threatRadar.data.datasets[0].data = MX_KEYS.map(k => (mx[k] || {}).score || 0);
+    threatRadar.update();
+  }
+  const rows = $("#matrix-rows");
+  if (rows) {
+    rows.innerHTML = MX_KEYS.map((k, i) => {
+      const m = mx[k] || { score: 0, trend: "flat", confidence: 90 };
+      const heat = m.score >= 60 ? "hot" : m.score >= 35 ? "warm" : "";
+      const arrow = m.trend === "up" ? "▲" : m.trend === "down" ? "▼" : "—";
+      return `<div class="mx-row ${heat}">
+        <span class="mx-name">${MX_LABELS[i]} · ${k.toUpperCase().slice(0, 9)}</span>
+        <span class="mx-score">${m.score}</span>
+        <span class="mx-trend ${m.trend}">${arrow}</span>
+        <span class="mx-conf">${m.confidence}%</span></div>`;
+    }).join("");
+  }
+  // SOC
+  const soc = d.soc || {};
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v ?? 0; };
+  set("#soc-analyzed", soc.analyzed); set("#soc-alerts", soc.alerts);
+  set("#soc-resolved", soc.resolved); set("#soc-invest", soc.investigations);
+  // incident response timeline
+  const tl = $("#ir-timeline");
+  if (tl) {
+    const evs = (d.events || []).slice(0, 6);
+    tl.innerHTML = evs.length ? evs.map(ev => {
+      const t = new Date(ev.ts * 1000).toTimeString().slice(0, 5);
+      return `<div class="ir-item">
+        <span class="ir-time">${t}</span>
+        <span class="ir-main">
+          <div class="ir-title">${escapeHTML(ev.title)}</div>
+          <div class="ir-meta">${escapeHTML(ev.severity.toUpperCase())} · ASSIGNED <b>${escapeHTML((ev.agent || "jarvis").toUpperCase())}</b></div>
+        </span>
+        <span class="ir-stage ${ev.stage || "detected"}">${(ev.stage || "detected").toUpperCase()}</span>
+      </div>`;
+    }).join("") : '<div class="tf-empty">no incidents in the response pipeline</div>';
+  }
+}
+
+/* ═══ INTELLIGENCE TICKER ════════════════════════════ */
+
+const tickerItems = [];
+function pushTicker(text, cls = "") {
+  tickerItems.unshift(cls ? `<span class="${cls}">${escapeHTML(text)}</span>` : escapeHTML(text));
+  if (tickerItems.length > 8) tickerItems.pop();
+  const el = $("#ticker-content");
+  if (el) el.innerHTML = tickerItems.join("&nbsp;&nbsp;<b>···</b>&nbsp;&nbsp;");
+}
+
+/* ═══ EMERGENCY ALERT SYSTEM ═════════════════════════ */
+
+const AlertSystem = {
+  ctx: null, unlocked: false, siren: null,
+  active: { warning: 0, critical: 0, emergency: 0 },
+
+  init() {
+    const unlock = () => {
+      try {
+        this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)();
+        this.ctx.resume(); this.unlocked = true;
+      } catch (e) {}
+    };
+    document.addEventListener("pointerdown", unlock, { once: true });
+    document.addEventListener("keydown", unlock, { once: true });
+  },
+
+  beep(freq, dur, delay = 0, type = "sine", vol = 0.07) {
+    if (!this.unlocked || !this.ctx) return;
+    try {
+      const t = this.ctx.currentTime + delay;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(g); g.connect(this.ctx.destination);
+      o.start(t); o.stop(t + dur);
+    } catch (e) {}
+  },
+
+  sound(sev) {
+    if (sev === "info") this.beep(880, 0.12);
+    else if (sev === "warning") { this.beep(620, 0.14); this.beep(480, 0.16, 0.16); }
+    else if (sev === "critical") { for (let i = 0; i < 3; i++) this.beep(900, 0.11, i * 0.18, "square", 0.06); }
+    else if (sev === "emergency") this.startSiren();
+  },
+
+  startSiren() {
+    if (!this.unlocked || !this.ctx || this.siren) return;
+    try {
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain(),
+            lfo = this.ctx.createOscillator(), lg = this.ctx.createGain();
+      o.type = "sawtooth"; o.frequency.value = 800;
+      lfo.frequency.value = 0.9; lg.gain.value = 320;
+      lfo.connect(lg); lg.connect(o.frequency);
+      g.gain.value = 0.05;
+      o.connect(g); g.connect(this.ctx.destination);
+      o.start(); lfo.start();
+      this.siren = { o, lfo, g };
+    } catch (e) {}
+  },
+  stopSiren() {
+    if (!this.siren) return;
+    try { this.siren.o.stop(); this.siren.lfo.stop(); } catch (e) {}
+    this.siren = null;
+  },
+
+  vibrate(sev) {
+    if (!navigator.vibrate) return;
+    try {
+      if (sev === "warning") navigator.vibrate(120);
+      else if (sev === "critical") navigator.vibrate([140, 90, 140]);
+      else if (sev === "emergency") navigator.vibrate([220, 100, 220, 100, 220, 100, 220]);
+    } catch (e) {}
+  },
+
+  release(sev) {
+    if (this.active[sev] != null) this.active[sev] = Math.max(0, this.active[sev] - 1);
+  },
+
+  raise(a) {
+    // Emergency renders as a persistent critical card — no full-screen
+    // takeover, no edge glow, no siren. Corner cards only.
+    let sev = ["info", "warning", "critical", "emergency"].includes(a.severity) ? a.severity : "info";
+    if (sev === "emergency") sev = "critical";
+    this.sound(sev); this.vibrate(sev);
+    pushTicker(`[${sev.toUpperCase()}] ${a.title}`, sev === "critical" ? "tk-crit" : sev === "warning" ? "tk-warn" : "");
+    if (this.active[sev] != null) this.active[sev]++;
+
+    const stack = $("#alert-stack"); if (!stack) return;
+    const card = document.createElement("div");
+    card.className = "alert-card " + sev;
+    const t = new Date().toTimeString().slice(0, 5);
+    card.innerHTML = `
+      <div class="ac-head"><span class="ac-sev">◢ ${sev.toUpperCase()}</span><span class="ac-time">${t}</span></div>
+      <div class="ac-title">${escapeHTML(a.title || "")}</div>
+      ${a.detail ? `<div class="ac-detail">${escapeHTML(a.detail)}</div>` : ""}
+      ${a.action ? `<div class="ac-action">→ ${escapeHTML(a.action)}</div>` : ""}
+      <div class="ac-src">SOURCE · ${escapeHTML((a.source || "system").toUpperCase())}</div>
+      <div class="ac-btns">
+        <button class="ac-btn" data-act="view">VIEW</button>
+        <button class="ac-btn" data-act="escalate">ESCALATE</button>
+        <button class="ac-btn ack" data-act="ack">ACKNOWLEDGE</button>
+      </div>`;
+    const close = () => {
+      if (card._closed) return; card._closed = true;
+      this.release(sev);
+      card.classList.add("out");
+      setTimeout(() => card.remove(), 380);
+    };
+    card.querySelector('[data-act="ack"]').addEventListener("click", close);
+    card.querySelector('[data-act="view"]').addEventListener("click", () => { execDashCmd("threats"); });
+    card.querySelector('[data-act="escalate"]').addEventListener("click", () => {
+      close();
+      this.raise({ ...a, severity: "critical",
+                   source: (a.source || "system") + " · escalated" });
+    });
+    stack.prepend(card);
+    while (stack.children.length > 3) stack.lastChild.remove();
+    if (sev === "info") setTimeout(close, 6000);
+    else if (sev === "warning") setTimeout(close, 12000);
+    else setTimeout(close, 25000);   // critical: lingers, but never forever
+  },
+};
+AlertSystem.init();
+
+/* ═══ DASHBOARD VOICE CONTROL ════════════════════════ */
+
+const DASH_TARGETS = {
+  threats: ".bs-threat", map: ".map-panel", agenda: "#agenda-list",
+  insights: "#aiops-insights", news: "#news-list", camera: "#operator-cam",
+  roster: "#avengers-panel", readiness: "#intel-readiness",
+};
+function execDashCmd(target) {
+  const sel = DASH_TARGETS[target]; if (!sel) return;
+  const el = document.querySelector(sel); if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("flash-target");
+  setTimeout(() => el.classList.remove("flash-target"), 2200);
+  logEvent(`<span class="tag">[voice]</span> dashboard control → ${target}`);
+}
+
+/* ═══ CALENDAR INTELLIGENCE ══════════════════════════ */
+
+function renderCalIntel(d) {
+  const el = $("#cal-intel"); if (!el) return;
+  const intel = d.intel || {};
+  if (!intel.meetings_today && intel.meetings_today !== 0) {
+    el.textContent = "analyzing schedule…"; return;
+  }
+  const bits = [];
+  bits.push(`${intel.meetings_today} mtgs today`);
+  if (intel.density) bits.push(`${intel.density} load`);
+  if (intel.largest_free_block_min != null) bits.push(`focus block ${intel.largest_free_block_min}m`);
+  if (intel.conflicts) bits.push(`⚠ ${intel.conflicts} conflict${intel.conflicts > 1 ? "s" : ""}`);
+  if (intel.readiness != null) bits.push(`readiness ${intel.readiness}%`);
+  el.innerHTML = bits.join(" · ") +
+    `<span class="cal-src${d.source === "google" ? " ok" : ""}">${(d.source || "mock").toUpperCase()}</span>`;
+  el.classList.toggle("warn", !!intel.conflicts);
+}
+
+$("#gcal-btn")?.addEventListener("click", async () => {
+  logEvent('<span class="tag">[calendar]</span> starting Google authorization — check your browser…');
+  try {
+    const r = await fetch("/api/calendar/connect", { method: "POST" });
+    const d = await r.json();
+    if (d.ok) {
+      logEvent(`<span class="tag">[calendar]</span> connected ✓ — ${d.synced ?? 0} events synced`);
+      refreshAgenda();
+    } else {
+      logEvent(`<span class="tag">[calendar]</span> ${escapeHTML(d.error || "connect failed")} — see google_sync.py setup steps`, "warn");
+    }
+  } catch (e) {
+    logEvent("calendar connect failed: " + escapeHTML(e.message), "error");
+  }
+});
+
+/* ═══ SESSION TRACKING (vision) ══════════════════════ */
+
+let sessionStart = null;
+setInterval(() => {
+  const el = $("#session-val"); if (!el) return;
+  const present = Presence.state === "active" || Presence.state === "idle";
+  if (present && !sessionStart) sessionStart = Date.now();
+  if (!present) sessionStart = null;
+  if (sessionStart) {
+    const m = Math.floor((Date.now() - sessionStart) / 60000);
+    el.textContent = m >= 60 ? `ACTIVE ${Math.floor(m / 60)}H ${m % 60}M` : `ACTIVE ${m}M`;
+  } else {
+    el.textContent = "—";
+  }
+}, 15000);
+
+/* ═══ PROCESS MONITOR + NETWORK TRAFFIC ══════════════ */
+
+let trafficChart = null;
+function ensureTraffic() {
+  if (trafficChart || typeof Chart === "undefined") return;
+  const el = document.getElementById("traffic-chart"); if (!el) return;
+  trafficChart = new Chart(el, {
+    type: "line",
+    data: { labels: [], datasets: [
+      { data: [], borderColor: "#00d9ff", backgroundColor: "rgba(0,217,255,0.12)",
+        borderWidth: 1.4, fill: true, tension: 0.3, pointRadius: 0 },
+      { data: [], borderColor: "#ff7a00", backgroundColor: "rgba(255,122,0,0.10)",
+        borderWidth: 1.4, fill: true, tension: 0.3, pointRadius: 0 },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: false },
+        y: { min: 0, ticks: { color: "#6b94b4", font: { size: 8, family: "Share Tech Mono" }, maxTicksLimit: 4 },
+             grid: { color: "rgba(13,58,90,0.3)" } },
+      },
+    },
+  });
+}
+function pushTraffic(up, down) {
+  ensureTraffic(); if (!trafficChart) return;
+  const d = trafficChart.data;
+  d.labels.push(""); d.datasets[0].data.push(up); d.datasets[1].data.push(down);
+  if (d.labels.length > 90) { d.labels.shift(); d.datasets[0].data.shift(); d.datasets[1].data.shift(); }
+  trafficChart.update("none");
+}
+
+async function refreshProcs() {
+  try {
+    const r = await fetch("/api/processes"); const d = await r.json();
+    const host = $("#proc-list"); if (!host) return;
+    const rows = (d.top_cpu || []).slice(0, 5);
+    if (!rows.length) return;
+    const maxc = Math.max(...rows.map(p => p.cpu), 1);
+    host.innerHTML = rows.map(p => `
+      <div class="proc-row">
+        <span class="proc-name">${escapeHTML(p.name)}${p.count > 1 ? " ×" + p.count : ""}</span>
+        <span class="proc-cpu">${p.cpu.toFixed(0)}%</span>
+        <span class="proc-mem">${p.mem_mb >= 1024 ? (p.mem_mb / 1024).toFixed(1) + " GB" : p.mem_mb.toFixed(0) + " MB"}</span>
+        <span class="proc-bar"><i style="width:${Math.min(100, p.cpu / maxc * 100)}%"></i></span>
+      </div>`).join("");
+  } catch (e) {}
+}
+refreshProcs();
+setInterval(refreshProcs, 6000);
+
+// ── websocket ────────────────────────────────────────
+let ws;
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => {
+    $("#status-pill").classList.remove("offline");
+    $("#status-text").textContent = "ONLINE";
+    logEvent('<span class="tag">[net]</span> uplink established');
+    refreshPills();
+    setPill("#sp-voice", "OFF", "warn");
+  };
+  ws.onclose = () => {
+    $("#status-pill").classList.add("offline");
+    $("#status-text").textContent = "OFFLINE";
+    logEvent('<span class="tag">[net]</span> uplink lost — retrying', "warn");
+    setTimeout(connect, 1500);
+  };
+  ws.onmessage = (m) => { try { handle(JSON.parse(m.data)); } catch (e) {} };
+}
+
+function handle(msg) {
+  switch (msg.type) {
+    case "snapshot":
+      renderAgents(msg.agents); break;
+    case "metrics":
+      $("#m-cpu").textContent = msg.cpu.toFixed(0);
+      $("#m-mem").textContent = msg.mem.toFixed(0);
+      $("#m-disk").textContent = msg.disk.toFixed(0);
+      $("#m-disk-fill").style.width = msg.disk + "%";
+      $("#m-up").textContent = msg.net_up;
+      $("#m-down").textContent = msg.net_down;
+      pushChart(cpuChart, msg.cpu); pushChart(memChart, msg.mem);
+      updateResource(msg.cpu, msg.mem, msg.disk);
+      try { updateAiopsTele(msg); } catch (e) {}
+      try { pushTraffic(msg.net_up, msg.net_down); } catch (e) {}
+      break;
+    case "agent":
+      if (msg.event === "status") {
+        updateAgentStatus(msg.agent, msg.status, msg.task);
+        if (msg.status === "thinking" || msg.status === "working") animateAiGauge(true);
+        else animateAiGauge(false);
+      }
+      if (msg.event === "reply") logEvent(`<span class="tag">[${msg.agent}]</span> ${escapeHTML(msg.a || msg.q)}`);
+      if (msg.event === "tick")  logEvent(`<span class="tag">[${msg.agent}]</span> ${escapeHTML(msg.msg)}`);
+      if (msg.event === "alert") logEvent(`<span class="tag">[${msg.agent}]</span> ${escapeHTML(msg.msg)}`, "warn");
+      if (msg.event === "pulled-news") logEvent(`<span class="tag">[${msg.agent}]</span> intel pulled · ${msg.count} items`);
+      break;
+    case "news":
+      renderNews(msg.items);
+      setPill("#sp-news", `${msg.items.length} ITEMS`, msg.items.length > 0 ? "ok" : "warn");
+      logEvent(`<span class="tag">[widow]</span> world feed refreshed · ${msg.items.length} headlines`);
+      break;
+    case "digest":
+      $("#digest").textContent = msg.msg;
+      logEvent(`<span class="tag">[${msg.kind === "briefing" ? "captain" : "vision"}]</span> digest updated`);
+      break;
+    case "voice":
+      if (msg.event === "ready")      setPill("#sp-voice", "READY", "ok");
+      if (msg.event === "wake")       setVoiceState("listening");
+      if (msg.event === "listening")  { setVoiceState("listening"); setPill("#sp-voice", "LISTENING", "ok"); }
+      if (msg.event === "processing") { setVoiceState("processing"); setPill("#sp-voice", "PROCESSING", "warn"); }
+      if (msg.event === "heard")      { setHeard(msg.text, ""); logEvent(`<span class="tag">[heard]</span> "${escapeHTML(msg.text)}"`); }
+      if (msg.event === "routed")     { setHeard(null, `→ ${(msg.agent || "").toUpperCase()}`); logEvent(`<span class="tag">[voice]</span> → ${escapeHTML(msg.agent)} · ${escapeHTML(msg.command)}`); }
+      if (msg.event === "speak")      { setVoiceState("speaking"); setPill("#sp-voice", "SPEAKING", "ok"); logEvent(`<span class="tag">[voice]</span> ◉ ${escapeHTML(msg.text || "")}`); }
+      if (msg.event === "idle")       { setVoiceState("idle"); setPill("#sp-voice", "READY", "ok"); }
+      break;
+    case "browser":
+      if (msg.event === "opened") logEvent(`<span class="tag">[browser]</span> opened ${escapeHTML(msg.name || msg.url)}${msg.fullscreen ? " · fullscreen" : ""}`);
+      break;
+    case "threat-event":
+      addThreatEvent(msg);
+      pushTicker(`[${(msg.category || "sys").toUpperCase()}] ${msg.title}`,
+                 msg.severity === "high" || msg.severity === "critical" ? "tk-crit"
+                 : msg.severity === "medium" ? "tk-warn" : "");
+      if (msg.severity === "high" || msg.severity === "critical")
+        logEvent(`<span class="tag">[threat]</span> ${escapeHTML(msg.title)}`, "warn");
+      break;
+    case "alert":
+      AlertSystem.raise(msg);
+      logEvent(`<span class="tag">[alert]</span> ${escapeHTML((msg.severity || "info").toUpperCase())} · ${escapeHTML(msg.title || "")}`,
+               msg.severity === "critical" || msg.severity === "emergency" ? "error"
+               : msg.severity === "warning" ? "warn" : "info");
+      break;
+    case "risk":
+      updateRisk(msg.score, msg.level);
+      break;
+    case "dash-cmd":
+      execDashCmd(msg.target);
+      break;
+    case "insight":
+      addInsight(msg);
+      pushTicker(`AI: ${msg.insight || ""}`.slice(0, 140));
+      setConfidence(msg.confidence);
+      { const src = $("#insight-source");
+        if (src) src.textContent = (msg.source || "—").toUpperCase(); }
+      logEvent(`<span class="tag">[jarvis-ai]</span> ${escapeHTML(msg.insight)}`,
+               msg.severity === "critical" ? "error" : msg.severity === "warn" ? "warn" : "info");
+      break;
+    case "ai-state":
+      setReasonState(msg.state === "analyzing" ? "analyzing" : "idle");
+      break;
+    case "presence":
+      // server-side echo (greetings, cross-client sync) — local monitor owns the UI
+      break;
+    case "agenda-alert":
+      logEvent(`<span class="tag">[agenda]</span> ${escapeHTML(msg.msg)}`, "warn");
+      refreshAgenda(); break;
+    case "inbox-alert":
+      logEvent(`<span class="tag">[inbox]</span> ${escapeHTML(msg.msg)}`, "warn");
+      refreshAgenda(); break;
+    case "log":
+      logEvent(`<span class="tag">[sys]</span> ${escapeHTML(msg.msg)}`, msg.level || "info"); break;
+    case "system":
+      logEvent(`<span class="tag">[sys]</span> ${escapeHTML(msg.msg)}`); break;
+  }
+}
+
+// ── ask form ─────────────────────────────────────────
+$("#ask-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const inp = $("#ask-input"); const text = inp.value.trim();
+  if (!text) return;
+  inp.value = "";
+  logEvent(`<span class="tag">[you]</span> ${escapeHTML(text)}`);
+  const m = text.match(/^@(\w+)\s+(.+)/);
+  const agent = m ? m[1] : null;
+  const prompt = m ? m[2] : text;
+  try {
+    const r = await fetch("/api/ask", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt, agent }),
+    });
+    const data = await r.json();
+    if (data.error) logEvent(`<span class="tag">[err]</span> ${escapeHTML(data.error)}`, "error");
+    else            logEvent(`<span class="tag">[${data.agent}]</span> ${escapeHTML(data.reply)}`);
+  } catch (err) { logEvent("ask failed: " + escapeHTML(err.message), "error"); }
+});
+
+// ── news refresh button ──────────────────────────────
+$("#news-refresh").addEventListener("click", async () => {
+  $("#news-refresh").disabled = true;
+  try { await fetch("/api/news/refresh", { method: "POST" }); }
+  finally { setTimeout(() => { $("#news-refresh").disabled = false; }, 1500); }
+});
+
+connect();

@@ -1,0 +1,18 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+httpx==0.28.1
+psutil==6.1.1
+apscheduler==3.11.0
+python-dotenv==1.0.1
+pydantic==2.10.4
+pyttsx3==2.98
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+
+# Optional wake-word stack — uncomment to enable "hey jarvis" detection + STT
+# openwakeword==0.6.0
+# sounddevice==0.5.1
+# numpy==2.2.0
+# faster-whisper==1.1.0
+# onnxruntime==1.20.1

@@ -1,0 +1,16 @@
+# environments & secrets — never commit
+.venv/
+.env
+credentials.json
+token.json
+waitlist.jsonl
+
+# runtime artifacts
+__pycache__/
+*.pyc
+.cache/
+*.log
+
+# OS noise
+Thumbs.db
+desktop.ini
