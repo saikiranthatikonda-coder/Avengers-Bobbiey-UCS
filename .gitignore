@@ -14,3 +14,4 @@ __pycache__/
 # OS noise
 Thumbs.db
 desktop.ini
+model_pref.json
