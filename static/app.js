@@ -114,6 +114,9 @@ function renderAgents(agents) {
     const card = document.createElement("div");
     card.className = "agent-card"; card.dataset.agent = a.name;
     card.dataset.role = a.role;
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.title = `${a.codename} — click for operations file`;
     card.style.setProperty("--agent-color", a.color);
     card.innerHTML = `
       <div class="agent-icon">${shortBadge(a.codename)}</div>
@@ -221,6 +224,118 @@ class Waveform {
   }
 }
 const wave = new Waveform(document.getElementById("wave-canvas")); wave.start();
+
+/* ═══ HOLOGRAPHIC EARTH (orb core) ═══════════════════
+   Wireframe rotating globe — meridians/parallels, day/night terminator,
+   glowing city nodes + orbiting satellites. Colour follows --orb-color so
+   it shifts with the voice state. Pure canvas, no deps. */
+class OrbEarth {
+  constructor(canvas) {
+    this.c = canvas; this.ctx = canvas.getContext("2d");
+    this.t = 0;
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.size = canvas.width;          // logical px (square)
+    this.c.width = this.size * this.dpr;
+    this.c.height = this.size * this.dpr;
+    this.ctx.scale(this.dpr, this.dpr);
+    this.R = this.size * 0.42;
+    // notable nodes [latDeg, lonDeg]
+    this.cities = [
+      [17.4, 78.5], [40.7, -74.0], [51.5, -0.1],
+      [35.7, 139.7], [-33.9, 151.2], [37.8, -122.4],
+    ];
+    this.sats = [0, 2.1, 4.0];         // orbital phase offsets
+  }
+  color() {
+    return getComputedStyle(document.body).getPropertyValue("--orb-color").trim() || "#00d9ff";
+  }
+  // rotate (lat,lon) → screen; returns null if on far hemisphere
+  project(latDeg, lonDeg, spin) {
+    const lat = latDeg * Math.PI / 180;
+    const lon = lonDeg * Math.PI / 180 + spin;
+    const x = Math.cos(lat) * Math.sin(lon);
+    const y = Math.sin(lat);
+    const z = Math.cos(lat) * Math.cos(lon);
+    return { x, y, z };
+  }
+  start() { const loop = () => { this.draw(); requestAnimationFrame(loop); }; loop(); }
+  draw() {
+    this.t += 1;
+    const ctx = this.ctx, cx = this.size / 2, cy = this.size / 2, R = this.R;
+    const col = this.color();
+    const spin = this.t * 0.006;
+    ctx.clearRect(0, 0, this.size, this.size);
+
+    // sphere base + dark ocean so overlaid text stays readable
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(2,10,20,0.55)"; ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = col + "cc";
+    ctx.shadowColor = col; ctx.shadowBlur = 8; ctx.stroke(); ctx.shadowBlur = 0;
+
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+
+    // parallels (latitude rings)
+    ctx.strokeStyle = col + "33"; ctx.lineWidth = 0.6;
+    for (let lat = -60; lat <= 60; lat += 30) {
+      ctx.beginPath();
+      for (let lon = -180; lon <= 180; lon += 6) {
+        const p = this.project(lat, lon, spin);
+        const sx = cx + p.x * R, sy = cy - p.y * R;
+        const vis = p.z >= 0;
+        ctx.globalAlpha = vis ? 0.5 : 0.12;
+        if (lon === -180) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+    }
+    // meridians (longitude lines)
+    for (let lon = -180; lon < 180; lon += 30) {
+      ctx.beginPath();
+      for (let lat = -90; lat <= 90; lat += 6) {
+        const p = this.project(lat, lon, spin);
+        const sx = cx + p.x * R, sy = cy - p.y * R;
+        ctx.globalAlpha = p.z >= 0 ? 0.5 : 0.12;
+        if (lat === -90) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // day/night terminator shade (soft gradient on one hemisphere)
+    const term = ctx.createLinearGradient(cx - R, 0, cx + R, 0);
+    term.addColorStop(0, "rgba(0,0,0,0)");
+    term.addColorStop(1, "rgba(0,0,0,0.4)");
+    ctx.fillStyle = term;
+    ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+    ctx.restore();
+
+    // city glow nodes (only near-side)
+    for (const [lat, lon] of this.cities) {
+      const p = this.project(lat, lon, spin);
+      if (p.z < 0) continue;
+      const sx = cx + p.x * R, sy = cy - p.y * R;
+      const pulse = 1.4 + Math.sin(this.t * 0.08 + lat) * 0.6;
+      ctx.beginPath(); ctx.arc(sx, sy, pulse, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 6;
+      ctx.fill(); ctx.shadowBlur = 0;
+    }
+
+    // orbiting satellites (elliptical paths around the globe)
+    for (const ph of this.sats) {
+      const a = this.t * 0.02 + ph;
+      const ox = cx + Math.cos(a) * (R + 7);
+      const oy = cy + Math.sin(a) * (R + 7) * 0.42;
+      ctx.beginPath(); ctx.arc(ox, oy, 1.4, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.globalAlpha = 0.9;
+      ctx.shadowColor = col; ctx.shadowBlur = 5; ctx.fill();
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    }
+  }
+}
+(() => {
+  const el = document.getElementById("orb-earth");
+  if (el) { try { new OrbEarth(el).start(); } catch (e) { console.warn("globe:", e); } }
+})();
 
 // ── voice state ──────────────────────────────────────
 function setVoiceState(state) {
@@ -1176,6 +1291,8 @@ function setEngineInfo(engine) {
   if (!engine) return;
   const model = $("#reason-model");
   if (model && engine.model) model.textContent = String(engine.model).slice(0, 20);
+  const sl = $("#st-llm");
+  if (sl && engine.model) sl.textContent = String(engine.model).split(":")[0].slice(0, 9);
   const lat = $("#reason-latency");
   if (lat) lat.textContent = engine.latency_ms != null ? engine.latency_ms + " ms" : "—";
   const src = $("#insight-source");
@@ -1405,6 +1522,15 @@ function addThreatEvent(ev, prepend = true) {
 
 function updateRisk(score, level) {
   const rs = $("#risk-score"); if (rs) rs.textContent = score;
+  const tileVal = $("#st-threat");
+  if (tileVal) {
+    tileVal.textContent = score;
+    const tile = tileVal.closest(".scan-tile");
+    if (tile) {
+      tile.classList.toggle("hot", level === "high");
+      tile.classList.toggle("warm", level === "elevated");
+    }
+  }
   const st = $("#threat-state");
   const sh = $("#threat-shield");
   const label = level === "secure" ? "SECURE" : level === "elevated" ? "ELEVATED" : "HIGH RISK";
@@ -1602,28 +1728,50 @@ const AlertSystem = {
       ${a.action ? `<div class="ac-action">→ ${escapeHTML(a.action)}</div>` : ""}
       <div class="ac-src">SOURCE · ${escapeHTML((a.source || "system").toUpperCase())}</div>
       <div class="ac-btns">
-        <button class="ac-btn" data-act="view">VIEW</button>
-        <button class="ac-btn" data-act="escalate">ESCALATE</button>
+        <button class="ac-btn" data-act="view">VIEW DETAILS</button>
+        <button class="ac-btn" data-act="dismiss">DISMISS</button>
         <button class="ac-btn ack" data-act="ack">ACKNOWLEDGE</button>
       </div>`;
-    const close = () => {
+    const close = (acked) => {
       if (card._closed) return; card._closed = true;
       this.release(sev);
+      if (sev === "critical") {
+        this.criticalActive = Math.max(0, this.criticalActive - 1);
+        this.stopLoopIfClear();
+        if (acked) logEvent('<span class="tag">[alert]</span> critical acknowledged');
+      }
       card.classList.add("out");
       setTimeout(() => card.remove(), 380);
     };
-    card.querySelector('[data-act="ack"]').addEventListener("click", close);
+    card._close = close;
+    card.querySelector('[data-act="ack"]').addEventListener("click", () => close(true));
+    card.querySelector('[data-act="dismiss"]').addEventListener("click", () => close(false));
     card.querySelector('[data-act="view"]').addEventListener("click", () => { execDashCmd("threats"); });
-    card.querySelector('[data-act="escalate"]').addEventListener("click", () => {
-      close();
-      this.raise({ ...a, severity: "critical",
-                   source: (a.source || "system") + " · escalated" });
-    });
     stack.prepend(card);
-    while (stack.children.length > 3) stack.lastChild.remove();
-    if (sev === "info") setTimeout(close, 6000);
-    else if (sev === "warning") setTimeout(close, 12000);
-    else setTimeout(close, 25000);   // critical: lingers, but never forever
+    while (stack.children.length > 3) {
+      const old = stack.lastChild;
+      if (old._close) old._close(false); else old.remove();
+      if (stack.lastChild === old) break;   // safety
+    }
+    if (sev === "info") setTimeout(() => close(false), 6000);
+    else if (sev === "warning") setTimeout(() => close(false), 12000);
+    else { this.criticalActive++; this.startLoop(); }   // critical: persists + loops until user acts
+  },
+
+  criticalActive: 0, loopTimer: null,
+  startLoop() {
+    if (this.loopTimer) return;
+    this.loopTimer = setInterval(() => {
+      if (this.criticalActive > 0) {
+        this.beep(900, 0.1, 0, "square", 0.05);
+        this.beep(900, 0.1, 0.16, "square", 0.05);
+      }
+    }, 2200);
+  },
+  stopLoopIfClear() {
+    if (this.criticalActive <= 0 && this.loopTimer) {
+      clearInterval(this.loopTimer); this.loopTimer = null;
+    }
   },
 };
 AlertSystem.init();
@@ -1735,6 +1883,8 @@ async function refreshProcs() {
     const rows = (d.top_cpu || []).slice(0, 5);
     if (!rows.length) return;
     const maxc = Math.max(...rows.map(p => p.cpu), 1);
+    const sp = $("#st-proc");
+    if (sp && rows[0]) sp.textContent = `${Math.round(rows[0].cpu)}%`;
     host.innerHTML = rows.map(p => `
       <div class="proc-row">
         <span class="proc-name">${escapeHTML(p.name)}${p.count > 1 ? " ×" + p.count : ""}</span>
@@ -1747,11 +1897,257 @@ async function refreshProcs() {
 refreshProcs();
 setInterval(refreshProcs, 6000);
 
-// ── websocket ────────────────────────────────────────
-let ws;
+/* ═══ INTERACTIVE LAYER — modals, scanners, model manager ═══ */
+
+let lastMetrics = {};
+
+function makeInteractive(el, fn, label) {
+  if (!el) return;
+  el.setAttribute("tabindex", "0");
+  el.setAttribute("role", "button");
+  if (label) el.title = label;
+  el.addEventListener("click", fn);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
+  });
+}
+
+function openCustomModal(title, sub, iconSvg, bodyHTML) {
+  const modal = $("#tool-modal"); if (!modal) return;
+  $("#modal-title").textContent = title;
+  $("#modal-sub").textContent = sub;
+  $("#modal-icon").innerHTML = iconSvg ||
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>';
+  $("#modal-body").innerHTML = bodyHTML;
+  modal.hidden = false;
+}
+
+async function openProcModal(kind) {
+  openCustomModal(
+    kind === "cpu" ? "PROCESS MONITOR" : "MEMORY SCANNER",
+    kind === "cpu" ? "TOP CPU CONSUMERS · LIVE" : "TOP MEMORY CONSUMERS · LIVE",
+    null, '<div style="color:var(--text-dim);font-style:italic">scanning…</div>');
+  try {
+    const d = await (await fetch("/api/processes")).json();
+    const rows = (kind === "cpu" ? d.top_cpu : d.top_mem) || [];
+    const max = Math.max(...rows.map(p => kind === "cpu" ? p.cpu : p.mem_mb), 1);
+    $("#modal-body").innerHTML = '<div class="mb-list">' + rows.map(p => {
+      const v = kind === "cpu" ? p.cpu : p.mem_mb;
+      const vs = kind === "cpu" ? p.cpu.toFixed(1) + "%"
+        : (p.mem_mb >= 1024 ? (p.mem_mb / 1024).toFixed(2) + " GB" : p.mem_mb.toFixed(0) + " MB");
+      return `<div class="mb-row"><strong>${escapeHTML(p.name)}${p.count > 1 ? " ×" + p.count : ""}</strong> — ${vs}
+        <div class="proc-bar" style="margin-top:4px"><i style="width:${Math.min(100, v / max * 100)}%"></i></div></div>`;
+    }).join("") + "</div>";
+  } catch (e) {
+    $("#modal-body").innerHTML = `<div style="color:var(--error)">scan failed: ${escapeHTML(e.message)}</div>`;
+  }
+}
+
+function openDiskModal() {
+  const dsk = lastMetrics.disk ?? 0;
+  openCustomModal("DISK SCANNER", "STORAGE · C:\\ VOLUME", null, `
+    <div class="mb-grid">
+      <div class="mb-stat"><span class="lbl">USED</span><span class="val ${dsk > 90 ? "warn" : ""}">${dsk.toFixed ? dsk.toFixed(1) : dsk}%</span></div>
+      <div class="mb-stat"><span class="lbl">STATUS</span><span class="val ${dsk > 92 ? "warn" : "ok"}">${dsk > 92 ? "CRITICAL" : dsk > 85 ? "FILLING" : "HEALTHY"}</span></div>
+    </div>
+    <div class="mb-list">
+      <div class="mb-row">${dsk > 90
+        ? "Storage critically full. Run Windows Disk Cleanup, empty Downloads, or archive old projects — update installs may fail below 5% free."
+        : "Storage within operating tolerance. No action required."}
+        <div class="mb-row-meta">LIVE · ${new Date().toTimeString().slice(0, 8)}</div></div>
+    </div>`);
+}
+
+function openVoiceEngineModal() {
+  const eng = $("#vr-engine")?.textContent || "—";
+  const mic = $("#vr-mic")?.textContent || "—";
+  const tts = $("#sp-tts .sp-val")?.textContent || "—";
+  openCustomModal("VOICE ENGINE", "STT · WAKE PHRASES · TTS", null, `
+    <div class="mb-grid">
+      <div class="mb-stat"><span class="lbl">RECOGNITION</span><span class="val ok">${escapeHTML(eng)}</span></div>
+      <div class="mb-stat"><span class="lbl">MICROPHONES</span><span class="val">${escapeHTML(mic)}</span></div>
+      <div class="mb-stat"><span class="lbl">TTS OUTPUT</span><span class="val ok">${escapeHTML(tts)}</span></div>
+      <div class="mb-stat"><span class="lbl">STT MODEL</span><span class="val">WHISPER SMALL</span></div>
+    </div>
+    <div class="mb-list">
+      <div class="mb-row">Wake phrases: Hey Jarvis · Hey Stark/Tony · Hey Cap/Captain · Hey Widow/Natasha · Hey Hawkeye/Clint · Hey Hulk/Bruce · Hey Thor · Hey Vision
+        <div class="mb-row-meta">FUZZY MATCH · INDIAN-ENGLISH BIASED</div></div>
+      <div class="mb-row"><button class="quick-btn" id="tts-test-btn" style="width:auto;padding:.45rem .9rem">RUN SPEAKER TEST</button></div>
+    </div>`);
+  $("#tts-test-btn")?.addEventListener("click", () => {
+    fetch("/api/speak", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "Voice engine test. All channels operational, sir." }) }).catch(() => {});
+  });
+}
+
+async function openAgentModal(name) {
+  openCustomModal((name || "").toUpperCase(), "AGENT OPERATIONS FILE", null,
+    '<div style="color:var(--text-dim);font-style:italic">pulling agent telemetry…</div>');
+  try {
+    const d = await (await fetch("/api/status")).json();
+    const a = (d.agents || []).find(x => x.name === name);
+    if (!a) throw new Error("agent not found");
+    $("#modal-title").textContent = a.codename;
+    $("#modal-sub").textContent = a.role.toUpperCase();
+    const hist = (a.history || []).slice(-4).reverse().map(h =>
+      `<div class="mb-row">${escapeHTML((h.a || "").slice(0, 160))}
+        <div class="mb-row-meta">${new Date(h.ts * 1000).toTimeString().slice(0, 5)} · RE: ${escapeHTML((h.q || "").slice(0, 60))}</div></div>`).join("");
+    $("#modal-body").innerHTML = `
+      <div class="mb-grid">
+        <div class="mb-stat"><span class="lbl">STATUS</span><span class="val ${a.status === "idle" ? "ok" : "warn"}">${escapeHTML(a.status.toUpperCase())}</span></div>
+        <div class="mb-stat"><span class="lbl">CONFIDENCE</span><span class="val">${a.confidence}%</span></div>
+        <div class="mb-stat"><span class="lbl">CURRENT TASK</span><span class="val">${escapeHTML((a.current_task || "—").slice(0, 22))}</span></div>
+        <div class="mb-stat"><span class="lbl">ACTIONS DONE</span><span class="val">${a.actions_completed}</span></div>
+      </div>
+      <div class="mb-list">${hist || '<div class="mb-row">no recent actions logged.</div>'}</div>`;
+  } catch (e) {
+    $("#modal-body").innerHTML = `<div style="color:var(--error)">${escapeHTML(e.message)}</div>`;
+  }
+}
+
+/* — Ollama model manager — */
+async function openModelManager() {
+  openCustomModal("AI MODEL MANAGER", "CLOUD + LOCAL OLLAMA · CLICK TO LOAD",
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z"/><circle cx="12" cy="11" r="3" fill="currentColor"/></svg>',
+    '<div style="color:var(--text-dim);font-style:italic">querying endpoints…</div>');
+  try {
+    const d = await (await fetch("/api/models")).json();
+    renderModelManager(d);
+  } catch (e) {
+    $("#modal-body").innerHTML = `<div style="color:var(--error)">model query failed: ${escapeHTML(e.message)}</div>`;
+  }
+}
+function renderModelManager(d) {
+  const body = $("#modal-body"); if (!body) return;
+  const claudeStatus = d.cloud_claude ? (d.brain_mode === "llm" ? "loaded" : "available") : "offline";
+  let html = `<div class="model-section">— CLOUD MODELS</div>
+    <div class="model-row disabled">
+      <span class="mr-name">claude (CLI)</span>
+      <span class="mr-spec">ANTHROPIC · AGENT BRAIN</span>
+      <span class="mr-status ${claudeStatus}">${claudeStatus.toUpperCase()}</span>
+    </div>
+    <div class="model-section">— LOCAL OLLAMA MODELS · ${escapeHTML(d.endpoint || "")}</div>`;
+  const locals = d.local || [];
+  if (!locals.length) {
+    html += `<div class="mb-row">no local models detected — install one with <b style="color:var(--accent)">ollama pull llama3.2</b> and reopen.
+      <div class="mb-row-meta">${d.local_available ? "ENDPOINT ONLINE" : "ENDPOINT OFFLINE — start `ollama serve`"}</div></div>`;
+  }
+  for (const m of locals) {
+    const spec = [m.param_size, m.quant, m.size_gb ? m.size_gb + " GB" : null]
+      .filter(Boolean).join(" · ") || (m.family || "local model");
+    const status = m.name === d.selected ? (d.local_available ? "loaded" : "offline") : "available";
+    html += `<div class="model-row${m.name === d.selected ? " selected" : ""}" data-model="${escapeHTML(m.name)}" tabindex="0" role="button">
+      <span class="mr-name">${escapeHTML(m.name)}</span>
+      <span class="mr-spec">${escapeHTML(spec.toUpperCase())}</span>
+      <span class="mr-status ${status}">${status.toUpperCase()}</span></div>`;
+  }
+  html += `<div class="mb-row" style="margin-top:.5rem">Selection persists across restarts (model_pref.json). The insights engine and local-LLM brain use this model.</div>`;
+  body.innerHTML = html;
+  body.querySelectorAll(".model-row[data-model]").forEach(r => {
+    const pick = async () => {
+      const name = r.dataset.model;
+      r.querySelector(".mr-status").textContent = "LOADING…";
+      try {
+        await fetch("/api/models/select", { method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model: name }) });
+        const d2 = await (await fetch("/api/models")).json();
+        renderModelManager(d2);
+        const rm = $("#reason-model"); if (rm && d2.selected) rm.textContent = String(d2.selected).slice(0, 20);
+        const sl = $("#st-llm"); if (sl && d2.selected) sl.textContent = String(d2.selected).split(":")[0].slice(0, 9);
+      } catch (e) {}
+    };
+    r.addEventListener("click", pick);
+    r.addEventListener("keydown", (e) => { if (e.key === "Enter") pick(); });
+  });
+}
+makeInteractive($("#model-row"), openModelManager, "Click to manage local Ollama models");
+
+/* — scanner tiles — */
+function updateScanTiles(m) {
+  const set = (id, v, level) => {
+    const el = $(id); if (!el) return;
+    el.textContent = v;
+    const tile = el.closest(".scan-tile");
+    if (tile) { tile.classList.toggle("hot", level === "hot"); tile.classList.toggle("warm", level === "warm"); }
+  };
+  set("#st-net", `${Math.round(m.net_down)}↓`, m.net_down > 2000 ? "warm" : "");
+  set("#st-pkt", `${Math.round(m.net_up + m.net_down)}/s`, "");
+  set("#st-mem", `${Math.round(m.mem)}%`, m.mem > 92 ? "hot" : m.mem > 85 ? "warm" : "");
+}
+document.querySelectorAll(".scan-tile").forEach(t => {
+  t.addEventListener("click", () => {
+    const k = t.dataset.scan;
+    if (k === "network" || k === "packets") openToolModal("network-activity");
+    else if (k === "threat") openToolModal("threat-scanner");
+    else if (k === "memory") openProcModal("mem");
+    else if (k === "process") openProcModal("cpu");
+    else if (k === "llm") openModelManager();
+  });
+});
+
+/* — status pills, diag cards, agent cards: clickable + keyboard — */
+makeInteractive($("#sp-brain"), () => openToolModal("ai-diagnostics"), "Brain — click for AI diagnostics");
+makeInteractive($("#sp-tts"), openVoiceEngineModal, "TTS — click for voice engine status");
+makeInteractive($("#sp-voice"), openVoiceEngineModal, "Voice — click for voice engine status");
+makeInteractive($("#sp-news"), () => execDashCmd("news"), "Feed — click to jump to World Feed");
+{
+  const cards = document.querySelectorAll(".diag-strip .strip-card");
+  const acts = [() => openProcModal("cpu"), () => openProcModal("mem"), openDiskModal,
+                () => openToolModal("network-activity")];
+  const labels = ["CPU — click for top processes", "Memory — click for top consumers",
+                  "Disk — click for storage detail", "Network — click for traffic detail"];
+  cards.forEach((c, i) => makeInteractive(c, acts[i] || (() => {}), labels[i]));
+}
+$("#avengers-list")?.addEventListener("click", (e) => {
+  const card = e.target.closest(".agent-card");
+  if (card) openAgentModal(card.dataset.agent);
+});
+$("#avengers-list")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const card = e.target.closest(".agent-card");
+  if (card) openAgentModal(card.dataset.agent);
+});
+
+/* — voice command reference: click-to-run + engine status — */
+document.querySelectorAll(".vr-row[data-cmd]").forEach(b => {
+  b.addEventListener("click", () => {
+    const inp = $("#ask-input"); if (!inp) return;
+    inp.value = b.dataset.cmd; inp.focus();
+    $("#ask-form").requestSubmit();
+  });
+});
+async function checkMic() {
+  const el = $("#vr-mic"); if (!el) return;
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const mics = devs.filter(d => d.kind === "audioinput");
+    el.textContent = mics.length ? `${mics.length} DEVICE${mics.length > 1 ? "S" : ""}` : "NONE FOUND";
+    el.className = mics.length ? "ok" : "dim";
+  } catch (e) { el.textContent = "N/A"; el.className = "dim"; }
+}
+checkMic();
+try { navigator.mediaDevices.addEventListener("devicechange", checkMic); } catch (e) {}
+
+// ── websocket (self-healing) ─────────────────────────
+let ws = null;
+let wsLastMsg = 0;
+let wsReconnecting = false;
+
+function scheduleReconnect(reason) {
+  if (wsReconnecting) return;          // dedup: never stack reconnects
+  wsReconnecting = true;
+  $("#status-pill").classList.add("offline");
+  $("#status-text").textContent = "RECONNECTING";
+  try { if (ws) ws.close(); } catch (e) {}
+  setTimeout(() => { wsReconnecting = false; connect(); }, 1200);
+}
+
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  try { ws = new WebSocket(`ws://${location.host}/ws`); }
+  catch (e) { scheduleReconnect("ctor"); return; }
   ws.onopen = () => {
+    wsLastMsg = Date.now();
     $("#status-pill").classList.remove("offline");
     $("#status-text").textContent = "ONLINE";
     logEvent('<span class="tag">[net]</span> uplink established');
@@ -1759,13 +2155,25 @@ function connect() {
     setPill("#sp-voice", "OFF", "warn");
   };
   ws.onclose = () => {
-    $("#status-pill").classList.add("offline");
-    $("#status-text").textContent = "OFFLINE";
-    logEvent('<span class="tag">[net]</span> uplink lost — retrying', "warn");
-    setTimeout(connect, 1500);
+    logEvent('<span class="tag">[net]</span> uplink lost — reconnecting', "warn");
+    scheduleReconnect("close");
   };
-  ws.onmessage = (m) => { try { handle(JSON.parse(m.data)); } catch (e) {} };
+  ws.onerror = () => { try { ws.close(); } catch (e) {} };  // → triggers onclose
+  ws.onmessage = (m) => {
+    wsLastMsg = Date.now();
+    try { handle(JSON.parse(m.data)); } catch (e) {}
+  };
 }
+
+// Watchdog: server pushes metrics every ~2s. If nothing arrives for 12s the
+// socket is half-dead (common under heavy CPU/disk load) — force a reconnect.
+setInterval(() => {
+  if (!ws) return;
+  if (ws.readyState === WebSocket.OPEN && Date.now() - wsLastMsg > 12000) {
+    logEvent('<span class="tag">[net]</span> link stalled — resetting', "warn");
+    scheduleReconnect("watchdog");
+  }
+}, 4000);
 
 function handle(msg) {
   switch (msg.type) {
@@ -1782,6 +2190,7 @@ function handle(msg) {
       updateResource(msg.cpu, msg.mem, msg.disk);
       try { updateAiopsTele(msg); } catch (e) {}
       try { pushTraffic(msg.net_up, msg.net_down); } catch (e) {}
+      try { lastMetrics = msg; updateScanTiles(msg); } catch (e) {}
       break;
     case "agent":
       if (msg.event === "status") {
@@ -1812,6 +2221,17 @@ function handle(msg) {
       if (msg.event === "routed")     { setHeard(null, `→ ${(msg.agent || "").toUpperCase()}`); logEvent(`<span class="tag">[voice]</span> → ${escapeHTML(msg.agent)} · ${escapeHTML(msg.command)}`); }
       if (msg.event === "speak")      { setVoiceState("speaking"); setPill("#sp-voice", "SPEAKING", "ok"); logEvent(`<span class="tag">[voice]</span> ◉ ${escapeHTML(msg.text || "")}`); }
       if (msg.event === "idle")       { setVoiceState("idle"); setPill("#sp-voice", "READY", "ok"); }
+      { // mirror into the voice-ref engine status block
+        const ve = $("#vr-engine");
+        const map = { ready: ["READY", "ok"], listening: ["LISTENING", "ok"],
+                      processing: ["PROCESSING", ""], speak: ["SPEAKING", "ok"], idle: ["READY", "ok"] };
+        const m = map[msg.event];
+        if (ve && m) { ve.textContent = m[0]; ve.className = m[1]; }
+        if (msg.event === "routed") {
+          const vl = $("#vr-last");
+          if (vl) vl.textContent = (msg.command || "—").slice(0, 24);
+        }
+      }
       break;
     case "browser":
       if (msg.event === "opened") logEvent(`<span class="tag">[browser]</span> opened ${escapeHTML(msg.name || msg.url)}${msg.fullscreen ? " · fullscreen" : ""}`);

@@ -9,10 +9,14 @@ Configure via .env:
     LOCAL_LLM_KEY=                  # optional bearer token
 """
 
+import json
 import os
 import time
+from pathlib import Path
 
 import httpx
+
+PREF_FILE = Path(__file__).parent / "model_pref.json"
 
 
 class LocalLLM:
@@ -21,10 +25,55 @@ class LocalLLM:
         self.base_url = (base_url or os.getenv("LOCAL_LLM_URL",
                          "http://127.0.0.1:11434/v1")).rstrip("/")
         self.model = model or os.getenv("LOCAL_LLM_MODEL") or None
+        # persisted selection (survives restarts) takes precedence
+        try:
+            pref = json.loads(PREF_FILE.read_text(encoding="utf-8"))
+            if pref.get("model"):
+                self.model = pref["model"]
+        except Exception:
+            pass
         self.api_key = api_key or os.getenv("LOCAL_LLM_KEY") or None
         self.hub = hub
         self.available = False
         self.last_latency_ms: int | None = None
+
+    def save_pref(self) -> None:
+        try:
+            PREF_FILE.write_text(json.dumps({"model": self.model}), encoding="utf-8")
+        except Exception:
+            pass
+
+    async def list_models(self) -> list[dict]:
+        """Installed local models. Prefers Ollama's native /api/tags (rich
+        metadata: size, params, quantization); falls back to /v1/models."""
+        root = self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
+        try:
+            async with httpx.AsyncClient(timeout=5, trust_env=False) as c:
+                r = await c.get(f"{root}/api/tags")
+                r.raise_for_status()
+                data = r.json()
+            out = []
+            for m in data.get("models", []):
+                det = m.get("details") or {}
+                out.append({
+                    "name": m.get("name"),
+                    "size_gb": round((m.get("size") or 0) / 1e9, 1),
+                    "param_size": det.get("parameter_size"),
+                    "quant": det.get("quantization_level"),
+                    "family": det.get("family"),
+                })
+            if out:
+                return out
+        except Exception:
+            pass
+        try:
+            async with httpx.AsyncClient(timeout=5, trust_env=False) as c:
+                r = await c.get(f"{self.base_url}/models", headers=self._headers())
+                r.raise_for_status()
+                return [{"name": m.get("id")} for m in (r.json().get("data") or [])
+                        if m.get("id")]
+        except Exception:
+            return []
 
     def _headers(self) -> dict:
         h = {"content-type": "application/json"}

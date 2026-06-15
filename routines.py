@@ -66,7 +66,7 @@ def schedule_all(team, news, sysmon, hub, agenda=None, tts=None, insights=None,
 
     sched.add_job(pull_news, IntervalTrigger(minutes=15),
                   next_run_time=now + timedelta(seconds=8))
-    sched.add_job(hawkeye_anomaly_alert, IntervalTrigger(seconds=60))
+    sched.add_job(hawkeye_anomaly_alert, IntervalTrigger(seconds=30))
 
     if agenda is not None:
         async def agenda_check():
@@ -91,8 +91,8 @@ def schedule_all(team, news, sysmon, hub, agenda=None, tts=None, insights=None,
     if threats is not None:
         async def threat_tick():
             await threats.tick()
-        sched.add_job(threat_tick, IntervalTrigger(seconds=45),
-                      next_run_time=now + timedelta(seconds=12),
+        sched.add_job(threat_tick, IntervalTrigger(seconds=20),
+                      next_run_time=now + timedelta(seconds=8),
                       max_instances=1, coalesce=True)
 
     if gcal is not None and agenda is not None:

@@ -187,13 +187,18 @@
 
       <div class="mini-card voice-ref">
         <div class="mini-card-title">VOICE COMMAND REFERENCE</div>
-        <div class="vr-row"><b>"Hey Jarvis…"</b> — anything, or just status</div>
-        <div class="vr-row"><b>"Hey Stark"</b> — system diagnostics</div>
-        <div class="vr-row"><b>"Hey Widow"</b> — research &amp; intel</div>
-        <div class="vr-row"><b>"What meetings do I have today?"</b></div>
-        <div class="vr-row"><b>"Summarize my inbox"</b></div>
-        <div class="vr-row"><b>"Open threat intelligence"</b></div>
-        <div class="vr-row"><b>"What's the threat status?"</b></div>
+        <div class="vr-hint">click any command to run it</div>
+        <button class="vr-row" data-cmd="@jarvis status report"><b>"Hey Jarvis…"</b> — anything, or just status</button>
+        <button class="vr-row" data-cmd="@stark run system diagnostics"><b>"Hey Stark"</b> — system diagnostics</button>
+        <button class="vr-row" data-cmd="@widow brief me on the latest intel"><b>"Hey Widow"</b> — research &amp; intel</button>
+        <button class="vr-row" data-cmd="what meetings do I have today?"><b>"What meetings do I have today?"</b></button>
+        <button class="vr-row" data-cmd="summarize my inbox"><b>"Summarize my inbox"</b></button>
+        <button class="vr-row" data-cmd="open threat intelligence"><b>"Open threat intelligence"</b></button>
+        <button class="vr-row" data-cmd="what's the threat status?"><b>"What's the threat status?"</b></button>
+        <div class="vr-divider">VOICE ENGINE</div>
+        <div class="vr-stat"><span>RECOGNITION</span><b id="vr-engine">—</b></div>
+        <div class="vr-stat"><span>MICROPHONE</span><b id="vr-mic">checking…</b></div>
+        <div class="vr-stat"><span>LAST COMMAND</span><b id="vr-last">—</b></div>
       </div>
 
       <form id="ask-form" class="ask-form">
@@ -238,9 +243,9 @@
               <line x1="36"  y1="0"   x2="30"  y2="0"   stroke="currentColor" stroke-width="1.4"/>
               <line x1="0"   y1="36"  x2="0"   y2="30"  stroke="currentColor" stroke-width="1.4"/>
               <line x1="-36" y1="0"   x2="-30" y2="0"   stroke="currentColor" stroke-width="1.4"/>
-              <text y="-44" class="flank-tick" text-anchor="middle">N</text>
+              <text y="-42" class="flank-tick" text-anchor="middle">N</text>
               <text x="44" y="3" class="flank-tick" text-anchor="middle">E</text>
-              <text y="50" class="flank-tick" text-anchor="middle">S</text>
+              <text y="46" class="flank-tick" text-anchor="middle">S</text>
               <text x="-44" y="3" class="flank-tick" text-anchor="middle">W</text>
             </g>
             <text x="65" y="208" class="flank-key" text-anchor="middle">PERIMETER SCAN</text>
@@ -300,6 +305,12 @@
               <line x1="184" y1="100" x2="194" y2="100"/>
             </g>
           </svg>
+          <canvas id="orb-earth" class="orb-earth" width="184" height="184" aria-hidden="true"></canvas>
+          <div class="orb-globe-data" aria-hidden="true">
+            <span>◉ <b id="og-sats">14</b> SAT</span>
+            <span><b id="og-nodes">6</b> NODE</span>
+            <span><b id="og-coord">17.4°N</b></span>
+          </div>
           <div class="orb-label-stack">
             <div class="orb-label" id="voice-label">STANDBY</div>
             <div class="orb-sublabel" id="voice-sublabel">say "hey &lt;agent&gt;"</div>
@@ -329,29 +340,45 @@
             </g>
             <line x1="14" y1="96" x2="116" y2="96" class="flank-divider"/>
 
-            <!-- Middle: vector ring — value inside, label below -->
+            <!-- Middle: vector ring — static rings (rotating dashed circles
+                 orbited off-axis and looked like stray roaming dots) -->
             <g transform="translate(65, 152)">
-              <circle r="34" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.45" stroke-dasharray="6 5" class="flank-spin reverse"/>
-              <circle r="24" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.55" stroke-dasharray="2 6" class="flank-spin slow"/>
+              <circle r="30" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.4" stroke-dasharray="4 5"/>
               <circle r="16" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.85"/>
               <text y="5" class="flank-bigval" text-anchor="middle">042°</text>
             </g>
             <text x="65" y="208" class="flank-key" text-anchor="middle">VECTOR · HEADING</text>
             <line x1="14" y1="220" x2="116" y2="220" class="flank-divider"/>
 
-            <!-- Bottom: data rows -->
+            <!-- Bottom: data rows (labels ≤8 chars so values never collide) -->
             <g transform="translate(10, 240)">
               <text class="flank-key" x="0" y="0">SHIELD</text>
-              <text class="flank-val" x="110" y="0" text-anchor="end">ACTIVE</text>
-              <text class="flank-key" x="0" y="16">PACKET LOSS</text>
-              <text class="flank-val" x="110" y="16" text-anchor="end">0.02%</text>
+              <text class="flank-val" x="112" y="0" text-anchor="end">ACTIVE</text>
+              <text class="flank-key" x="0" y="16">PKT LOSS</text>
+              <text class="flank-val" x="112" y="16" text-anchor="end">0.02%</text>
               <text class="flank-key" x="0" y="32">CHANNEL</text>
-              <text class="flank-val" x="110" y="32" text-anchor="end">SEC-7</text>
-              <text class="flank-key" x="0" y="48">ENCRYPTION</text>
-              <text class="flank-val ok" x="110" y="48" text-anchor="end">AES-256</text>
+              <text class="flank-val" x="112" y="32" text-anchor="end">SEC-7</text>
+              <text class="flank-key" x="0" y="48">ENCRYPT</text>
+              <text class="flank-val ok" x="112" y="48" text-anchor="end">AES-256</text>
             </g>
           </svg>
         </div>
+      </div>
+
+      <!-- interactive scanner modules — click any tile for details -->
+      <div class="scanner-row" id="scanner-row">
+        <button class="scan-tile" data-scan="network" title="Network Scanner — click for live traffic detail">
+          <span class="st-ic">⌖</span><span class="st-lbl">NET SCAN</span><span class="st-val" id="st-net">--</span></button>
+        <button class="scan-tile" data-scan="threat" title="Threat Scanner — click for risk detail">
+          <span class="st-ic">◬</span><span class="st-lbl">THREAT</span><span class="st-val" id="st-threat">--</span></button>
+        <button class="scan-tile" data-scan="packets" title="Packet Analyzer — click for link detail">
+          <span class="st-ic">⇅</span><span class="st-lbl">PACKETS</span><span class="st-val" id="st-pkt">--</span></button>
+        <button class="scan-tile" data-scan="memory" title="Memory Scanner — click for top consumers">
+          <span class="st-ic">▦</span><span class="st-lbl">MEMORY</span><span class="st-val" id="st-mem">--</span></button>
+        <button class="scan-tile" data-scan="process" title="Process Monitor — click for top CPU">
+          <span class="st-ic">≣</span><span class="st-lbl">PROC</span><span class="st-val" id="st-proc">--</span></button>
+        <button class="scan-tile" data-scan="llm" title="Local LLM — click to manage Ollama models">
+          <span class="st-ic">⬡</span><span class="st-lbl">LLM CORE</span><span class="st-val" id="st-llm">--</span></button>
       </div>
 
       <canvas id="wave-canvas" class="wave-canvas"></canvas>
@@ -654,7 +681,8 @@
         <div class="conf-lbl">CONFIDENCE</div>
         <div class="reason-rows">
           <div class="reason-row"><span>STATE</span><strong id="reason-state">IDLE</strong></div>
-          <div class="reason-row"><span>MODEL</span><strong id="reason-model">—</strong></div>
+          <div class="reason-row clickable" id="model-row" tabindex="0" role="button"
+               title="Click to manage local Ollama models"><span>MODEL ▾</span><strong id="reason-model">—</strong></div>
           <div class="reason-row"><span>LATENCY</span><strong id="reason-latency">—</strong></div>
         </div>
       </div>

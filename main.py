@@ -247,9 +247,8 @@ async def connectivity_endpoint():
     return await connectivity.gather()
 
 
-@app.get("/api/processes")
-async def processes_endpoint():
-    """Top processes by CPU and memory, aggregated by name (chrome ×40 → one row)."""
+def _scan_processes() -> list[dict]:
+    """Synchronous psutil sweep — MUST run in an executor, never on the loop."""
     import psutil
     agg: dict[str, dict] = {}
     for p in psutil.process_iter(["name", "cpu_percent", "memory_info"]):
@@ -264,7 +263,14 @@ async def processes_endpoint():
         except Exception:
             continue
     SKIP = {"System Idle Process", "System", "Registry", "?", "smss", "Memory Compression"}
-    rows = [r for r in agg.values() if r["name"] not in SKIP]
+    return [r for r in agg.values() if r["name"] not in SKIP]
+
+
+@app.get("/api/processes")
+async def processes_endpoint():
+    """Top processes by CPU and memory, aggregated by name (chrome ×40 → one row)."""
+    loop = asyncio.get_running_loop()
+    rows = await loop.run_in_executor(None, _scan_processes)
     for r in rows:
         r["cpu"] = round(r["cpu"], 1)
         r["mem_mb"] = round(r["mem_mb"], 1)
@@ -304,6 +310,36 @@ async def presence_endpoint(req: PresenceReq):
 @app.get("/api/threats")
 async def threats_endpoint():
     return state["threats"].snapshot()
+
+
+@app.get("/api/models")
+async def models_endpoint():
+    llm = state["local_llm"]
+    return {
+        "local": await llm.list_models(),
+        "selected": llm.model,
+        "local_available": llm.available,
+        "endpoint": llm.base_url,
+        "cloud_claude": state["brain"].mode == "llm",
+        "brain_mode": state["brain"].mode,
+    }
+
+
+class ModelSel(BaseModel):
+    model: str
+
+
+@app.post("/api/models/select")
+async def models_select(req: ModelSel):
+    llm = state["local_llm"]
+    llm.model = req.model.strip()
+    llm.available = True
+    llm.save_pref()
+    await state["hub"].broadcast({
+        "type": "log", "level": "info",
+        "msg": f"local model switched → {llm.model} (persisted)",
+    })
+    return {"ok": True, "selected": llm.model}
 
 
 class AlertReq(BaseModel):
