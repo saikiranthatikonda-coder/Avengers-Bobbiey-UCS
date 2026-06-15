@@ -26,15 +26,11 @@
 
 ## 📸 Screenshots
 
-> _Live captures of the running command center._
+> **▶ See it live & animated:** **[avengers-bobbiey.netlify.app](https://avengers-bobbiey.netlify.app/)**
 
-| Command Center | Threat Intelligence |
-|:--:|:--:|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Threat Center](docs/screenshots/threat-center.png) |
+Dashboard captures live in [`docs/screenshots/`](docs/screenshots/). The command center is a cinematic dark HUD: a central reactor orb with a live rotating Earth, eight AI-agent cards, real-time telemetry sparklines, a six-domain threat radar, world activity map, and India/Telangana regional grids — all updating in real time over WebSockets.
 
-| Holographic Orb + Earth | AI Operations |
-|:--:|:--:|
-| ![Orb](docs/screenshots/orb.png) | ![AI Ops](docs/screenshots/ai-ops.png) |
+<!-- Captures are added to docs/screenshots/ — see that folder's README to add your own -->
 
 ---
 
