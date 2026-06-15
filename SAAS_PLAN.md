@@ -1,11 +1,11 @@
-# BUCS → SaaS: Productization Plan
+# Bobbiey UCS → SaaS: Productization Plan
 
 Status: v0.1.0 committed · landing live at https://avengers-bobbiey.netlify.app (pricing published)
 
 ## Positioning
 "JARVIS-class AI command center for operators" — local-first, privacy-first,
 cinematic. The local install IS the moat: competitors are cloud dashboards;
-BUCS runs the AI on the customer's machine.
+Bobbiey UCS runs the AI on the customer's machine.
 
 ## Pricing (published)
 | Tier | Price | Gets |

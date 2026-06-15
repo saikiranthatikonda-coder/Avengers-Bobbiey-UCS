@@ -1,9 +1,13 @@
 import asyncio
 import base64
 import os
+import platform
 import queue
+import shutil
 import subprocess
 import threading
+
+OS = platform.system()   # "Windows" | "Darwin" | "Linux"
 
 
 class TTSPlayer:
@@ -39,24 +43,37 @@ class TTSPlayer:
         return max(-10, min(10, rate))
 
     def start(self) -> bool:
-        # Confirm powershell is reachable.
-        if not self._powershell_ok():
+        # Pick a speech backend for this OS. Returns False (silent dashboard)
+        # only if no engine is available.
+        self.engine = self._detect_engine()
+        if not self.engine:
             return False
         self.enabled = True
         self.thread = threading.Thread(target=self._worker, daemon=True)
         self.thread.start()
         return True
 
-    def _powershell_ok(self) -> bool:
-        try:
-            r = subprocess.run(
-                ["powershell", "-NoProfile", "-Command", "Add-Type -AssemblyName System.Speech; 'OK'"],
-                capture_output=True, text=True, timeout=15,
-                creationflags=self._creation_flags(),
-            )
-            return r.returncode == 0 and "OK" in (r.stdout or "")
-        except Exception:
-            return False
+    def _detect_engine(self) -> str | None:
+        if OS == "Windows":
+            try:
+                r = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     "Add-Type -AssemblyName System.Speech; 'OK'"],
+                    capture_output=True, text=True, timeout=15,
+                    creationflags=self._creation_flags())
+                if r.returncode == 0 and "OK" in (r.stdout or ""):
+                    return "windows"
+            except Exception:
+                pass
+            return None
+        if OS == "Darwin":
+            return "macos" if shutil.which("say") else None
+        # Linux
+        if shutil.which("spd-say"):
+            return "linux-spd"
+        if shutil.which("espeak-ng") or shutil.which("espeak"):
+            return "linux-espeak"
+        return None
 
     @staticmethod
     def _creation_flags() -> int:
@@ -98,6 +115,28 @@ class TTSPlayer:
             "$s.Dispose()"
         )
 
+    def _speak_blocking(self, text: str) -> None:
+        eng = getattr(self, "engine", "windows")
+        if eng == "windows":
+            subprocess.run(["powershell", "-NoProfile", "-Command", self._build_ps_command(text)],
+                           capture_output=True, text=True, timeout=120,
+                           creationflags=self._creation_flags())
+        elif eng == "macos":
+            # macOS `say` — rate in words/min (~180 default)
+            wpm = os.getenv("JARVIS_VOICE_RATE", "180")
+            args = ["say", "-r", str(wpm)]
+            voice = os.getenv("JARVIS_MAC_VOICE", "")   # e.g. "Daniel", "Samantha"
+            if voice:
+                args += ["-v", voice]
+            args.append(text)
+            subprocess.run(args, capture_output=True, text=True, timeout=120)
+        elif eng == "linux-spd":
+            subprocess.run(["spd-say", "-w", "-r", "0", text],
+                           capture_output=True, text=True, timeout=120)
+        elif eng == "linux-espeak":
+            exe = shutil.which("espeak-ng") or shutil.which("espeak")
+            subprocess.run([exe, text], capture_output=True, text=True, timeout=120)
+
     def _worker(self) -> None:
         while True:
             item = self.q.get()
@@ -106,12 +145,7 @@ class TTSPlayer:
             text, fut = item
             self._emit("speak", text=text[:200])
             try:
-                cmd = self._build_ps_command(text)
-                subprocess.run(
-                    ["powershell", "-NoProfile", "-Command", cmd],
-                    capture_output=True, text=True, timeout=120,
-                    creationflags=self._creation_flags(),
-                )
+                self._speak_blocking(text)
             except Exception as e:
                 print(f"tts play error: {e}")
             finally:

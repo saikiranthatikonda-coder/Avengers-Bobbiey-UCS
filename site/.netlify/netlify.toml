@@ -9,6 +9,7 @@ redirects = []
 [build]
 publish = "C:\\Users\\sai\\Desktop\\jarvis\\site"
 publishOrigin = "default"
+base = "C:\\Users\\sai\\Desktop\\jarvis\\site"
 
 [build.environment]
 

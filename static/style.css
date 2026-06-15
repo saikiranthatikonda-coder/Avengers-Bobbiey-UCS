@@ -550,20 +550,29 @@ body {
 /* holographic Earth inside the orb core */
 .orb-earth {
   position: absolute; top: 50%; left: 50%;
-  width: 96px; height: 96px;
-  transform: translate(-50%, -50%);
-  z-index: 1; pointer-events: none; opacity: 0.9;
+  width: 104px; height: 104px;
+  transform: translate(-50%, -52%);
+  z-index: 1; pointer-events: none; opacity: 0.95;
 }
-.orb-label-stack { gap: 0.15rem; }
-/* lift label text above the globe so it stays readable */
-.orb-label { z-index: 3; }
-.orb-sublabel { z-index: 3; }
+/* dark lozenge scrim so the STANDBY label reads as a clean HUD plate
+   over the rotating continents */
+.orb-label-stack { gap: 0.12rem; position: absolute; inset: 0; }
+.orb-label-stack::before {
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 116px; height: 46px; transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse at center,
+    rgba(2,8,16,0.85) 0%, rgba(2,8,16,0.6) 55%, transparent 78%);
+  z-index: 1; pointer-events: none;
+}
+.orb-label   { z-index: 3; position: relative; }
+.orb-sublabel{ z-index: 3; position: relative; }
 .orb-globe-data {
-  position: absolute; left: 0; right: 0; bottom: 30px;
-  display: flex; justify-content: center; gap: 0.55rem;
+  position: absolute; left: 0; right: 0; bottom: 22px;
+  display: flex; justify-content: center; gap: 0.5rem;
   z-index: 3; pointer-events: none;
   font-family: var(--font-display); font-size: 0.4rem;
-  letter-spacing: 0.1em; color: var(--text-dim);
+  letter-spacing: 0.08em; color: var(--text-dim);
+  text-shadow: 0 0 4px rgba(0,0,0,0.9);
 }
 .orb-globe-data b { color: var(--orb-color); text-shadow: 0 0 5px var(--orb-color); }
 

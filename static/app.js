@@ -226,108 +226,98 @@ class Waveform {
 const wave = new Waveform(document.getElementById("wave-canvas")); wave.start();
 
 /* ═══ HOLOGRAPHIC EARTH (orb core) ═══════════════════
-   Wireframe rotating globe — meridians/parallels, day/night terminator,
-   glowing city nodes + orbiting satellites. Colour follows --orb-color so
-   it shifts with the voice state. Pure canvas, no deps. */
+   Real rotating globe via d3 orthographic projection + world-atlas land —
+   actual continents, dark ocean (keeps overlaid text legible), graticule,
+   spherical 3D shading, and orbiting satellites. Colour follows --orb-color
+   so the globe shifts with the voice state. */
 class OrbEarth {
   constructor(canvas) {
     this.c = canvas; this.ctx = canvas.getContext("2d");
     this.t = 0;
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.size = canvas.width;          // logical px (square)
+    this.size = canvas.width;                       // logical px (square, 184)
     this.c.width = this.size * this.dpr;
     this.c.height = this.size * this.dpr;
     this.ctx.scale(this.dpr, this.dpr);
-    this.R = this.size * 0.42;
-    // notable nodes [latDeg, lonDeg]
-    this.cities = [
-      [17.4, 78.5], [40.7, -74.0], [51.5, -0.1],
-      [35.7, 139.7], [-33.9, 151.2], [37.8, -122.4],
-    ];
-    this.sats = [0, 2.1, 4.0];         // orbital phase offsets
+    this.R = this.size * 0.40;
+    this.land = null;
+    this.sats = [0, 2.1, 4.0];
+    if (window.d3) {
+      this.proj = d3.geoOrthographic()
+        .scale(this.R).translate([this.size / 2, this.size / 2]).clipAngle(90);
+      this.path = d3.geoPath(this.proj, this.ctx);
+      this.grat = d3.geoGraticule10();
+      this._load();
+    }
+  }
+  async _load() {
+    try {
+      const w = await (await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json")).json();
+      this.land = topojson.feature(w, w.objects.land);
+    } catch (e) { /* graceful: ocean + graticule still render */ }
   }
   color() {
     return getComputedStyle(document.body).getPropertyValue("--orb-color").trim() || "#00d9ff";
   }
-  // rotate (lat,lon) → screen; returns null if on far hemisphere
-  project(latDeg, lonDeg, spin) {
-    const lat = latDeg * Math.PI / 180;
-    const lon = lonDeg * Math.PI / 180 + spin;
-    const x = Math.cos(lat) * Math.sin(lon);
-    const y = Math.sin(lat);
-    const z = Math.cos(lat) * Math.cos(lon);
-    return { x, y, z };
-  }
   start() { const loop = () => { this.draw(); requestAnimationFrame(loop); }; loop(); }
   draw() {
     this.t += 1;
-    const ctx = this.ctx, cx = this.size / 2, cy = this.size / 2, R = this.R;
-    const col = this.color();
-    const spin = this.t * 0.006;
-    ctx.clearRect(0, 0, this.size, this.size);
+    const ctx = this.ctx, s = this.size, col = this.color();
+    ctx.clearRect(0, 0, s, s);
+    if (!this.proj) return;
 
-    // sphere base + dark ocean so overlaid text stays readable
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(2,10,20,0.55)"; ctx.fill();
-    ctx.lineWidth = 1; ctx.strokeStyle = col + "cc";
-    ctx.shadowColor = col; ctx.shadowBlur = 8; ctx.stroke(); ctx.shadowBlur = 0;
+    this.proj.rotate([this.t * 0.18, -14]);   // spin W→E with a slight axial tilt
 
+    // ocean disc — dark so the STANDBY label stays readable on top
+    ctx.beginPath(); this.path({ type: "Sphere" });
+    ctx.fillStyle = "rgba(2,12,22,0.82)"; ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = col;
+    ctx.shadowColor = col; ctx.shadowBlur = 9; ctx.globalAlpha = 0.85;
+    ctx.stroke(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+
+    // graticule
+    ctx.beginPath(); this.path(this.grat);
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.13; ctx.lineWidth = 0.5;
+    ctx.stroke(); ctx.globalAlpha = 1;
+
+    // continents
+    if (this.land) {
+      ctx.beginPath(); this.path(this.land);
+      ctx.fillStyle = col; ctx.globalAlpha = 0.34; ctx.fill();
+      ctx.globalAlpha = 0.75; ctx.lineWidth = 0.5; ctx.strokeStyle = col;
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
+
+    // spherical 3D shading (lit upper-left, shadowed lower-right)
     ctx.save();
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
-
-    // parallels (latitude rings)
-    ctx.strokeStyle = col + "33"; ctx.lineWidth = 0.6;
-    for (let lat = -60; lat <= 60; lat += 30) {
-      ctx.beginPath();
-      for (let lon = -180; lon <= 180; lon += 6) {
-        const p = this.project(lat, lon, spin);
-        const sx = cx + p.x * R, sy = cy - p.y * R;
-        const vis = p.z >= 0;
-        ctx.globalAlpha = vis ? 0.5 : 0.12;
-        if (lon === -180) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
-      }
-      ctx.stroke();
-    }
-    // meridians (longitude lines)
-    for (let lon = -180; lon < 180; lon += 30) {
-      ctx.beginPath();
-      for (let lat = -90; lat <= 90; lat += 6) {
-        const p = this.project(lat, lon, spin);
-        const sx = cx + p.x * R, sy = cy - p.y * R;
-        ctx.globalAlpha = p.z >= 0 ? 0.5 : 0.12;
-        if (lat === -90) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
-      }
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-
-    // day/night terminator shade (soft gradient on one hemisphere)
-    const term = ctx.createLinearGradient(cx - R, 0, cx + R, 0);
-    term.addColorStop(0, "rgba(0,0,0,0)");
-    term.addColorStop(1, "rgba(0,0,0,0.4)");
-    ctx.fillStyle = term;
-    ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+    ctx.beginPath(); this.path({ type: "Sphere" }); ctx.clip();
+    const g = ctx.createRadialGradient(s * 0.36, s * 0.34, s * 0.05, s * 0.5, s * 0.5, this.R);
+    g.addColorStop(0, "rgba(255,255,255,0.06)");
+    g.addColorStop(0.6, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,0,0,0.5)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, s, s);
     ctx.restore();
 
-    // city glow nodes (only near-side)
-    for (const [lat, lon] of this.cities) {
-      const p = this.project(lat, lon, spin);
-      if (p.z < 0) continue;
-      const sx = cx + p.x * R, sy = cy - p.y * R;
-      const pulse = 1.4 + Math.sin(this.t * 0.08 + lat) * 0.6;
-      ctx.beginPath(); ctx.arc(sx, sy, pulse, 0, Math.PI * 2);
-      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 6;
+    // Hyderabad HQ ping (only when on the near hemisphere)
+    const rot = this.proj.rotate();
+    const center = [-rot[0], -rot[1]];
+    if (d3.geoDistance([78.49, 17.39], center) < Math.PI / 2) {
+      const p = this.proj([78.49, 17.39]);
+      const pulse = 1.6 + Math.sin(this.t * 0.1) * 0.7;
+      ctx.beginPath(); ctx.arc(p[0], p[1], pulse, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 7;
       ctx.fill(); ctx.shadowBlur = 0;
     }
 
-    // orbiting satellites (elliptical paths around the globe)
+    // orbiting satellites
+    const cx = s / 2, cy = s / 2;
     for (const ph of this.sats) {
       const a = this.t * 0.02 + ph;
-      const ox = cx + Math.cos(a) * (R + 7);
-      const oy = cy + Math.sin(a) * (R + 7) * 0.42;
-      ctx.beginPath(); ctx.arc(ox, oy, 1.4, 0, Math.PI * 2);
-      ctx.fillStyle = col; ctx.globalAlpha = 0.9;
-      ctx.shadowColor = col; ctx.shadowBlur = 5; ctx.fill();
+      const ox = cx + Math.cos(a) * (this.R + 8);
+      const oy = cy + Math.sin(a) * (this.R + 8) * 0.4;
+      ctx.beginPath(); ctx.arc(ox, oy, 1.3, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 5;
+      ctx.globalAlpha = 0.9; ctx.fill();
       ctx.shadowBlur = 0; ctx.globalAlpha = 1;
     }
   }
