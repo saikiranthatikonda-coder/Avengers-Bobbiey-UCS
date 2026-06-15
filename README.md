@@ -205,7 +205,7 @@ Avengers-Bobbiey-UCS/
 
 ## 👤 Founder
 
-Built end-to-end by **Sai** — founder, architect, and builder of Bobbiey UCS — from Hyderabad, India. The mission: redefine how humans interact with data and AI, from passive screens to active command systems.
+Built end-to-end by **Bobbiey** — founder, architect, and builder of Bobbiey UCS — from Hyderabad, India. The mission: redefine how humans interact with data and AI, from passive screens to active command systems.
 
 <div align="center">
 
