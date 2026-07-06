@@ -1135,12 +1135,71 @@ function stopCamera() {
   camStatus.textContent = "◌ OFFLINE";
   if (camResEl) camResEl.textContent = "--×--";
   try { Presence.stop(); } catch (e) {}
+  try { if (VisionAI.on) VisionAI.toggle(); } catch (e) {}   // disable AI vision with the camera
   logEvent('<span class="tag">[cam]</span> operator view offline');
 }
 
 camToggle?.addEventListener("click", () => {
   if (camStream) stopCamera(); else startCamera();
 });
+
+/* ═══ AI VISION — Claude describes the webcam feed ═══════════
+   Opt-in (protects Claude usage): when ON and the camera is live, a frame is
+   captured every VISION_INTERVAL and sent to /api/vision/analyze; Claude's
+   one-line observation is displayed + spoken. Also fires on demand (voice
+   "what do you see", the AI button, or the manual analyze). */
+const VisionAI = {
+  on: false, timer: null, busy: false,
+  interval: 120000,             // 2 min between auto-analyses
+  canvas: document.createElement("canvas"),
+
+  toggle() {
+    this.on = !this.on;
+    const btn = $("#cam-ai-toggle");
+    if (btn) btn.classList.toggle("on", this.on);
+    try { localStorage.setItem("vision-ai", this.on ? "1" : "0"); } catch (e) {}
+    if (this.on) {
+      if (!camStream) { logEvent('<span class="tag">[vision-ai]</span> enable the camera first', "warn"); }
+      else { logEvent('<span class="tag">[vision-ai]</span> Claude vision ON — analysing every 2 min'); this.analyze(); }
+      this.timer = setInterval(() => { if (camStream) this.analyze(); }, this.interval);
+    } else {
+      if (this.timer) { clearInterval(this.timer); this.timer = null; }
+      logEvent('<span class="tag">[vision-ai]</span> Claude vision OFF');
+    }
+  },
+
+  async analyze(force = false) {
+    if (this.busy) return;
+    if (!camStream || camVideo.readyState < 2) {
+      if (force) logEvent('<span class="tag">[vision-ai]</span> camera not ready', "warn");
+      return;
+    }
+    this.busy = true;
+    const btn = $("#cam-ai-toggle"); if (btn) btn.classList.add("busy");
+    const vo = $("#vision-obs"); if (vo) vo.textContent = "◍ Claude is analysing the feed…";
+    try {
+      this.canvas.width = 320; this.canvas.height = 240;
+      this.canvas.getContext("2d").drawImage(camVideo, 0, 0, 320, 240);
+      const frame = this.canvas.toDataURL("image/jpeg", 0.6);
+      const r = await fetch("/api/vision/analyze", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ frame, speak: true }),
+      });
+      const d = await r.json();
+      if (!d.ok) {
+        if (vo) vo.textContent = d.error === "rate-limited"
+          ? `◍ cooling down (${d.retry_in}s)…` : `◍ ${d.error}`;
+      }
+      // success arrives via WS "vision-obs" + "insight"
+    } catch (e) {
+      if (vo) vo.textContent = "◍ vision request failed";
+    } finally {
+      this.busy = false;
+      if (btn) btn.classList.remove("busy");
+    }
+  },
+};
+$("#cam-ai-toggle")?.addEventListener("click", () => VisionAI.toggle());
 
 // Tidy up if the user navigates away
 window.addEventListener("beforeunload", () => { if (camStream) stopCamera(); });
@@ -2245,6 +2304,12 @@ function handle(msg) {
       break;
     case "dash-cmd":
       execDashCmd(msg.target);
+      break;
+    case "vision-request":                 // voice "what do you see" → capture a frame
+      try { VisionAI.analyze(true); } catch (e) {}
+      break;
+    case "vision-obs":                      // Claude's webcam observation
+      { const vo = $("#vision-obs"); if (vo) vo.textContent = "◉ " + (msg.text || ""); }
       break;
     case "insight":
       addInsight(msg);

@@ -285,6 +285,12 @@ class VoiceLoop:
                 except Exception:
                     pass
 
+        # vision: "what do you see" / "what am I doing" / "look at me"
+        if re.search(r"\b(what do you see|what am i doing|look at me|see me|analys?e me|how do i look)\b", low):
+            await self.hub.broadcast({"type": "vision-request"})
+            await respond("Let me take a look, sir.")
+            return True
+
         # dashboard control: "open/show <section>"
         if re.search(r"\b(open|show|bring up|display)\b", low):
             targets = {

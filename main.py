@@ -312,6 +312,64 @@ async def threats_endpoint():
     return state["threats"].snapshot()
 
 
+_vision_state = {"ts": 0.0}
+
+
+class VisionReq(BaseModel):
+    frame: str            # data URL or raw base64 JPEG
+    prompt: str | None = None
+    speak: bool = True
+
+
+@app.post("/api/vision/analyze")
+async def vision_analyze(req: VisionReq):
+    """Real-time webcam insight via Claude. The browser sends a frame; Claude
+    (the operator's own subscription, via the CLI) describes it in one sentence,
+    which is displayed + spoken. Rate-limited to protect Claude usage."""
+    import base64 as _b64
+    import time as _t
+    now = _t.time()
+    gap = now - _vision_state["ts"]
+    if gap < 12:
+        return {"ok": False, "error": "rate-limited", "retry_in": round(12 - gap, 1)}
+    _vision_state["ts"] = now
+
+    try:
+        raw = req.frame.split(",", 1)[-1]
+        data = _b64.b64decode(raw)
+        if len(data) < 500:
+            return {"ok": False, "error": "empty frame"}
+    except Exception:
+        return {"ok": False, "error": "bad frame"}
+
+    path = ROOT / "vision_frame.jpg"
+    path.write_bytes(data)
+
+    prompt = req.prompt or (
+        "You are JARVIS observing your operator through their webcam feed. "
+        "In ONE concise, warm butler-style sentence, note what the operator appears "
+        "to be doing or their current state (present and working, away, on a call, "
+        "looking tired, etc). Do NOT identify or name the person — presence and "
+        "activity only.")
+    try:
+        obs = await state["brain"].see(str(path), prompt, timeout=60)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    if not obs or obs.lstrip().startswith("["):
+        return {"ok": False, "error": "vision unavailable — Claude CLI required (set CLAUDE_BIN)"}
+
+    obs = obs.strip()[:280]
+    await state["hub"].broadcast({
+        "type": "insight", "insight": obs, "recommendation": "",
+        "severity": "info", "confidence": 90, "source": "vision-ai", "ts": now,
+    })
+    await state["hub"].broadcast({"type": "vision-obs", "text": obs})
+    if req.speak and state["tts"].enabled:
+        await state["tts"].say(obs)
+    return {"ok": True, "observation": obs}
+
+
 @app.get("/api/models")
 async def models_endpoint():
     llm = state["local_llm"]

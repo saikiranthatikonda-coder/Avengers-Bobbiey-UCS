@@ -68,6 +68,13 @@ class Brain:
             return self.local.for_agent(agent, prompt)
         return "[brain unavailable]"
 
+    async def see(self, image_path: str, prompt: str, timeout: float = 60.0) -> str:
+        """Vision: route an image through the Claude CLI (vision-capable).
+        Claude Code reads the referenced local image via its Read tool.
+        Used for the real-time webcam insight feature."""
+        full = f"{prompt}\n\nAnalyze this local image file: {image_path}"
+        return await self._llm_call(full, system=None, timeout=timeout)
+
     async def _llm_call(self, prompt: str, system: str | None, timeout: float) -> str:
         args: list[str] = [self.claude_bin, "-p"]
         if system:

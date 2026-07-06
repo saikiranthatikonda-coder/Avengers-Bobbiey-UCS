@@ -660,6 +660,22 @@ body {
 }
 .cam-toggle svg { width: 14px; height: 14px; pointer-events: none; }   /* clicks land on the button, not the icon */
 .cam-toggle:hover { box-shadow: 0 0 10px var(--accent-glow); transform: scale(1.05); }
+
+.cam-ai-toggle {
+  height: 22px; padding: 0 6px;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid var(--panel-edge); border-radius: 4px;
+  color: var(--text-dim); cursor: pointer;
+  font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.14em;
+  transition: all 0.25s ease;
+}
+.cam-ai-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.cam-ai-toggle.on {
+  color: var(--stark); border-color: var(--stark);
+  box-shadow: 0 0 10px var(--stark-glow);
+  animation: pulse 2s ease-in-out infinite;
+}
+.cam-ai-toggle.busy { color: var(--warn); border-color: var(--warn); }
 .operator-cam.live .cam-toggle {
   color: var(--success); border-color: var(--success);
   box-shadow: 0 0 12px var(--success);
