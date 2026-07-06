@@ -44,7 +44,21 @@ class Brain:
         system: str | None = None,
         agent: str = "jarvis",
         timeout: float = 120.0,
+        fast: bool = False,
     ) -> str:
+        # Fast path (voice / typed chat): prefer whichever backend is actually
+        # fast on THIS machine. A local Ollama model is only preferred once it
+        # has PROVEN quick (last call < 4s) — on GPU-less / loaded machines local
+        # inference is slower than Claude, so we stay on Claude there. "/no_think"
+        # suppresses Qwen3's slow reasoning pass; residue is stripped downstream.
+        local_fast = (self.local_llm and self.local_llm.available
+                      and self.local_llm.last_latency_ms is not None
+                      and self.local_llm.last_latency_ms < 4000)
+        if fast and local_fast:
+            alt = await self.local_llm.chat(prompt + " /no_think", system=system,
+                                            timeout=min(timeout, 20), max_tokens=180)
+            if alt:
+                return alt
         if self.mode == "llm":
             reply = await self._llm_call(prompt, system, timeout)
             if reply.startswith("[brain"):
@@ -83,6 +97,7 @@ class Brain:
         try:
             proc = await asyncio.create_subprocess_exec(
                 *args,
+                stdin=asyncio.subprocess.DEVNULL,   # empty stdin → skip the CLI's 3s stdin wait
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

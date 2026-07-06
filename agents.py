@@ -55,7 +55,7 @@ class Avenger:
 
     async def handle(self, prompt: str) -> str:
         await self.set_status("thinking", note=prompt[:80])
-        reply = await self.brain.think(prompt, system=self.system_prompt, agent=self.name)
+        reply = await self.brain.think(prompt, system=self.system_prompt, agent=self.name, fast=True)
         self.history.append({"q": prompt, "a": reply, "ts": time.time()})
         self.actions_completed += 1
         # rolling confidence: error markers dent it, clean replies restore it

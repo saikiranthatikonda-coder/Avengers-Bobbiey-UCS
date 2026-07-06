@@ -124,7 +124,12 @@ class LocalLLM:
                 data = r.json()
             self.last_latency_ms = int((time.time() - t0) * 1000)
             content = (data.get("choices") or [{}])[0].get("message", {}).get("content")
-            return (content or "").strip() or None
+            content = content or ""
+            # strip any reasoning residue (Qwen3 etc. may emit <think>…</think>)
+            if "<think>" in content:
+                import re as _re
+                content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL)
+            return content.strip() or None
         except Exception as e:
             self.available = False
             if self.hub:

@@ -1150,7 +1150,7 @@ camToggle?.addEventListener("click", () => {
    "what do you see", the AI button, or the manual analyze). */
 const VisionAI = {
   on: false, timer: null, busy: false,
-  interval: 120000,             // 2 min between auto-analyses
+  interval: 45000,              // 45 s between auto-analyses — frequent operator comments
   canvas: document.createElement("canvas"),
 
   toggle() {
@@ -1160,7 +1160,7 @@ const VisionAI = {
     try { localStorage.setItem("vision-ai", this.on ? "1" : "0"); } catch (e) {}
     if (this.on) {
       if (!camStream) { logEvent('<span class="tag">[vision-ai]</span> enable the camera first', "warn"); }
-      else { logEvent('<span class="tag">[vision-ai]</span> Claude vision ON — analysing every 2 min'); this.analyze(); }
+      else { logEvent('<span class="tag">[vision-ai]</span> Claude vision ON — commenting every 45s'); this.analyze(); }
       this.timer = setInterval(() => { if (camStream) this.analyze(); }, this.interval);
     } else {
       if (this.timer) { clearInterval(this.timer); this.timer = null; }

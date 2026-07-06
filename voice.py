@@ -133,9 +133,9 @@ class VoiceLoop:
         sample_rate = 16000
         chunk_samples = int(sample_rate * 0.05)  # 50 ms
         threshold = float(os.getenv("JARVIS_VOICE_THRESHOLD", "300"))
-        end_silence_chunks = 24    # 1.2 s of trailing silence ends an utterance
+        end_silence_chunks = 14    # 0.7 s trailing silence ends an utterance (snappier)
         max_utterance_chunks = 220 # 11 s cap per utterance
-        min_utterance_chunks = 10  # 0.5 s floor (reject blips)
+        min_utterance_chunks = 8   # 0.4 s floor (reject blips)
         preroll_chunks = 6         # 300 ms pre-roll captured before speech onset
 
         loop = asyncio.get_event_loop()
@@ -263,6 +263,15 @@ class VoiceLoop:
             return
 
         # ── LLM path with conversation memory ──────────────────────
+        # Instant spoken acknowledgment so the operator hears feedback in <1s
+        # while the model composes the full reply (masks LLM latency).
+        if agent.speaker:
+            import random as _r
+            ack = _r.choice(["On it, sir.", "One moment.", "Right away.", "Working on it, sir."])
+            try:
+                await agent.speaker.say(ack)
+            except Exception:
+                pass
         prompt = command
         if self.convo:
             ctx = " | ".join(f"Q:{q[:60]} A:{a[:80]}" for q, a in self.convo[-3:])
@@ -360,7 +369,7 @@ class VoiceLoop:
             audio, language="en",
             beam_size=1, best_of=1,
             vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 300},
+            vad_parameters={"min_silence_duration_ms": 200},
             initial_prompt=INITIAL_PROMPT,
             condition_on_previous_text=False,
             no_speech_threshold=0.5,

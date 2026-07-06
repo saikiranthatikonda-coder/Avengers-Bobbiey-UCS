@@ -312,7 +312,16 @@ async def threats_endpoint():
     return state["threats"].snapshot()
 
 
-_vision_state = {"ts": 0.0}
+_vision_state = {"ts": 0.0, "n": 0}
+
+# Rotating lenses so frequent webcam comments stay varied, not repetitive.
+_VISION_LENSES = [
+    "note what the operator appears to be doing or their current state (present and working, away, on a call, stepped out, etc)",
+    "comment briefly on the operator's focus or energy level, like a butler checking in",
+    "note the lighting or environment around the operator and whether conditions look good for work",
+    "give a short, warm morale-boosting remark based on how engaged the operator looks",
+    "note whether the operator seems present and attentive, or distracted / away from the desk",
+]
 
 
 class VisionReq(BaseModel):
@@ -345,12 +354,13 @@ async def vision_analyze(req: VisionReq):
     path = ROOT / "vision_frame.jpg"
     path.write_bytes(data)
 
+    lens = _VISION_LENSES[_vision_state["n"] % len(_VISION_LENSES)]
+    _vision_state["n"] += 1
     prompt = req.prompt or (
         "You are JARVIS observing your operator through their webcam feed. "
-        "In ONE concise, warm butler-style sentence, note what the operator appears "
-        "to be doing or their current state (present and working, away, on a call, "
-        "looking tired, etc). Do NOT identify or name the person — presence and "
-        "activity only.")
+        f"In ONE concise, warm butler-style sentence, {lens}. "
+        "Do NOT identify or name the person — presence and activity only. "
+        "Vary your phrasing from a typical status line.")
     try:
         obs = await state["brain"].see(str(path), prompt, timeout=60)
     except Exception as e:
