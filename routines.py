@@ -29,7 +29,7 @@ CYCLE_SECONDS = 180
 
 
 def schedule_all(team, news, sysmon, hub, agenda=None, tts=None, insights=None,
-                 threats=None, gcal=None) -> AsyncIOScheduler:
+                 threats=None, gcal=None, memory=None) -> AsyncIOScheduler:
     sched = AsyncIOScheduler()
     now = datetime.now()
 
@@ -93,6 +93,24 @@ def schedule_all(team, news, sysmon, hub, agenda=None, tts=None, insights=None,
             await threats.tick()
         sched.add_job(threat_tick, IntervalTrigger(seconds=20),
                       next_run_time=now + timedelta(seconds=8),
+                      max_instances=1, coalesce=True)
+
+    if memory is not None:
+        # behavioural clock: log an active minute whenever the operator is present
+        async def memory_activity_tick():
+            try:
+                if insights and insights.presence.get("state") in ("active", "idle"):
+                    memory.add_active_minute()
+            except Exception:
+                pass
+        sched.add_job(memory_activity_tick, IntervalTrigger(seconds=60),
+                      max_instances=1, coalesce=True)
+
+        # distill recent observations into stable long-term facts
+        async def memory_synthesis():
+            await memory.synthesize()
+        sched.add_job(memory_synthesis, IntervalTrigger(minutes=30),
+                      next_run_time=now + timedelta(minutes=10),
                       max_instances=1, coalesce=True)
 
     if gcal is not None and agenda is not None:

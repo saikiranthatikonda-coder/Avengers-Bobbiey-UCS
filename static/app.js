@@ -2178,6 +2178,170 @@ async function checkMic() {
 checkMic();
 try { navigator.mediaDevices.addEventListener("devicechange", checkMic); } catch (e) {}
 
+/* ═══ OPERATOR MEMORY + VISION INTELLIGENCE ══════════ */
+
+let memRefreshTs = 0;
+
+function fmtClock(ts) {
+  return new Date(ts * 1000).toTimeString().slice(0, 5);
+}
+
+function renderMemory(d) {
+  // — recognition card —
+  const st = $("#recog-status"), nm = $("#recog-name"),
+        sk = $("#recog-sketch"), meta = $("#recog-meta");
+  if (st && !st.dataset.liveHold) {
+    if (d.enrolled) {
+      st.textContent = "ENROLLED"; st.className = "recog-status enrolled";
+    } else {
+      st.textContent = "NOT ENROLLED"; st.className = "recog-status dim";
+    }
+  }
+  if (nm) nm.textContent = d.enrolled
+    ? `operator: ${d.name || "unnamed"} · enrolled ${d.enrolled_at ? new Date(d.enrolled_at * 1000).toLocaleDateString() : ""}`
+    : "enable camera + AI ◍, then enroll";
+  if (sk) sk.textContent = d.appearance ||
+    "JARVIS stores a short written sketch of you — words in a JSON file you own, never face data.";
+  if (meta) meta.textContent =
+    `guest sightings: ${d.guest_sightings || 0} · syntheses: ${d.syntheses || 0} · memory file: operator_memory.json`;
+
+  // — observation log (server-driven, consistent across refreshes) —
+  const log = $("#obslog");
+  if (log) {
+    const obs = d.observations || [];
+    log.innerHTML = obs.length ? obs.map(o => `
+      <div class="obs-item ${o.who || "unknown"}">
+        <span class="ob-who">${escapeHTML((o.who || "?").toUpperCase())}</span>
+        <span class="ob-text">${escapeHTML(o.text)}</span>
+        <span class="ob-time">${fmtClock(o.ts)}</span>
+      </div>`).join("")
+      : '<div class="tf-empty">no observations yet — turn on AI ◍ vision</div>';
+  }
+
+  // — activity timeline —
+  const bars = $("#atl-bars");
+  if (bars) {
+    const hours = d.hourly_activity || new Array(24).fill(0);
+    const max = Math.max(...hours, 1);
+    const nowH = new Date().getHours();
+    bars.innerHTML = hours.map((v, h) =>
+      `<div class="atl-bar${h === nowH ? " now" : ""}" title="${h}:00 — ${v} min" style="height:${v ? Math.max(6, v / max * 100) : 3}%"></div>`
+    ).join("");
+  }
+  const setT = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  const mins = d.active_minutes_today || 0;
+  setT("#atl-active", mins >= 60 ? `${Math.floor(mins / 60)}H ${mins % 60}M` : `${mins}M`);
+  setT("#atl-arrivals", d.arrivals_today ?? 0);
+  setT("#atl-sessions", d.sessions_total ?? 0);
+
+  // — facts —
+  const fc = $("#mem-count"); if (fc) fc.textContent = (d.facts || []).length;
+  const facts = $("#mem-facts");
+  if (facts) {
+    facts.innerHTML = (d.facts || []).length ? d.facts.map(f => `
+      <div class="mem-fact${f.source === "ai-synthesis" ? " ai" : ""}">
+        ${escapeHTML(f.text)}
+        <div class="mf-src">${escapeHTML((f.source || "").toUpperCase())} · ${new Date(f.ts * 1000).toLocaleDateString()}</div>
+      </div>`).join("")
+      : '<div class="tf-empty">memory is empty — it fills as JARVIS observes you</div>';
+  }
+}
+
+async function refreshMemory(force = false) {
+  const now = Date.now();
+  if (!force && now - memRefreshTs < 2000) return;   // throttle WS bursts
+  memRefreshTs = now;
+  try {
+    const d = await (await fetch("/api/memory")).json();
+    renderMemory(d);
+  } catch (e) {}
+}
+refreshMemory(true);
+setInterval(() => refreshMemory(true), 120000);
+
+// live recognition status from vision results (overrides for 60s, then
+// falls back to the enrolled/not-enrolled baseline)
+function setRecogLive(who) {
+  const st = $("#recog-status"); if (!st || !who || who === "unknown") return;
+  const map = {
+    operator: ["OPERATOR VERIFIED", "operator"],
+    guest: ["UNKNOWN PERSON", "guest"],
+    multiple: ["MULTIPLE PEOPLE", "multiple"],
+    none: ["NOBODY IN FRAME", "dim"],
+  };
+  const m = map[who]; if (!m) return;
+  st.textContent = m[0]; st.className = "recog-status " + m[1];
+  st.dataset.liveHold = "1";
+  clearTimeout(st._holdTimer);
+  st._holdTimer = setTimeout(() => { delete st.dataset.liveHold; refreshMemory(true); }, 60000);
+}
+
+// — enroll ("remember me") —
+$("#btn-enroll")?.addEventListener("click", async () => {
+  const btn = $("#btn-enroll");
+  if (!camStream || camVideo.readyState < 2) {
+    logEvent('<span class="tag">[memory]</span> enable the camera first, then enroll', "warn");
+    return;
+  }
+  btn.disabled = true; btn.textContent = "◍ LOOKING…";
+  try {
+    const cv = document.createElement("canvas");
+    cv.width = 480; cv.height = 360;
+    cv.getContext("2d").drawImage(camVideo, 0, 0, 480, 360);
+    const frame = cv.toDataURL("image/jpeg", 0.7);
+    const name = ($("#enroll-name")?.value || "").trim();
+    const r = await fetch("/api/memory/enroll", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ frame, name: name || null }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      logEvent('<span class="tag">[memory]</span> enrolled ✓ — JARVIS will recognize you');
+      refreshMemory(true);
+    } else {
+      logEvent(`<span class="tag">[memory]</span> enroll failed: ${escapeHTML(d.error || "")}`, "warn");
+    }
+  } catch (e) {
+    logEvent("enroll failed: " + escapeHTML(e.message), "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "◍ REMEMBER ME";
+  }
+});
+
+// — forget (wipe memory file) —
+$("#btn-forget")?.addEventListener("click", async () => {
+  if (!confirm("Wipe operator_memory.json? JARVIS forgets everything about you.")) return;
+  try {
+    await fetch("/api/memory/forget", { method: "POST" });
+    refreshMemory(true);
+  } catch (e) {}
+});
+
+// — teach a fact manually —
+$("#mem-add-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const inp = $("#mem-add-input");
+  const text = (inp?.value || "").trim();
+  if (!text) return;
+  inp.value = "";
+  try {
+    await fetch("/api/memory/fact", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    logEvent(`<span class="tag">[memory]</span> learned: ${escapeHTML(text)}`);
+    refreshMemory(true);
+  } catch (e2) {}
+});
+
+// — "what do you know about me?" (spoken) —
+$("#btn-mem-speak")?.addEventListener("click", async () => {
+  try {
+    const d = await (await fetch("/api/memory/speak", { method: "POST" })).json();
+    if (d.summary) logEvent(`<span class="tag">[memory]</span> ${escapeHTML(d.summary)}`);
+  } catch (e) {}
+});
+
 // ── websocket (self-healing) ─────────────────────────
 let ws = null;
 let wsLastMsg = 0;
@@ -2310,6 +2474,11 @@ function handle(msg) {
       break;
     case "vision-obs":                      // Claude's webcam observation
       { const vo = $("#vision-obs"); if (vo) vo.textContent = "◉ " + (msg.text || ""); }
+      try { setRecogLive(msg.who); } catch (e) {}
+      try { refreshMemory(); } catch (e) {}
+      break;
+    case "memory-updated":                  // operator memory changed on disk
+      try { refreshMemory(); } catch (e) {}
       break;
     case "insight":
       addInsight(msg);

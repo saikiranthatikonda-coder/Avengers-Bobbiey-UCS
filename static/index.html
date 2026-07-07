@@ -726,6 +726,72 @@
 
   </section>
 
+  <!-- ═══ VISION INTELLIGENCE & OPERATOR MEMORY ══════════ -->
+  <section class="vision-row">
+
+    <div class="bs-card vis-card" id="vis-recognition">
+      <div class="bs-head">
+        <div class="bs-title">OPERATOR RECOGNITION</div>
+        <div class="bs-sub">DESCRIPTION-BASED · NO BIOMETRICS</div>
+      </div>
+      <div class="recog-body">
+        <div class="recog-status dim" id="recog-status">NOT ENROLLED</div>
+        <div class="recog-name" id="recog-name">enable camera + AI ◍, then enroll</div>
+        <div class="recog-sketch" id="recog-sketch">JARVIS stores a short written sketch of you — words in a JSON file you own, never face data.</div>
+        <div class="recog-btns">
+          <input id="enroll-name" placeholder="your name (optional)" maxlength="40"/>
+          <button class="quick-btn" id="btn-enroll">◍ REMEMBER ME</button>
+          <button class="quick-btn danger" id="btn-forget" title="wipe operator_memory.json">FORGET</button>
+        </div>
+        <div class="recog-meta" id="recog-meta">—</div>
+      </div>
+    </div>
+
+    <div class="bs-card vis-card" id="vis-obslog">
+      <div class="bs-head">
+        <div class="bs-title">AI OBSERVATION LOG</div>
+        <div class="bs-sub">LIVE VISION FEED · CLAUDE</div>
+      </div>
+      <div class="obslog" id="obslog">
+        <div class="tf-empty">no observations yet — turn on AI ◍ vision</div>
+      </div>
+    </div>
+
+    <div class="bs-card vis-card" id="vis-timeline">
+      <div class="bs-head">
+        <div class="bs-title">ACTIVITY TIMELINE</div>
+        <div class="bs-sub">TODAY · PER-HOUR PRESENCE</div>
+      </div>
+      <div class="atl-body">
+        <div class="atl-bars" id="atl-bars"></div>
+        <div class="atl-axis"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
+        <div class="atl-stats">
+          <div class="mr-stat"><span>ACTIVE TODAY</span><strong id="atl-active">—</strong></div>
+          <div class="mr-stat"><span>ARRIVALS</span><strong id="atl-arrivals">—</strong></div>
+          <div class="mr-stat"><span>SESSIONS ALL-TIME</span><strong id="atl-sessions">—</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bs-card vis-card" id="vis-memory">
+      <div class="bs-head">
+        <div class="bs-title">OPERATOR MEMORY</div>
+        <div class="bs-sub">LEARNS &amp; UPDATES · <span id="mem-count">0</span> FACTS</div>
+      </div>
+      <div class="mem-body">
+        <div class="mem-facts" id="mem-facts">
+          <div class="tf-empty">memory is empty — it fills as JARVIS observes you</div>
+        </div>
+        <form class="mem-add" id="mem-add-form">
+          <input id="mem-add-input" placeholder="teach JARVIS a fact about you…" maxlength="200"/>
+          <button type="submit" title="add fact">+</button>
+        </form>
+        <button class="quick-btn" id="btn-mem-speak">🗣 WHAT DO YOU KNOW ABOUT ME?</button>
+      </div>
+    </div>
+
+  </section>
+
   <!-- ═══ STRATEGIC INTELLIGENCE ROW ═════════════════════ -->
   <section class="intel-row">
 

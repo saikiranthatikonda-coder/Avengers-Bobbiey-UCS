@@ -290,6 +290,11 @@ class InsightsEngine:
             self._last_greet = time.time()
             greeted = True
             phrase = random.choice(GREETINGS)
+            # personalize with the operator's enrolled name when memory knows it
+            mem = getattr(self, "memory", None)
+            if mem is not None and getattr(mem, "name", None):
+                phrase = phrase.replace("sir", mem.name).replace(
+                    "Operator detected", f"{mem.name} detected")
             await self.hub.broadcast({
                 "type": "log", "level": "info",
                 "msg": f"presence: operator arrived — \"{phrase}\"",

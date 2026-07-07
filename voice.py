@@ -253,6 +253,12 @@ class VoiceLoop:
             "type": "voice", "event": "routed",
             "agent": agent_key, "command": command or "(no command)",
         })
+        try:
+            mem = self.services.get("memory")
+            if mem and command:
+                mem.record_command(command)   # memory learns command habits
+        except Exception:
+            pass
 
         if not command:
             command = "Sir is summoning you. Greet briefly and ask what he needs."
@@ -293,6 +299,12 @@ class VoiceLoop:
                     await agent.speaker.say(text)
                 except Exception:
                     pass
+
+        # memory: "what do you know about me" / "who am I"
+        memory = self.services.get("memory")
+        if memory and re.search(r"\b(what do you know about me|who am i|remember about me|my memory)\b", low):
+            await respond(memory.summary_text())
+            return True
 
         # vision: "what do you see" / "what am I doing" / "look at me"
         if re.search(r"\b(what do you see|what am i doing|look at me|see me|analys?e me|how do i look)\b", low):
