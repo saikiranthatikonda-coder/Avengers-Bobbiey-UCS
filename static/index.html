@@ -225,7 +225,7 @@
             <g transform="translate(65, 38)">
               <circle r="22" fill="none" stroke="currentColor" stroke-width="0.8" opacity="0.18"/>
               <path d="M -17,15 A 22,22 0 1 1 17,15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" class="flank-arc-fill"/>
-              <text y="5" class="flank-bigval" text-anchor="middle">98.6%</text>
+              <text y="5" class="flank-bigval" text-anchor="middle" id="fl-core">--%</text>
             </g>
             <text x="65" y="82" class="flank-key" text-anchor="middle">CORE INTEGRITY</text>
             <line x1="14" y1="96" x2="116" y2="96" class="flank-divider"/>
@@ -254,7 +254,7 @@
             <!-- Bottom data bars -->
             <g transform="translate(10, 240)">
               <text class="flank-key" x="0" y="0">PHASE FLUX</text>
-              <text class="flank-val" x="110" y="0" text-anchor="end">+0.142</text>
+              <text class="flank-val" x="110" y="0" text-anchor="end" id="fl-flux">—</text>
               <g class="flank-bars" transform="translate(0, 28)">
                 <rect class="fb fb1"  x="0"   y="-6"  width="3" height="22"/>
                 <rect class="fb fb2"  x="5"   y="-10" width="3" height="30"/>
@@ -323,7 +323,7 @@
             <!-- Top: frequency value + pulse bars -->
             <g transform="translate(65, 24)">
               <text y="0" class="flank-key" text-anchor="middle">DATA UPLINK</text>
-              <text y="22" class="flank-bigval" text-anchor="middle">98.2<tspan class="unit"> Khz</tspan></text>
+              <text y="22" class="flank-bigval" text-anchor="middle"><tspan id="fl-uplink">--</tspan><tspan class="unit"> KB/s</tspan></text>
             </g>
             <g transform="translate(20, 58)">
               <g class="flank-pulse-bars">
@@ -345,17 +345,17 @@
             <g transform="translate(65, 152)">
               <circle r="30" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.4" stroke-dasharray="4 5"/>
               <circle r="16" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.85"/>
-              <text y="5" class="flank-bigval" text-anchor="middle">042°</text>
+              <text y="5" class="flank-bigval" text-anchor="middle" id="fl-vector">--</text>
             </g>
-            <text x="65" y="208" class="flank-key" text-anchor="middle">VECTOR · HEADING</text>
+            <text x="65" y="208" class="flank-key" text-anchor="middle">LINK LATENCY · MS</text>
             <line x1="14" y1="220" x2="116" y2="220" class="flank-divider"/>
 
             <!-- Bottom: data rows (labels ≤8 chars so values never collide) -->
             <g transform="translate(10, 240)">
               <text class="flank-key" x="0" y="0">SHIELD</text>
-              <text class="flank-val" x="112" y="0" text-anchor="end">ACTIVE</text>
+              <text class="flank-val" x="112" y="0" text-anchor="end" id="fl-shield">—</text>
               <text class="flank-key" x="0" y="16">PKT LOSS</text>
-              <text class="flank-val" x="112" y="16" text-anchor="end">0.02%</text>
+              <text class="flank-val" x="112" y="16" text-anchor="end" id="fl-pkt">—</text>
               <text class="flank-key" x="0" y="32">CHANNEL</text>
               <text class="flank-val" x="112" y="32" text-anchor="end">SEC-7</text>
               <text class="flank-key" x="0" y="48">ENCRYPT</text>
@@ -536,21 +536,21 @@
 
     <div class="bs-card bs-mission">
       <div class="bs-head">
-        <div class="bs-title">MISSION STATUS</div>
-        <div class="bs-sub">ONGOING OPERATIONS</div>
+        <div class="bs-title">LIVE OPERATIONS</div>
+        <div class="bs-sub">REAL COUNTERS · TODAY</div>
       </div>
       <div class="missions">
         <div class="mission-row">
-          <div class="mission-line"><span class="mission-name">Project Helios</span><span class="mission-pct">78%</span></div>
-          <div class="mission-bar"><div class="mission-fill" style="width: 78%"></div></div>
+          <div class="mission-line"><span class="mission-name">Meetings remaining today</span><span class="mission-pct" id="ops-meetings">—</span></div>
+          <div class="mission-bar"><div class="mission-fill" id="ops-meetings-bar" style="width:0%"></div></div>
         </div>
         <div class="mission-row">
-          <div class="mission-line"><span class="mission-name">Stark Defense Grid</span><span class="mission-pct">52%</span></div>
-          <div class="mission-bar"><div class="mission-fill" style="width: 52%"></div></div>
+          <div class="mission-line"><span class="mission-name">Threats resolved</span><span class="mission-pct" id="ops-threats">—</span></div>
+          <div class="mission-bar"><div class="mission-fill" id="ops-threats-bar" style="width:0%"></div></div>
         </div>
         <div class="mission-row">
-          <div class="mission-line"><span class="mission-name">Neural Net Upgrade</span><span class="mission-pct">91%</span></div>
-          <div class="mission-bar"><div class="mission-fill" style="width: 91%"></div></div>
+          <div class="mission-line"><span class="mission-name">Presence today (8h goal)</span><span class="mission-pct" id="ops-presence">—</span></div>
+          <div class="mission-bar"><div class="mission-fill" id="ops-presence-bar" style="width:0%"></div></div>
         </div>
       </div>
     </div>
@@ -638,14 +638,15 @@
     <div class="bs-card bs-notes">
       <div class="bs-head">
         <div class="bs-title">NOTES</div>
-        <div class="bs-sub">PERSONAL NOTES</div>
+        <div class="bs-sub">YOUR NOTES · SAVED TO DISK</div>
       </div>
-      <div class="notes-list">
-        <div class="note"><div class="note-text">Review Project Helios specs</div><div class="note-ts">Today · 09:30</div></div>
-        <div class="note"><div class="note-text">Prepare for AISIN briefing</div><div class="note-ts">Today · 10:00</div></div>
-        <div class="note"><div class="note-text">Call Pepper re: Q4 roadmap</div><div class="note-ts">Today · 14:00</div></div>
-        <div class="note"><div class="note-text">Sign off on Stark Defense Grid v3</div><div class="note-ts">Tomorrow · 11:00</div></div>
+      <div class="notes-list" id="notes-list">
+        <div class="tf-empty">no notes yet — add one below</div>
       </div>
+      <form class="mem-add" id="note-add-form">
+        <input id="note-add-input" placeholder="add a note…" maxlength="200"/>
+        <button type="submit" title="add note">+</button>
+      </form>
     </div>
 
   </section>
@@ -801,10 +802,11 @@
         <div class="bs-sub">GLOBAL OPS · REGIONAL STATUS</div>
       </div>
       <div class="region-rows">
-        <div class="region-row"><span class="rr-dot ok"></span><span class="rr-name">APAC · HYDERABAD HQ</span><span class="rr-state ok">ONLINE</span></div>
-        <div class="region-row"><span class="rr-dot"></span><span class="rr-name">EMEA RELAY</span><span class="rr-state">STANDBY</span></div>
-        <div class="region-row"><span class="rr-dot"></span><span class="rr-name">AMERICAS NODE</span><span class="rr-state">STANDBY</span></div>
-        <div class="region-row"><span class="rr-dot ok"></span><span class="rr-name">ORBITAL LINK</span><span class="rr-state ok">SYNCED</span></div>
+        <div class="region-row" id="svc-claude"><span class="rr-dot"></span><span class="rr-name">CLAUDE CLI · BRAIN</span><span class="rr-state">—</span></div>
+        <div class="region-row" id="svc-ollama"><span class="rr-dot"></span><span class="rr-name">OLLAMA · LOCAL AI</span><span class="rr-state">—</span></div>
+        <div class="region-row" id="svc-gcal"><span class="rr-dot"></span><span class="rr-name">GOOGLE CAL + GMAIL</span><span class="rr-state">—</span></div>
+        <div class="region-row" id="svc-news"><span class="rr-dot"></span><span class="rr-name">NEWS FEED · API</span><span class="rr-state">—</span></div>
+        <div class="region-row" id="svc-weather"><span class="rr-dot"></span><span class="rr-name">WEATHER · OPEN-METEO</span><span class="rr-state">—</span></div>
       </div>
       <div class="intel-divider">PRIORITY ALERTS</div>
       <div class="alert-list" id="priority-alerts">

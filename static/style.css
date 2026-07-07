@@ -957,6 +957,12 @@ body {
 .notes-list { display: flex; flex-direction: column; gap: 0.32rem; flex: 1; overflow-y: auto; max-height: 150px; }
 .note { padding: 0.32rem 0.5rem; border-left: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent); border-radius: 0 4px 4px 0; }
 .note-text { font-size: 0.7rem; color: var(--text); line-height: 1.25; }
+.note-del {
+  float: right; cursor: pointer; color: var(--text-dim);
+  font-size: 0.85rem; line-height: 1; padding: 0 0.2rem;
+  transition: color 0.2s;
+}
+.note-del:hover { color: var(--error); }
 .note-ts { font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.16em; color: var(--text-dim); margin-top: 0.15rem; }
 
 /* ═══ VISION INTELLIGENCE & OPERATOR MEMORY ══════════ */

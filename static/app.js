@@ -639,10 +639,12 @@ async function refreshWeather(force = false) {
     clearTimeout(timeout);
     const d = await r.json();
     if (!d || d.error) {
+      lastWeatherOk = false;
       setWeatherState("error", "unavailable");
       $("#weather-update").textContent = "ERR · " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
       return;
     }
+    lastWeatherOk = true;
     setWeatherState(null, (d.label || "").toUpperCase() || "—");
     $("#weather-glyph").textContent = d.glyph || "◐";
     $("#weather-temp").textContent  = d.temp_c != null ? Math.round(d.temp_c) : "--";
@@ -683,6 +685,9 @@ async function refreshConnectivity() {
     $("#conn-ble").classList.toggle("ok", ble.count > 0);
 
     const p = d.ping_ms ?? -1;
+    // orb flank: real link latency + probe loss
+    const fv = $("#fl-vector"); if (fv) fv.textContent = p >= 0 ? String(Math.min(999, p)) : "---";
+    const fp = $("#fl-pkt"); if (fp) fp.textContent = p >= 0 ? "0%" : "100%";
     const pingRow = $("#conn-net");
     if (p < 0)        { $("#ping-val").textContent = "—";       pingRow.classList.add("bad");  pingRow.classList.remove("ok","warn"); }
     else if (p < 100) { $("#ping-val").textContent = `${p} ms`; pingRow.classList.add("ok");   pingRow.classList.remove("warn","bad"); }
@@ -759,10 +764,15 @@ function fmtCountdown(mins) {
   if (mins < 60) return `${Math.round(mins)} MIN`;
   return `${Math.floor(mins/60)}H ${Math.round(mins%60)}M`;
 }
-function renderAgenda(events) {
+function renderAgenda(events, source) {
   const host = $("#agenda-list"); host.innerHTML = "";
   $("#agenda-badge").textContent = `${events.length} TODAY`;
-  if (!events.length) { host.innerHTML = '<div class="agenda-empty">no meetings scheduled</div>'; return; }
+  if (!events.length) {
+    host.innerHTML = source === "google"
+      ? '<div class="agenda-empty">calendar clear — no upcoming events</div>'
+      : '<div class="agenda-empty">no data — connect Google Calendar via the <b>G</b> button</div>';
+    return;
+  }
   for (const e of events) {
     const div = document.createElement("div");
     div.className = "agenda-item" + (e.priority === "high" ? " high" : "") + (e.minutes_until <= 10 && e.minutes_until > 0 ? " imminent" : "");
@@ -778,10 +788,15 @@ function renderAgenda(events) {
     host.appendChild(div);
   }
 }
-function renderInbox(emails, priorityCount) {
+function renderInbox(emails, priorityCount, source) {
   const host = $("#inbox-list"); host.innerHTML = "";
-  $("#inbox-badge").textContent = priorityCount ? `${priorityCount} PRIORITY` : `${emails.length} UNREAD`;
-  if (!emails.length) { host.innerHTML = '<div class="inbox-empty">inbox empty</div>'; return; }
+  $("#inbox-badge").textContent = priorityCount ? `${priorityCount} PRIORITY` : `${emails.length} RECENT`;
+  if (!emails.length) {
+    host.innerHTML = source === "google"
+      ? '<div class="inbox-empty">no recent mail</div>'
+      : '<div class="inbox-empty">no data — connect Gmail via the <b>G</b> button</div>';
+    return;
+  }
   for (const m of emails) {
     const div = document.createElement("div");
     div.className = "inbox-item" + (m.priority === "priority" ? " priority" : "");
@@ -795,8 +810,8 @@ function renderInbox(emails, priorityCount) {
 async function refreshAgenda() {
   try {
     const r = await fetch("/api/agenda"); const d = await r.json();
-    renderAgenda(d.events || []);
-    renderInbox(d.emails || [], d.priority_unread || 0);
+    renderAgenda(d.events || [], d.source);
+    renderInbox(d.emails || [], d.priority_unread || 0, d.source);
     try {
       pendingActions = (d.events || []).length + (d.priority_unread || 0);
       renderPriorityAlerts(d);
@@ -805,6 +820,7 @@ async function refreshAgenda() {
         const b = $("#agenda-badge");
         if (b) b.textContent = `${(d.events || []).length} · GOOGLE`;
       }
+      lastAgenda = d; updateLiveOps();
     } catch (e) {}
   } catch (e) {}
 }
@@ -1435,6 +1451,8 @@ function updateAiopsTele(msg) {
   const rb = $("#readiness-bar"); if (rb) rb.style.width = ready + "%";
   const av = $("#anomaly-val");  if (av) av.textContent = anom;
   const ab = $("#anomaly-bar");  if (ab) ab.style.width = anom + "%";
+  // orb flank: CORE INTEGRITY = real stability (100 - anomaly index)
+  const fc = $("#fl-core"); if (fc) fc.textContent = (100 - anom).toFixed(1) + "%";
   // feed predictive analytics + mission readiness
   metricHist.cpu.push(msg.cpu); metricHist.mem.push(msg.mem);
   if (metricHist.cpu.length > 120) { metricHist.cpu.shift(); metricHist.mem.shift(); }
@@ -1585,6 +1603,9 @@ function updateRisk(score, level) {
   const label = level === "secure" ? "SECURE" : level === "elevated" ? "ELEVATED" : "HIGH RISK";
   if (st) { st.textContent = label; st.className = "threat-state " + level; }
   if (sh) { sh.className.baseVal = "threat-shield " + level; }
+  // orb flank: SHIELD state mirrors the live risk level
+  const fs = $("#fl-shield");
+  if (fs) fs.textContent = level === "secure" ? "ACTIVE" : level === "elevated" ? "ELEVATED" : "BREACH";
 }
 
 async function seedThreats() {
@@ -1596,6 +1617,7 @@ async function seedThreats() {
     }
     updateRisk(d.risk_score ?? 5, d.level || "secure");
     renderThreatCenter(d);
+    try { lastThreat = d; updateLiveOps(); } catch (e2) {}
   } catch (e) {}
 }
 seedThreats();
@@ -1934,6 +1956,12 @@ async function refreshProcs() {
     const maxc = Math.max(...rows.map(p => p.cpu), 1);
     const sp = $("#st-proc");
     if (sp && rows[0]) sp.textContent = `${Math.round(rows[0].cpu)}%`;
+    // real GPU utilization (nvidia-smi); N/A on machines without one
+    const gv = $("#res-gpu"); const gb = document.querySelector(".res-fill.gpu");
+    if (gv) {
+      if (d.gpu == null) { gv.textContent = "N/A"; if (gb) gb.style.width = "0%"; }
+      else { gv.textContent = `${Math.round(d.gpu)}%`; if (gb) gb.style.width = `${Math.min(100, d.gpu)}%`; }
+    }
     host.innerHTML = rows.map(p => `
       <div class="proc-row">
         <span class="proc-name">${escapeHTML(p.name)}${p.count > 1 ? " ×" + p.count : ""}</span>
@@ -2254,6 +2282,7 @@ async function refreshMemory(force = false) {
   try {
     const d = await (await fetch("/api/memory")).json();
     renderMemory(d);
+    try { lastMemorySnap = d; updateLiveOps(); } catch (e2) {}
   } catch (e) {}
 }
 refreshMemory(true);
@@ -2342,6 +2371,104 @@ $("#btn-mem-speak")?.addEventListener("click", async () => {
   } catch (e) {}
 });
 
+/* ═══ REAL-DATA BRIDGES — no mock anywhere ═══════════
+   Live Operations, personal Notes (disk-persisted), Service Grid, and the
+   orb-flank readouts all bind to real endpoints/telemetry. */
+
+let lastAgenda = null, lastThreat = null, lastMemorySnap = null, lastWeatherOk = null;
+
+function updateLiveOps() {
+  const set = (id, txt, barId, pct) => {
+    const el = $(id); if (el) el.textContent = txt;
+    const b = $(barId); if (b) b.style.width = Math.max(0, Math.min(100, pct)) + "%";
+  };
+  if (lastAgenda) {
+    const n = (lastAgenda.intel || {}).meetings_today ?? (lastAgenda.events || []).length;
+    set("#ops-meetings", String(n), "#ops-meetings-bar", n ? Math.min(100, n / 8 * 100) : 0);
+  }
+  if (lastThreat) {
+    const soc = lastThreat.soc || {};
+    const total = (lastThreat.events || []).length || 0;
+    set("#ops-threats", `${soc.resolved ?? 0}/${total}`, "#ops-threats-bar",
+        total ? (soc.resolved || 0) / total * 100 : 0);
+  }
+  if (lastMemorySnap) {
+    const mins = lastMemorySnap.active_minutes_today || 0;
+    const txt = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+    set("#ops-presence", txt, "#ops-presence-bar", mins / 480 * 100);
+  }
+}
+
+/* — personal notes (notes.json on disk) — */
+async function refreshNotes() {
+  try {
+    const d = await (await fetch("/api/notes")).json();
+    const host = $("#notes-list"); if (!host) return;
+    const notes = d.notes || [];
+    host.innerHTML = notes.length ? notes.map(n => `
+      <div class="note" data-id="${n.id}">
+        <div class="note-text">${escapeHTML(n.text)}
+          <span class="note-del" title="delete">×</span></div>
+        <div class="note-ts">${new Date(n.ts * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
+      </div>`).join("")
+      : '<div class="tf-empty">no notes yet — add one below</div>';
+  } catch (e) {}
+}
+refreshNotes();
+$("#note-add-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const inp = $("#note-add-input");
+  const text = (inp?.value || "").trim();
+  if (!text) return;
+  inp.value = "";
+  try {
+    await fetch("/api/notes", { method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }) });
+    refreshNotes();
+  } catch (e2) {}
+});
+$("#notes-list")?.addEventListener("click", async (e) => {
+  const del = e.target.closest(".note-del"); if (!del) return;
+  const id = del.closest(".note")?.dataset.id; if (!id) return;
+  try { await fetch(`/api/notes/${id}`, { method: "DELETE" }); refreshNotes(); } catch (e2) {}
+});
+
+/* — service grid: real health of every integration — */
+function setSvc(id, ok, label) {
+  const row = $(id); if (!row) return;
+  const dot = row.querySelector(".rr-dot"), st = row.querySelector(".rr-state");
+  if (dot) dot.className = "rr-dot" + (ok ? " ok" : "");
+  if (st) { st.textContent = label; st.className = "rr-state" + (ok ? " ok" : ""); }
+}
+async function pollServiceGrid() {
+  try {
+    const [sr, cr, mr] = await Promise.allSettled([
+      fetch("/api/status").then(r => r.json()),
+      fetch("/api/calendar/status").then(r => r.json()),
+      fetch("/api/models").then(r => r.json()),
+    ]);
+    if (sr.status === "fulfilled") {
+      const s = sr.value;
+      setSvc("#svc-claude", s.brain_mode === "llm", s.brain_mode === "llm" ? "ONLINE" : "OFFLINE");
+      setSvc("#svc-news", (s.news_count || 0) > 0, (s.news_count || 0) > 0 ? `${s.news_count} ITEMS` : "NO KEY");
+    }
+    if (cr.status === "fulfilled") {
+      const c = cr.value;
+      setSvc("#svc-gcal", !!c.connected,
+             c.connected ? "SYNCED" : c.credentials_present ? "AUTH NEEDED" : "NO CREDS");
+    }
+    if (mr.status === "fulfilled") {
+      const m = mr.value;
+      setSvc("#svc-ollama", !!m.local_available,
+             m.local_available ? (m.selected || "READY") : "OFFLINE");
+    }
+    setSvc("#svc-weather", lastWeatherOk === true, lastWeatherOk ? "LIVE" : "NO DATA");
+  } catch (e) {}
+}
+pollServiceGrid();
+setInterval(pollServiceGrid, 60000);
+
 // ── websocket (self-healing) ─────────────────────────
 let ws = null;
 let wsLastMsg = 0;
@@ -2404,6 +2531,16 @@ function handle(msg) {
       try { updateAiopsTele(msg); } catch (e) {}
       try { pushTraffic(msg.net_up, msg.net_down); } catch (e) {}
       try { lastMetrics = msg; updateScanTiles(msg); } catch (e) {}
+      try {   // orb flank: real uplink rate + CPU flux
+        const fu = $("#fl-uplink"); if (fu) fu.textContent = Math.round(msg.net_down + msg.net_up);
+        const ff = $("#fl-flux");
+        if (ff) {
+          const prev = window._prevCpu ?? msg.cpu;
+          const d = msg.cpu - prev;
+          ff.textContent = (d >= 0 ? "+" : "") + d.toFixed(1);
+          window._prevCpu = msg.cpu;
+        }
+      } catch (e) {}
       break;
     case "agent":
       if (msg.event === "status") {

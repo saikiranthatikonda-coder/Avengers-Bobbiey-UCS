@@ -114,17 +114,21 @@ def schedule_all(team, news, sysmon, hub, agenda=None, tts=None, insights=None,
                       max_instances=1, coalesce=True)
 
     if gcal is not None and agenda is not None:
-        async def calendar_sync():
+        async def google_sync_job():
             if not gcal.token_present():
-                return            # not connected yet — keep mock data
+                return            # not connected yet — sections stay empty (real data only)
             events = await gcal.sync()
             if events is not None:
                 agenda.set_events(events)
+            mails = await gcal.fetch_emails()
+            if mails is not None:
+                agenda.set_emails(mails)
+            if events is not None or mails is not None:
                 await hub.broadcast({
                     "type": "log", "level": "info",
-                    "msg": f"calendar synced — {len(events)} events from Google",
+                    "msg": f"google synced — {len(events or [])} events · {len(mails or [])} emails",
                 })
-        sched.add_job(calendar_sync, IntervalTrigger(minutes=5),
+        sched.add_job(google_sync_job, IntervalTrigger(minutes=5),
                       next_run_time=now + timedelta(seconds=6),
                       max_instances=1, coalesce=True)
 

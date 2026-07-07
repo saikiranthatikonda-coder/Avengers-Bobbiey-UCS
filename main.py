@@ -269,9 +269,29 @@ def _scan_processes() -> list[dict]:
     return [r for r in agg.values() if r["name"] not in SKIP]
 
 
+_gpu_cache = {"ts": 0.0, "pct": None}
+
+
+def _read_gpu() -> float | None:
+    """Real GPU utilization via nvidia-smi; None when no NVIDIA GPU present."""
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["nvidia-smi", "--query-gpu=utilization.gpu",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=4,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if r.returncode == 0 and r.stdout.strip():
+            return float(r.stdout.strip().splitlines()[0])
+    except Exception:
+        pass
+    return None
+
+
 @app.get("/api/processes")
 async def processes_endpoint():
     """Top processes by CPU and memory, aggregated by name (chrome ×40 → one row)."""
+    import time as _t
     loop = asyncio.get_running_loop()
     rows = await loop.run_in_executor(None, _scan_processes)
     for r in rows:
@@ -282,7 +302,58 @@ async def processes_endpoint():
     # psutil's first sample reports 0% for everything — fall back to memory order
     if by_cpu and by_cpu[0]["cpu"] == 0:
         by_cpu = by_mem
-    return {"top_cpu": by_cpu, "top_mem": by_mem}
+    # real GPU (cached 10s); null when machine has no NVIDIA GPU
+    if _t.time() - _gpu_cache["ts"] > 10:
+        _gpu_cache["pct"] = await loop.run_in_executor(None, _read_gpu)
+        _gpu_cache["ts"] = _t.time()
+    return {"top_cpu": by_cpu, "top_mem": by_mem, "gpu": _gpu_cache["pct"]}
+
+
+# ── real personal notes (persisted to notes.json, gitignored) ────
+NOTES_FILE = ROOT / "notes.json"
+
+
+def _load_notes() -> list[dict]:
+    import json as _json
+    try:
+        return _json.loads(NOTES_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _save_notes(notes: list[dict]) -> None:
+    import json as _json
+    NOTES_FILE.write_text(_json.dumps(notes, indent=1, ensure_ascii=False),
+                          encoding="utf-8")
+
+
+@app.get("/api/notes")
+async def notes_get():
+    return {"notes": _load_notes()}
+
+
+class NoteReq(BaseModel):
+    text: str
+
+
+@app.post("/api/notes")
+async def notes_add(req: NoteReq):
+    import time as _t
+    import uuid as _uuid
+    text = req.text.strip()[:200]
+    if not text:
+        return {"ok": False}
+    notes = _load_notes()
+    notes.insert(0, {"id": _uuid.uuid4().hex[:8], "text": text, "ts": _t.time()})
+    _save_notes(notes[:30])
+    return {"ok": True}
+
+
+@app.delete("/api/notes/{note_id}")
+async def notes_delete(note_id: str):
+    notes = [n for n in _load_notes() if n.get("id") != note_id]
+    _save_notes(notes)
+    return {"ok": True}
 
 
 @app.get("/api/insights")
@@ -565,6 +636,10 @@ async def calendar_connect():
         if events is not None:
             state["agenda"].set_events(events)
             result["synced"] = len(events)
+        mails = await state["gcal"].fetch_emails()
+        if mails is not None:
+            state["agenda"].set_emails(mails)
+            result["emails"] = len(mails)
     return result
 
 

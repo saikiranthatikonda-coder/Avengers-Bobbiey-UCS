@@ -16,7 +16,10 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/gmail.readonly",
+]
 
 HIGH_PRIORITY_WORDS = ("investor", "board", "demo", "review", "interview",
                        "pitch", "client", "aisin", "deadline")
@@ -198,3 +201,49 @@ class GoogleCalendar:
         self.last_error = None
         self.event_count = len(events)
         return events
+
+    # ── Gmail (same OAuth, readonly) ──────────────────────────────
+    async def fetch_emails(self, max_results: int = 8) -> list[dict] | None:
+        """Recent inbox mail (last 3 days). Returns None when not connected."""
+        creds = self._load_creds()
+        if not creds:
+            return None
+
+        def _fetch():
+            from googleapiclient.discovery import build
+            svc = build("gmail", "v1", credentials=creds, cache_discovery=False)
+            resp = svc.users().messages().list(
+                userId="me", q="in:inbox newer_than:3d",
+                maxResults=max_results).execute()
+            out = []
+            for m in resp.get("messages", [])[:max_results]:
+                msg = svc.users().messages().get(
+                    userId="me", id=m["id"], format="metadata",
+                    metadataHeaders=["From", "Subject"]).execute()
+                headers = {h["name"].lower(): h["value"]
+                           for h in msg.get("payload", {}).get("headers", [])}
+                labels = msg.get("labelIds", []) or []
+                sender = headers.get("from", "unknown")
+                if "<" in sender:
+                    sender = sender.split("<", 1)[1].rstrip(">")
+                out.append({
+                    "sender": sender[:80],
+                    "subject": (headers.get("subject") or "(no subject)")[:140],
+                    "snippet": (msg.get("snippet") or "")[:160],
+                    "received_ms": int(msg.get("internalDate", "0")),
+                    "priority": "priority" if ("IMPORTANT" in labels
+                                               or "STARRED" in labels) else "normal",
+                    "unread": "UNREAD" in labels,
+                })
+            return out
+
+        try:
+            loop = asyncio.get_running_loop()
+            mails = await loop.run_in_executor(None, _fetch)
+            return mails
+        except Exception as e:
+            self.last_error = f"gmail: {e}"
+            if self.hub:
+                await self.hub.broadcast({"type": "log", "level": "warn",
+                                          "msg": f"gmail sync failed: {e}"})
+            return None

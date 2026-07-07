@@ -41,10 +41,11 @@ class Email:
 class Agenda:
     def __init__(self, hub=None) -> None:
         self.hub = hub
+        # REAL DATA ONLY: starts empty; populated by Google Calendar + Gmail
+        # sync (google_sync.py). No mock/seed data anywhere.
         self.events: list[CalendarEvent] = []
         self.emails: list[Email] = []
-        self.source = "mock"   # "mock" | "google"
-        self._seed()
+        self.source = "disconnected"   # "disconnected" | "google"
 
     # ── real-calendar ingestion (Google sync) ────────────────────
     def set_events(self, raw: list[dict]) -> None:
@@ -120,62 +121,26 @@ class Agenda:
             "source": self.source,
         }
 
-    def _seed(self) -> None:
-        # Anchored to "now" so the 10-min reminder fires within 30-60 s of boot
-        # and you can see/hear the pipeline working without waiting hours.
-        now = datetime.now()
-        self.events = [
-            CalendarEvent(
-                "Engineering standup",
-                now + timedelta(minutes=11), 30,
-                attendees=["Pepper", "Happy"],
-                location="meet.google.com/abc-defg-hij",
-                priority="normal",
-            ),
-            CalendarEvent(
-                "Corporate Innovation sync — AISIN",
-                now + timedelta(minutes=42), 45,
-                attendees=["AISIN team"],
-                priority="high",
-            ),
-            CalendarEvent(
-                "Investor pitch",
-                now + timedelta(hours=2, minutes=5), 60,
-                attendees=["AISIN executives", "Pepper"],
-                priority="high",
-            ),
-            CalendarEvent(
-                "Lunch with Bruce",
-                now + timedelta(hours=4), 60,
-            ),
-            CalendarEvent(
-                "Demo prep · Friday review",
-                now + timedelta(hours=6, minutes=20), 30,
-                attendees=["team"],
-            ),
-        ]
-        self.emails = [
-            Email("Q4 roadmap — final review needed",
-                  "pepper@stark.example",
-                  now - timedelta(minutes=7), "priority",
-                  "Need your sign-off before EOD. Three new line items flagged."),
-            Email("AISIN — final terms attached",
-                  "ceo@aisin.example",
-                  now - timedelta(minutes=23), "priority",
-                  "Terms reflect the increase we discussed. See page 4."),
-            Email("Re: Demo deck v3",
-                  "happy@stark.example",
-                  now - timedelta(minutes=44), "normal",
-                  "Pushed v3 with the suit walkthrough. Slide 12 still needs the metric."),
-            Email("Your weekly engineering digest",
-                  "engineering@stark.example",
-                  now - timedelta(hours=1, minutes=10), "normal",
-                  "5 PRs merged, 2 deploys, all green."),
-            Email("Calendar invite: board sync",
-                  "calendar@stark.example",
-                  now - timedelta(hours=2), "normal",
-                  "Friday 10:00 IST. Add to your calendar."),
-        ]
+    # ── real-Gmail ingestion ──────────────────────────────────────
+    def set_emails(self, raw: list[dict]) -> None:
+        """Replace inbox with synced Gmail data, preserving notified flags so
+        re-syncs don't re-announce the same priority mail."""
+        old_notified = {(m.sender, m.subject) for m in self.emails if m.notified}
+        new_mails: list[Email] = []
+        for r in raw:
+            em = Email(
+                subject=r.get("subject") or "(no subject)",
+                sender=r.get("sender") or "unknown",
+                received=datetime.fromtimestamp((r.get("received_ms") or 0) / 1000)
+                         if r.get("received_ms") else datetime.now(),
+                priority=r.get("priority", "normal"),
+                snippet=r.get("snippet") or "",
+            )
+            if (em.sender, em.subject) in old_notified:
+                em.notified = True
+            new_mails.append(em)
+        self.emails = new_mails
+        self.source = "google"
 
     def snapshot(self) -> dict:
         now = datetime.now()
