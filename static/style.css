@@ -1087,6 +1087,23 @@ body {
 .kb-item.answer { border-left-color: #22c55e; background: rgba(34,197,94,0.05); }
 .kb-item.answer .kb-src { color: #22c55e; }
 
+/* Phase 3 · multi-camera + zone monitoring */
+.cam-ops { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
+.cam-select {
+  flex: 1; min-width: 0; background: rgba(6,18,31,0.7); color: var(--text-dim);
+  border: 1px solid var(--panel-edge); border-radius: 4px;
+  font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.1em;
+  padding: 0.24rem 0.3rem; cursor: pointer; outline: none;
+}
+.cam-select:hover, .cam-select:focus { border-color: color-mix(in srgb, var(--accent) 50%, var(--panel-edge)); color: var(--text); }
+.zone-wrap { display: flex; align-items: center; gap: 0.3rem; }
+.zone-grid { display: grid; grid-template-columns: repeat(3, 9px); grid-template-rows: repeat(3, 7px); gap: 1.5px; }
+.zone-grid span { background: color-mix(in srgb, var(--panel-edge) 60%, transparent); border-radius: 1px; transition: background 0.3s; }
+.zone-grid span.z-low  { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.zone-grid span.z-warm { background: #facc15; box-shadow: 0 0 4px rgba(250,204,21,0.6); }
+.zone-grid span.z-hot  { background: var(--error); box-shadow: 0 0 5px rgba(255,60,60,0.7); }
+.zone-label { font-family: var(--font-display); font-size: 0.42rem; letter-spacing: 0.14em; color: var(--text-dim); }
+
 /* agenda: live meeting + countdown + prep + AI summary */
 .cal-now { display: flex; align-items: center; gap: 0.4rem; font-size: 0.62rem; color: var(--text); padding: 0.3rem 0.45rem; border: 1px solid color-mix(in srgb, #22c55e 45%, var(--panel-edge)); border-radius: 4px; background: rgba(34,197,94,0.06); margin-top: 0.3rem; }
 .cal-now-live { color: #22c55e; animation: pulse 1.6s infinite; }

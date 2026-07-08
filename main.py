@@ -440,6 +440,7 @@ class VisionReq(BaseModel):
     frame: str            # data URL or raw base64 JPEG
     prompt: str | None = None
     speak: bool = True
+    camera: str | None = None   # Phase 3: which camera this frame came from
 
 
 @app.post("/api/vision/analyze")
@@ -507,12 +508,16 @@ async def vision_analyze(req: VisionReq):
                            flags=_re.IGNORECASE).strip()
     text = text[:280]
 
+    cam = (req.camera or "primary")[:40]
+    _vision_state.setdefault("cameras", set()).add(cam)
     await mem.record_observation(text, who=who)
     await state["hub"].broadcast({
         "type": "insight", "insight": text, "recommendation": "",
-        "severity": "info", "confidence": 90, "source": "vision-ai", "ts": now,
+        "severity": "info", "confidence": 90,
+        "source": f"vision-ai · {cam}", "ts": now,
     })
-    await state["hub"].broadcast({"type": "vision-obs", "text": text, "who": who})
+    await state["hub"].broadcast({"type": "vision-obs", "text": text, "who": who,
+                                  "camera": cam})
     if who in ("guest", "multiple"):
         await state["hub"].broadcast({
             "type": "alert", "severity": "warning",

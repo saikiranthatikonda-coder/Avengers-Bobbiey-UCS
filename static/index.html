@@ -478,6 +478,20 @@
           <span class="cam-chip dim" id="chip-presence">STANDBY</span>
           <span class="cam-chip dim" id="chip-motion">MOTION 0</span>
         </div>
+        <!-- Phase 3: multi-camera + zone monitoring -->
+        <div class="cam-ops">
+          <select id="cam-select" class="cam-select" title="switch camera" aria-label="camera source">
+            <option value="">DEFAULT CAMERA</option>
+          </select>
+          <div class="zone-wrap" title="zone activity monitor — motion per sector">
+            <div class="zone-grid" id="zone-grid">
+              <span></span><span></span><span></span>
+              <span></span><span></span><span></span>
+              <span></span><span></span><span></span>
+            </div>
+            <span class="zone-label">ZONES</span>
+          </div>
+        </div>
       </div>
 
       <h2 class="panel-title">WORLD CLOCKS</h2>

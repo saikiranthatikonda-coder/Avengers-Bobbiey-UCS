@@ -72,8 +72,8 @@ class Roadmap:
             ("Identity-free presence awareness", lambda: mem is not None),
             ("Description-based recognition", lambda: mem is not None and mem.enrolled),
             ("Activity analytics timeline", lambda: mem is not None),
-            ("Multi-camera situational awareness", lambda: False),
-            ("Zone monitoring", lambda: False),
+            ("Multi-camera situational awareness", lambda: True),  # selector + per-camera tagging
+            ("Zone monitoring (3×3 sector watch)", lambda: True),  # away-intrusion alerts live
         ]
         phase4 = [
             ("Multi-operator deployments", lambda: False),

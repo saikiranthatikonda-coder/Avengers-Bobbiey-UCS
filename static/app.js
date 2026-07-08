@@ -1074,6 +1074,36 @@ const camToggle = $("#cam-toggle");
 const camResEl  = $("#cam-res");
 let camStream   = null;
 
+/* Phase 3 · multi-camera situational awareness */
+let camDeviceId = "";            // "" = default camera
+function camLabel() {
+  const sel = $("#cam-select");
+  const opt = sel && sel.selectedOptions[0];
+  return (opt && opt.value ? opt.textContent : "primary").slice(0, 40);
+}
+async function enumerateCameras() {
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const cams = devs.filter(d => d.kind === "videoinput");
+    const sel = $("#cam-select"); if (!sel) return;
+    const cur = camDeviceId;
+    sel.innerHTML = cams.map((c, i) =>
+      `<option value="${escapeHTML(c.deviceId)}"${c.deviceId === cur ? " selected" : ""}>` +
+      `${escapeHTML((c.label || `CAMERA ${i + 1}`).toUpperCase().slice(0, 28))}</option>`).join("")
+      || '<option value="">DEFAULT CAMERA</option>';
+    if (cams.length > 1)
+      logEvent(`<span class="tag">[cam]</span> ${cams.length} cameras available — multi-camera awareness armed`);
+  } catch (e) {}
+}
+$("#cam-select")?.addEventListener("change", async () => {
+  camDeviceId = $("#cam-select").value || "";
+  if (camStream) {          // hot-switch: restart the stream on the new device
+    stopCamera();
+    await startCamera();
+    logEvent(`<span class="tag">[cam]</span> switched to ${escapeHTML(camLabel())}`);
+  }
+});
+
 async function startCamera() {
   if (camStream) return;
   logEvent('<span class="tag">[cam]</span> requesting camera access…');
@@ -1088,16 +1118,19 @@ async function startCamera() {
   camRoot.classList.add("requesting");
   camStatus.textContent = "◌ REQUESTING…";
   try {
+    const vidConstraints = {
+      width:  { ideal: 480 },
+      height: { ideal: 360 },
+    };
+    if (camDeviceId) vidConstraints.deviceId = { exact: camDeviceId };
+    else vidConstraints.facingMode = "user";
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        width:  { ideal: 480 },
-        height: { ideal: 360 },
-        facingMode: "user",
-      },
+      video: vidConstraints,
       audio: false,
     });
     camStream = stream;
     camVideo.srcObject = stream;
+    enumerateCameras();   // labels become available once permission is granted
 
     // Explicit play() — autoplay can silently fail on display:none or unfocused tabs.
     try {
@@ -1199,7 +1232,7 @@ const VisionAI = {
       const frame = this.canvas.toDataURL("image/jpeg", 0.6);
       const r = await fetch("/api/vision/analyze", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ frame, speak: true }),
+        body: JSON.stringify({ frame, speak: true, camera: camLabel() }),
       });
       const d = await r.json();
       if (!d.ok) {
@@ -1236,6 +1269,9 @@ const Presence = {
   canvas: document.createElement("canvas"),
   ctx: null, prev: null, timer: null,
   ema: 0, lastMotion: 0, state: "offline",
+  zones: new Array(9).fill(0),        // Phase 3: per-sector motion EMA (3×3)
+  zoneHeat: new Array(9).fill(0),     // cumulative activity analytics
+  _lastZoneAlert: 0,
 
   start() {
     this.canvas.width = 64; this.canvas.height = 48;
@@ -1276,8 +1312,24 @@ const Presence = {
     let motion = 0;
     if (this.prev) {
       let diff = 0;
-      for (let i = 0; i < N; i += 2) diff += Math.abs(gray[i] - this.prev[i]);
+      const zdiff = new Array(9).fill(0);
+      for (let i = 0; i < N; i += 2) {
+        const d0 = Math.abs(gray[i] - this.prev[i]);
+        diff += d0;
+        // zone monitoring: map pixel → 3×3 sector (64×48 → 21px × 16px cells)
+        const zx = Math.min(2, ((i % 64) / 21.34) | 0);
+        const zy = Math.min(2, ((i / 64) / 16) | 0);
+        zdiff[zy * 3 + zx] += d0;
+      }
       motion = diff / (N / 2);
+      const perZone = (N / 2) / 9;
+      for (let z = 0; z < 9; z++) {
+        const zm = zdiff[z] / perZone;
+        this.zones[z] = this.zones[z] * 0.6 + zm * 0.4;
+        this.zoneHeat[z] += zm > 3 ? zm : 0;   // activity analytics accumulator
+      }
+      this.renderZones();
+      this.zoneWatch();
     }
     this.prev = gray;
     this.ema = this.ema * 0.6 + motion * 0.4;
@@ -1298,6 +1350,44 @@ const Presence = {
     else if (now - this.lastMotion < 45000) next = "idle";
     else next = "away";
     this.setState(next);
+  },
+
+  /* Phase 3 · zone monitoring — render the 3×3 sector heat + intrusion watch */
+  ZONE_NAMES: ["TOP-LEFT", "TOP-CENTER", "TOP-RIGHT",
+               "MID-LEFT", "CENTER", "MID-RIGHT",
+               "LOW-LEFT", "LOW-CENTER", "LOW-RIGHT"],
+
+  renderZones() {
+    const grid = $("#zone-grid"); if (!grid) return;
+    const cells = grid.children;
+    for (let z = 0; z < 9 && z < cells.length; z++) {
+      const v = this.zones[z];
+      cells[z].className = v > 8 ? "z-hot" : v > 3.5 ? "z-warm" : v > 1.2 ? "z-low" : "";
+    }
+  },
+
+  zoneWatch() {
+    // while the operator is away, motion in any sector is a security signal:
+    // raise a real alert naming the zone (rate-limited to one per 2 min)
+    if (this.state !== "away" && this.state !== "no-user") return;
+    let hot = -1, hotV = 0;
+    for (let z = 0; z < 9; z++) if (this.zones[z] > hotV) { hotV = this.zones[z]; hot = z; }
+    if (hotV < 7) return;
+    const now = Date.now();
+    if (now - this._lastZoneAlert < 120000) return;
+    this._lastZoneAlert = now;
+    const zone = this.ZONE_NAMES[hot] || "UNKNOWN";
+    logEvent(`<span class="tag">[zone]</span> motion in ${zone} sector while operator away`, "warn");
+    fetch("/api/alert", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        severity: "warning",
+        title: `Zone monitor: motion in ${zone} sector`,
+        detail: `Movement detected on ${camLabel()} while the operator is away (intensity ${hotV.toFixed(1)}).`,
+        source: "vision · zone monitor",
+        action: "Check the operator view feed.",
+      }),
+    }).catch(() => {});
   },
 
   setState(s) {
