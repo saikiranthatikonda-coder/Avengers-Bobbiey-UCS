@@ -38,6 +38,9 @@ class LocalLLM:
         self.hub = hub
         self.available = False
         self.last_latency_ms: int | None = None
+        self.last_tps: float | None = None        # completion tokens / second
+        self.last_tokens: int | None = None
+        self.calls_total = 0
 
     def save_pref(self, force_local: bool | None = None) -> None:
         if force_local is not None:
@@ -105,6 +108,39 @@ class LocalLLM:
             self.available = False
         return self.available
 
+    async def running(self) -> list[dict]:
+        """Models loaded in memory RIGHT NOW (Ollama /api/ps): RAM/VRAM split,
+        context window, expiry. Empty on non-Ollama endpoints."""
+        root = self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
+        try:
+            async with httpx.AsyncClient(timeout=5, trust_env=False) as c:
+                r = await c.get(f"{root}/api/ps")
+                r.raise_for_status()
+                data = r.json()
+            out = []
+            for m in data.get("models", []):
+                size = m.get("size") or 0
+                vram = m.get("size_vram") or 0
+                out.append({
+                    "name": m.get("name"),
+                    "ram_gb": round(max(0, size - vram) / 1e9, 2),
+                    "vram_gb": round(vram / 1e9, 2),
+                    "context": m.get("context_length"),
+                    "until": m.get("expires_at"),
+                })
+            return out
+        except Exception:
+            return []
+
+    def perf(self) -> dict:
+        """Latest measured performance of this client."""
+        return {
+            "latency_ms": self.last_latency_ms,
+            "tokens_per_sec": self.last_tps,
+            "last_completion_tokens": self.last_tokens,
+            "calls_total": self.calls_total,
+        }
+
     async def chat(self, prompt: str, system: str | None = None,
                    timeout: float = 60.0, max_tokens: int = 300) -> str | None:
         """Single-turn chat. Returns None on any failure (caller falls back)."""
@@ -129,7 +165,14 @@ class LocalLLM:
                 )
                 r.raise_for_status()
                 data = r.json()
-            self.last_latency_ms = int((time.time() - t0) * 1000)
+            elapsed = time.time() - t0
+            self.last_latency_ms = int(elapsed * 1000)
+            self.calls_total += 1
+            usage = data.get("usage") or {}
+            ctoks = usage.get("completion_tokens")
+            if ctoks and elapsed > 0:
+                self.last_tokens = ctoks
+                self.last_tps = round(ctoks / elapsed, 1)
             content = (data.get("choices") or [{}])[0].get("message", {}).get("content")
             content = content or ""
             # strip any reasoning residue (Qwen3 etc. may emit <think>…</think>)

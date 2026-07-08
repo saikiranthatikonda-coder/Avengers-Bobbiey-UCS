@@ -303,6 +303,85 @@ class InsightsEngine:
                 asyncio.create_task(self.tts.say(phrase))
         return {"prev": prev, "greeted": greeted}
 
+    # ── command recommendations (permanent panel feed) ────────────
+    def recommendations(self, productivity=None, orchestrator=None) -> list[dict]:
+        """EVERY currently-applicable recommendation, priority-ordered — the
+        commander's standing briefing. Same real signals as insights, but a
+        complete list instead of one observation."""
+        s = self.snapshot()
+        recs: list[dict] = []
+
+        def add(sev, rank, title, detail):
+            recs.append({"severity": sev, "rank": rank,
+                         "title": title[:90], "detail": detail[:120]})
+
+        if s.get("next_meeting") and s.get("next_meeting_min") is not None:
+            m = s["next_meeting_min"]
+            if 0 < m <= 20:
+                add("critical", 1, f"Prepare: \"{s['next_meeting']}\" in {m:.0f} min",
+                    "Wrap the current task and review the agenda item.")
+            elif m <= 60:
+                add("warn", 3, f"Next: \"{s['next_meeting']}\" in {m:.0f} min",
+                    "A prep block now beats a scramble later.")
+        if s["disk"] > 92:
+            add("critical", 1, f"Storage critical — {s['disk']:.0f}%",
+                "Run a cleanup; saves and updates may fail.")
+        if s.get("risk_score", 0) >= 50:
+            add("critical", 1, f"Threat level HIGH — {s['risk_score']}/100",
+                "Open the incident board and acknowledge the queue.")
+        elif s.get("risk_score", 0) >= 20:
+            add("warn", 2, f"Threat level elevated — {s['risk_score']}/100",
+                "Review the response queue when convenient.")
+        if s["cpu"] > 85:
+            add("warn", 2, f"High CPU — {s['cpu']:.0f}%",
+                "Check the top process before it throttles the machine.")
+        if s["mem"] > 88:
+            add("warn", 2, f"Memory pressure — {s['mem']:.0f}%",
+                "Close idle apps or browser tabs.")
+        if s["priority_mail"] >= 1:
+            add("warn", 3, f"Inbox: {s['priority_mail']} priority message(s)",
+                "Triage before the next meeting block.")
+        if s.get("cal_conflicts", 0) > 0:
+            add("warn", 2, f"{s['cal_conflicts']} calendar conflict(s) today",
+                "Resolve the overlap before it collides.")
+        if s.get("cal_density") == "heavy" and (s.get("cal_focus_block") or 0) < 60:
+            add("info", 4, "Heavy meeting day, thin focus time",
+                f"Largest free block only {s.get('cal_focus_block') or 0} min — guard it.")
+        if productivity is not None:
+            try:
+                p = productivity.snapshot()
+                if not p["focus_active"] and p["focus_min_today"] < 30 \
+                        and 9 <= s["hour"] < 19 and s["presence"] in ("active", "idle"):
+                    blk = s.get("cal_focus_block") or 0
+                    if blk >= 45:
+                        add("info", 4, f"A {blk}-min focus window is open",
+                            "Start a deep-work session while it lasts.")
+                if p["switches_today"] >= 6:
+                    add("info", 4, f"{p['switches_today']} context switches today",
+                        "Batch similar tasks to recover momentum.")
+            except Exception:
+                pass
+        if orchestrator is not None:
+            try:
+                n = orchestrator.summary()["active"]
+                if n >= 3:
+                    add("info", 4, f"{n} directives in flight",
+                        "The agent roster is at elevated tasking.")
+            except Exception:
+                pass
+        if s["presence"] in ("active", "idle") and s["presence_minutes"] >= 120:
+            add("info", 4, f"{s['presence_minutes'] // 60}h {s['presence_minutes'] % 60}m at the console",
+                "A short break would sharpen the next block.")
+        if s["hour"] >= 23 or s["hour"] < 5:
+            add("info", 5, "Late hours — autonomous watch is on",
+                "Consider resting; I will hold the fort.")
+        if not recs:
+            add("info", 5, "All clear — no action required",
+                f"CPU {s['cpu']:.0f}%, risk {s.get('risk_score', 0)}/100, "
+                "calendar under control.")
+        recs.sort(key=lambda r: r["rank"])
+        return recs[:8]
+
     # ── consolidated status for /api/aiops ────────────────────────
     def aiops_status(self) -> dict:
         m = (self.sysmon.latest if self.sysmon else {}) or {}

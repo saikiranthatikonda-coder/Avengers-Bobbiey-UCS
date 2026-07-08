@@ -29,7 +29,8 @@ CYCLE_SECONDS = 180
 
 
 def schedule_all(team, news, sysmon, hub, agenda=None, tts=None, insights=None,
-                 threats=None, gcal=None, memory=None) -> AsyncIOScheduler:
+                 threats=None, gcal=None, memory=None,
+                 orchestrator=None) -> AsyncIOScheduler:
     sched = AsyncIOScheduler()
     now = datetime.now()
 
@@ -111,6 +112,15 @@ def schedule_all(team, news, sysmon, hub, agenda=None, tts=None, insights=None,
             await memory.synthesize()
         sched.add_job(memory_synthesis, IntervalTrigger(minutes=30),
                       next_run_time=now + timedelta(minutes=10),
+                      max_instances=1, coalesce=True)
+
+    if orchestrator is not None:
+        # Phase 2: Jarvis-led delegation cycle — derive directives from live
+        # conditions, assign to specialists, resolve when conditions clear
+        async def orchestration_tick():
+            await orchestrator.tick()
+        sched.add_job(orchestration_tick, IntervalTrigger(seconds=20),
+                      next_run_time=now + timedelta(seconds=12),
                       max_instances=1, coalesce=True)
 
     if gcal is not None and agenda is not None:

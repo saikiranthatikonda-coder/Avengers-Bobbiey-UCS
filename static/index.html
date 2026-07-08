@@ -513,7 +513,13 @@
         </span>
       </h2>
       <div id="agenda-list" class="agenda-list"><div class="agenda-empty">loading…</div></div>
+      <div class="cal-now" id="cal-now" hidden>
+        <span class="cal-now-live">●</span> <span id="cal-now-txt"></span>
+      </div>
+      <div class="cal-countdown" id="cal-countdown" hidden></div>
       <div class="cal-intel" id="cal-intel">analyzing schedule…</div>
+      <div class="cal-prep" id="cal-prep" hidden></div>
+      <div class="cal-summary" id="cal-summary" hidden></div>
 
       <h2 class="panel-title" style="margin-top:0.5rem;">
         INBOX <span class="title-badge" id="inbox-badge">—</span>
@@ -891,6 +897,119 @@
       </div>
       <div class="ir-timeline" id="ir-timeline">
         <div class="tf-empty">no incidents in the response pipeline</div>
+      </div>
+    </div>
+
+    <div class="bs-card tic-card" id="tic-analytics">
+      <div class="bs-head">
+        <div class="bs-title">THREAT ANALYTICS</div>
+        <div class="bs-sub">TREND · DISTRIBUTION · RESPONSE QUEUE</div>
+      </div>
+      <div class="ta-trend">
+        <canvas id="risk-trend" height="46"></canvas>
+        <div class="ta-trend-label">RISK TREND · LAST 30 MIN</div>
+      </div>
+      <div class="ta-dist" id="ta-dist"></div>
+      <div class="intel-divider">RESPONSE QUEUE · <span id="ta-queue-n">0</span> AWAITING ACK</div>
+      <div class="ta-queue" id="ta-queue">
+        <div class="tf-empty">queue clear — nothing awaiting acknowledgement</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ═══ PHASE 2 · MULTI-AGENT INTELLIGENCE + PRODUCT EVOLUTION ═══ -->
+  <section class="orch-row">
+
+    <div class="bs-card" id="orch-card">
+      <div class="bs-head">
+        <div class="bs-title">MULTI-AGENT ORCHESTRATION</div>
+        <div class="bs-sub">JARVIS-LED DELEGATION · <span id="orch-stat">STARTING…</span></div>
+      </div>
+      <div class="orch-bb" id="orch-bb"></div>
+      <div class="intel-divider">DIRECTIVES · PRIORITY-RESOLVED</div>
+      <div class="orch-list" id="orch-list">
+        <div class="tf-empty">orchestrator warming up…</div>
+      </div>
+    </div>
+
+    <div class="bs-card" id="recs-card">
+      <div class="bs-head">
+        <div class="bs-title">COMMAND RECOMMENDATIONS</div>
+        <div class="bs-sub">STANDING BRIEFING · LIVE CONDITIONS</div>
+      </div>
+      <div class="recs-list" id="recs-list">
+        <div class="tf-empty">assessing conditions…</div>
+      </div>
+      <button class="ghost-btn wide" id="btn-briefing" title="full spoken executive briefing">◈ EXECUTIVE BRIEFING</button>
+    </div>
+
+    <div class="bs-card" id="evo-card">
+      <div class="bs-head">
+        <div class="bs-title">PRODUCT EVOLUTION</div>
+        <div class="bs-sub">LIVE ROADMAP · <span id="evo-version">v—</span> · <span id="evo-pct">—%</span> BUILT</div>
+      </div>
+      <div class="evo-bar"><div class="evo-fill" id="evo-fill"></div></div>
+      <div class="evo-phases" id="evo-phases"></div>
+      <div class="intel-divider">IN DEVELOPMENT NOW</div>
+      <div class="evo-dev" id="evo-dev">—</div>
+    </div>
+
+  </section>
+
+  <!-- ═══ PHASE 2 · LOCAL AI + PRODUCTIVITY + KNOWLEDGE ═══ -->
+  <section class="prod-row">
+
+    <div class="bs-card" id="lai-card">
+      <div class="bs-head">
+        <div class="bs-title">LOCAL AI CONTROL CENTER</div>
+        <div class="bs-sub">ACTIVE BRAIN: <span id="lai-active">—</span></div>
+      </div>
+      <div class="lai-stats">
+        <div class="lai-stat"><span class="lbl">LATENCY</span><span class="val" id="lai-latency">—</span></div>
+        <div class="lai-stat"><span class="lbl">TOKENS/SEC</span><span class="val" id="lai-tps">—</span></div>
+        <div class="lai-stat"><span class="lbl">MODEL RAM</span><span class="val" id="lai-ram">—</span></div>
+        <div class="lai-stat"><span class="lbl">CONTEXT</span><span class="val" id="lai-ctx">—</span></div>
+      </div>
+      <div class="lai-host"><span>HOST MEMORY</span><div class="lai-host-bar"><div id="lai-host-fill"></div></div><span id="lai-host-txt">—</span></div>
+      <div class="intel-divider">INSTALLED MODELS · CLICK TO SWITCH</div>
+      <div class="lai-models" id="lai-models"><div class="tf-empty">scanning endpoint…</div></div>
+    </div>
+
+    <div class="bs-card" id="focus-card">
+      <div class="bs-head">
+        <div class="bs-title">OPERATOR PRODUCTIVITY</div>
+        <div class="bs-sub">AI SCORE: <span id="prod-score">—</span>/100</div>
+      </div>
+      <div class="focus-timer">
+        <div class="focus-clock" id="focus-clock">00:00</div>
+        <button class="ghost-btn" id="btn-focus">▶ START DEEP WORK</button>
+      </div>
+      <form class="mem-add-form" id="task-form">
+        <input type="text" id="task-input" placeholder="current task…" maxlength="80" autocomplete="off"/>
+        <button type="submit" class="ghost-btn">SET</button>
+        <button type="button" class="ghost-btn" id="btn-task-done" title="mark done">✓</button>
+      </form>
+      <div class="prod-counters">
+        <div class="pc"><span class="pc-n" id="pc-focus">0</span><span class="pc-l">FOCUS MIN</span></div>
+        <div class="pc"><span class="pc-n" id="pc-sessions">0</span><span class="pc-l">SESSIONS</span></div>
+        <div class="pc"><span class="pc-n" id="pc-switch">0</span><span class="pc-l">SWITCHES</span></div>
+        <div class="pc"><span class="pc-n" id="pc-done">0</span><span class="pc-l">TASKS DONE</span></div>
+      </div>
+    </div>
+
+    <div class="bs-card" id="kb-card">
+      <div class="bs-head">
+        <div class="bs-title">KNOWLEDGE HUB</div>
+        <div class="bs-sub">SEARCHABLE MEMORY · <span id="kb-stats">—</span></div>
+      </div>
+      <form class="mem-add-form" id="kb-form">
+        <input type="text" id="kb-input" placeholder="search everything I know…" maxlength="120" autocomplete="off"/>
+        <button type="submit" class="ghost-btn">FIND</button>
+        <button type="button" class="ghost-btn" id="btn-kb-ask" title="AI answer from the knowledge base">ASK AI</button>
+      </form>
+      <div class="kb-results" id="kb-results">
+        <div class="tf-empty">memory, notes, incidents, mail, agents — one search</div>
       </div>
     </div>
 

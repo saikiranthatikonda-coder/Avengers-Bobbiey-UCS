@@ -49,6 +49,9 @@ class ThreatEngine:
         self._prev_matrix: dict[str, int] = {}
         # SOC counters
         self.stats = {"analyzed": 0, "alerts": 0, "resolved": 0}
+        # Threat 2.0: risk trend history + operator-acknowledged incidents
+        self.history: deque = deque(maxlen=90)   # (ts, score) ~30 min at 20s ticks
+        self._acked: set[str] = set()
 
     # ── event plumbing ────────────────────────────────────────────
     async def _add(self, category: str, severity: str, title: str,
@@ -160,6 +163,7 @@ class ThreatEngine:
 
         # risk broadcast on material change + emergency transition
         score = self._recompute_risk()
+        self.history.append({"ts": time.time(), "score": score})
         level = self.level_for(score)
         if abs(score - self._last_broadcast_score) >= 3:
             self._last_broadcast_score = score
@@ -249,6 +253,11 @@ class ThreatEngine:
         self.stats["resolved"] = resolved
         investigations = sum(1 for e in events
                              if e["stage"] in ("analysis", "escalation"))
+        # Threat 2.0: response queue = live medium+ incidents awaiting an
+        # operator acknowledgement (SOC work-queue discipline)
+        queue = [e for e in events
+                 if e["stage"] != "resolved" and e["id"] not in self._acked
+                 and e["severity"] in ("medium", "high", "critical")][:8]
         return {
             "risk_score": score,
             "level": self.level_for(score),
@@ -257,7 +266,17 @@ class ThreatEngine:
             "by_severity": by_sev,
             "matrix": self.matrix(),
             "soc": {**self.stats, "investigations": investigations},
+            "history": list(self.history),
+            "response_queue": queue,
+            "acked": len(self._acked),
         }
+
+    def acknowledge(self, event_id: str) -> bool:
+        """Operator acknowledges an incident — clears it from the queue."""
+        if any(ev["id"] == event_id for ev in self.events):
+            self._acked.add(event_id)
+            return True
+        return False
 
     def summary_text(self) -> str:
         s = self.snapshot()

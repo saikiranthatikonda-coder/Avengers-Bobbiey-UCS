@@ -94,8 +94,10 @@ class Agenda:
         if day_end > cursor:
             largest_block = max(largest_block,
                                 int((day_end - cursor).total_seconds() // 60))
-        # readiness: time + prep margin before the next meeting
-        nxt = today[0] if today else None
+        # current meeting (started, not ended) vs the next one to start
+        current = next((e for e in today if e.start <= now), None)
+        upcoming = [e for e in today if e.start > now]
+        nxt = upcoming[0] if upcoming else None
         readiness = 100
         if nxt:
             mins = nxt.minutes_until()
@@ -109,14 +111,38 @@ class Agenda:
             readiness = max(10, min(100, readiness))
         density = ("heavy" if total_min > 240 else
                    "moderate" if total_min > 120 else "light")
+        # meeting preparation suggestions — rule-based, instant, real inputs
+        prep: list[str] = []
+        if nxt:
+            mins = nxt.minutes_until()
+            if mins <= 60:
+                if nxt.attendees:
+                    prep.append(f"Review notes on {', '.join(nxt.attendees[:2])}"
+                                + (f" +{len(nxt.attendees) - 2}" if len(nxt.attendees) > 2 else ""))
+                if nxt.location:
+                    prep.append(f"Location: {nxt.location} — allow transit/join time")
+                if nxt.priority == "high":
+                    prep.append("High priority — prepare talking points first")
+                if mins > 15:
+                    prep.append(f"~{int(mins - 5)} min usable before it starts")
+                else:
+                    prep.append("Wrap the current task now")
+        if conflicts:
+            prep.append(f"Resolve {conflicts} overlap(s) before they collide")
         return {
             "meetings_today": len(today),
             "meeting_minutes": total_min,
             "density": density,
             "conflicts": conflicts,
             "largest_free_block_min": largest_block,
+            "current_title": current.title if current else None,
+            "current_ends_min": (round((current.start + timedelta(minutes=current.duration_min)
+                                        - now).total_seconds() / 60)
+                                 if current else None),
             "next_title": nxt.title if nxt else None,
             "next_in_min": round(nxt.minutes_until(), 1) if nxt else None,
+            "next_start_ts": nxt.start.timestamp() if nxt else None,
+            "prep": prep[:4],
             "readiness": readiness,
             "source": self.source,
         }

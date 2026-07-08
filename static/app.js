@@ -1697,6 +1697,72 @@ function renderThreatCenter(d) {
       </div>`;
     }).join("") : '<div class="tf-empty">no incidents in the response pipeline</div>';
   }
+  renderThreatAnalytics(d);
+}
+
+/* ═══ THREAT 2.0 — trend graph · alert distribution · response queue ═══ */
+
+function renderThreatAnalytics(d) {
+  // risk trend sparkline (raw canvas — no chart lib needed at this size)
+  const cv = document.getElementById("risk-trend");
+  if (cv) {
+    const hist = d.history || [];
+    const ctx = cv.getContext("2d");
+    const W = cv.width = cv.clientWidth || 260, H = cv.height = 46;
+    ctx.clearRect(0, 0, W, H);
+    if (hist.length >= 2) {
+      const scores = hist.map(h => h.score);
+      const max = Math.max(25, ...scores);
+      ctx.beginPath();
+      hist.forEach((h, i) => {
+        const x = (i / (hist.length - 1)) * (W - 4) + 2;
+        const y = H - 4 - (h.score / max) * (H - 10);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+      const last = scores[scores.length - 1];
+      ctx.strokeStyle = last >= 50 ? "#ff3c3c" : last >= 20 ? "#facc15" : "#00d9ff";
+      ctx.lineWidth = 1.6; ctx.stroke();
+      // soft fill under the line
+      ctx.lineTo(W - 2, H - 2); ctx.lineTo(2, H - 2); ctx.closePath();
+      ctx.fillStyle = last >= 50 ? "rgba(255,60,60,0.12)"
+                    : last >= 20 ? "rgba(250,204,21,0.10)" : "rgba(0,217,255,0.10)";
+      ctx.fill();
+    } else {
+      ctx.fillStyle = "rgba(126,150,179,0.6)";
+      ctx.font = "9px monospace";
+      ctx.fillText("collecting risk samples…", 6, H / 2 + 3);
+    }
+  }
+  // alert distribution by severity
+  const dist = $("#ta-dist");
+  if (dist) {
+    const by = d.by_severity || {};
+    const total = Math.max(1, Object.values(by).reduce((a, b) => a + b, 0));
+    dist.innerHTML = ["critical", "high", "medium", "low"].map(sev => {
+      const n = by[sev] || 0;
+      return `<div class="ta-d-row">
+        <span class="ta-d-name">${sev.toUpperCase()}</span>
+        <div class="ta-d-bar"><div class="ta-d-fill ${sev}" style="width:${Math.round(n * 100 / total)}%"></div></div>
+        <span class="ta-d-n">${n}</span></div>`;
+    }).join("");
+  }
+  // response queue — incidents awaiting operator acknowledgement
+  const q = $("#ta-queue"); const qn = $("#ta-queue-n");
+  if (q) {
+    const items = d.response_queue || [];
+    if (qn) qn.textContent = items.length;
+    q.innerHTML = items.length ? items.map(ev => `
+      <div class="ta-q-item ${ev.severity}">
+        <span class="ta-q-title" title="${escapeHTML(ev.detail || "")}">${escapeHTML(ev.title)}</span>
+        <button class="ta-q-ack" data-id="${escapeHTML(ev.id)}">ACK</button>
+      </div>`).join("")
+      : '<div class="tf-empty">queue clear — nothing awaiting acknowledgement</div>';
+    q.querySelectorAll(".ta-q-ack").forEach(btn => btn.addEventListener("click", async () => {
+      btn.disabled = true; btn.textContent = "…";
+      try { await fetch("/api/threats/ack/" + btn.dataset.id, { method: "POST" }); } catch (e) {}
+      seedThreats();
+    }));
+  }
 }
 
 /* ═══ INTELLIGENCE TICKER ════════════════════════════ */
@@ -1865,9 +1931,12 @@ function execDashCmd(target) {
 
 /* ═══ CALENDAR INTELLIGENCE ══════════════════════════ */
 
+let calIntelLive = null;   // intel stash for the 1-second countdown ticker
+
 function renderCalIntel(d) {
   const el = $("#cal-intel"); if (!el) return;
   const intel = d.intel || {};
+  calIntelLive = intel;
   if (!intel.meetings_today && intel.meetings_today !== 0) {
     el.textContent = "analyzing schedule…"; return;
   }
@@ -1880,7 +1949,51 @@ function renderCalIntel(d) {
   el.innerHTML = bits.join(" · ") +
     `<span class="cal-src${d.source === "google" ? " ok" : ""}">${(d.source || "mock").toUpperCase()}</span>`;
   el.classList.toggle("warn", !!intel.conflicts);
+
+  // current meeting banner (live)
+  const nowEl = $("#cal-now");
+  if (nowEl) {
+    if (intel.current_title) {
+      nowEl.hidden = false;
+      $("#cal-now-txt").textContent =
+        `IN SESSION: ${intel.current_title} — ends in ${intel.current_ends_min} min`;
+    } else nowEl.hidden = true;
+  }
+  // preparation suggestions (real rule-based, from the backend)
+  const prep = $("#cal-prep");
+  if (prep) {
+    const items = intel.prep || [];
+    prep.hidden = !items.length;
+    prep.innerHTML = items.map(p => `<div>${escapeHTML(p)}</div>`).join("");
+  }
+  tickCalCountdown();
 }
+
+// 1-second countdown to the next meeting (uses next_start_ts from the intel)
+function tickCalCountdown() {
+  const cd = $("#cal-countdown"); if (!cd) return;
+  const ts = calIntelLive && calIntelLive.next_start_ts;
+  if (!ts || !calIntelLive.next_title) { cd.hidden = true; return; }
+  const secs = Math.floor(ts - Date.now() / 1000);
+  if (secs <= 0 || secs > 6 * 3600) { cd.hidden = true; return; }
+  cd.hidden = false;
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  const t = (h ? `${h}h ` : "") + `${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+  cd.textContent = `T-MINUS ${t} → ${calIntelLive.next_title}`;
+  cd.classList.toggle("soon", secs < 600);
+}
+setInterval(tickCalCountdown, 1000);
+
+// AI schedule summary (only when Google is connected; cached server-side)
+async function refreshCalSummary() {
+  const el = $("#cal-summary"); if (!el) return;
+  try {
+    const d = await (await fetch("/api/agenda/summary")).json();
+    if (d.summary) { el.hidden = false; el.textContent = "❝ " + d.summary + " ❞"; }
+    else el.hidden = true;
+  } catch (e) {}
+}
+setTimeout(refreshCalSummary, 12000); setInterval(refreshCalSummary, 600000);
 
 $("#gcal-btn")?.addEventListener("click", async () => {
   logEvent('<span class="tag">[calendar]</span> starting Google authorization — check your browser…');
@@ -2692,7 +2805,14 @@ function handle(msg) {
       try { refreshMemory(); } catch (e) {}
       break;
     case "models-updated":                  // brain/model switched
-      try { pollServiceGrid(); } catch (e) {}
+      try { pollServiceGrid(); refreshLocalAI(); } catch (e) {}
+      break;
+    case "orch":                            // orchestrator cycle summary
+      try {
+        const os = $("#orch-stat");
+        if (os) os.textContent =
+          `${msg.active} ACTIVE · ${msg.delegations_total} DELEGATED · ${msg.preemptions_total} PREEMPTED`;
+      } catch (e) {}
       break;
     case "insight":
       addInsight(msg);
@@ -2748,6 +2868,268 @@ $("#news-refresh").addEventListener("click", async () => {
   $("#news-refresh").disabled = true;
   try { await fetch("/api/news/refresh", { method: "POST" }); }
   finally { setTimeout(() => { $("#news-refresh").disabled = false; }, 1500); }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   PHASE 2 · MULTI-AGENT INTELLIGENCE — panel controllers
+   orchestration · recommendations · product evolution ·
+   local AI control · operator productivity · knowledge hub
+   ═══════════════════════════════════════════════════════════════ */
+
+// ── multi-agent orchestration ────────────────────────
+async function refreshOrch() {
+  try {
+    const d = await (await fetch("/api/orchestrator")).json();
+    const os = $("#orch-stat");
+    if (os) os.textContent =
+      `${d.active} ACTIVE · ${d.delegations_total} DELEGATED · ${d.preemptions_total} PREEMPTED`;
+    // shared context blackboard chips
+    const bb = d.blackboard || {}; const bbEl = $("#orch-bb");
+    if (bbEl && bb.ts) {
+      const chips = [
+        ["CPU", `${Math.round(bb.cpu)}%`, bb.cpu > 85],
+        ["MEM", `${Math.round(bb.mem)}%`, bb.mem > 88],
+        ["RISK", `${bb.risk_score}`, bb.risk_score >= 50],
+        ["INCIDENTS", `${bb.open_incidents}`, bb.open_incidents > 3],
+        ["MAIL", `${bb.priority_mail}`, bb.priority_mail >= 2],
+        ["PRESENCE", (bb.presence || "—").toUpperCase(), false],
+      ];
+      if (bb.next_meeting_min != null)
+        chips.push(["NEXT MTG", `${Math.round(bb.next_meeting_min)}m`, bb.next_meeting_min < 15]);
+      if (bb.focus_active) chips.push(["FOCUS", "GUARDED", false]);
+      bbEl.innerHTML = chips.map(([k, v, hot]) =>
+        `<span class="orch-chip${hot ? " hot" : ""}">${k} <b>${escapeHTML(String(v))}</b></span>`).join("");
+    }
+    // directives (active first, then recent completions greyed)
+    const list = $("#orch-list");
+    if (list) {
+      const act = (d.directives || []).map(x => ({ ...x, _done: false }));
+      const done = (d.recent_done || []).slice(0, 3).map(x => ({ ...x, _done: true }));
+      const rows = [...act, ...done];
+      list.innerHTML = rows.length ? rows.map(x => `
+        <div class="orch-item${x._done ? " done" : ""}">
+          <span class="orch-p p${x.priority}">${(d.priority_labels || {})[x.priority] || "P" + x.priority}</span>
+          <span class="orch-main">
+            <div class="orch-title">${escapeHTML(x.title)}</div>
+            <div class="orch-detail">${escapeHTML(x.detail || "")}</div>
+          </span>
+          <span class="orch-agent">${escapeHTML((x.agent || "").toUpperCase())}</span>
+        </div>`).join("")
+        : '<div class="tf-empty">no directives — all stations nominal</div>';
+    }
+  } catch (e) {}
+}
+refreshOrch(); setInterval(refreshOrch, 15000);
+
+// ── command recommendations ──────────────────────────
+async function refreshRecs() {
+  try {
+    const d = await (await fetch("/api/recommendations")).json();
+    const list = $("#recs-list"); if (!list) return;
+    const recs = d.recommendations || [];
+    list.innerHTML = recs.length ? recs.map(r => `
+      <div class="rec-item ${r.severity}">
+        <span class="rec-main">
+          <div class="rec-title">${escapeHTML(r.title)}</div>
+          <div class="rec-detail">${escapeHTML(r.detail || "")}</div>
+        </span>
+      </div>`).join("") : '<div class="tf-empty">assessing conditions…</div>';
+  } catch (e) {}
+}
+refreshRecs(); setInterval(refreshRecs, 30000);
+
+$("#btn-briefing")?.addEventListener("click", async () => {
+  const b = $("#btn-briefing"); b.disabled = true; b.textContent = "◈ COMPILING…";
+  try { await fetch("/api/briefing", { method: "POST" }); } catch (e) {}
+  setTimeout(() => { b.disabled = false; b.textContent = "◈ EXECUTIVE BRIEFING"; }, 4000);
+});
+
+// ── product evolution (live roadmap) ─────────────────
+async function refreshRoadmap() {
+  try {
+    const d = await (await fetch("/api/roadmap")).json();
+    const v = $("#evo-version"); if (v) v.textContent = d.version;
+    const p = $("#evo-pct"); if (p) p.textContent = d.progress_pct + "%";
+    const f = $("#evo-fill"); if (f) f.style.width = d.progress_pct + "%";
+    const host = $("#evo-phases");
+    if (host) {
+      host.innerHTML = (d.phases || []).map(ph => `
+        <div class="evo-phase" data-n="${ph.n}" tabindex="0" role="button">
+          <span class="n">P${ph.n}</span>
+          <span class="nm">${escapeHTML(ph.name)}</span>
+          <span class="pc">${ph.done}/${ph.total}</span>
+          <span class="st ${ph.status}">${ph.status.toUpperCase()}</span>
+          <div class="evo-feats">
+            ${ph.features.map(ft => `<div class="evo-feat${ft.done ? " done" : ""}">${escapeHTML(ft.name)}</div>`).join("")}
+          </div>
+        </div>`).join("");
+      host.querySelectorAll(".evo-phase").forEach(el => {
+        const toggle = () => el.classList.toggle("open");
+        el.addEventListener("click", toggle);
+        el.addEventListener("keydown", (e) => { if (e.key === "Enter") toggle(); });
+      });
+      // current (active) phase starts expanded
+      host.querySelector(".evo-phase .st.active")?.closest(".evo-phase")?.classList.add("open");
+    }
+    const dev = $("#evo-dev");
+    if (dev) dev.textContent = (d.in_development || []).join(" · ") || "—";
+  } catch (e) {}
+}
+refreshRoadmap(); setInterval(refreshRoadmap, 120000);
+
+// ── local AI control center ──────────────────────────
+async function refreshLocalAI() {
+  try {
+    const [models, stats] = await Promise.all([
+      (await fetch("/api/models")).json(),
+      (await fetch("/api/models/stats")).json(),
+    ]);
+    const act = $("#lai-active");
+    if (act) act.textContent = (models.active_brain || "—").toUpperCase();
+    const perf = stats.perf || {};
+    const setV = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+    setV("#lai-latency", perf.latency_ms != null ? perf.latency_ms + "ms" : "—");
+    setV("#lai-tps", perf.tokens_per_sec != null ? perf.tokens_per_sec : "—");
+    // running model resources (Ollama /api/ps)
+    const run = (stats.running || [])[0];
+    setV("#lai-ram", run ? (run.vram_gb > 0 ? `${run.vram_gb}G VRAM` : `${run.ram_gb}G RAM`) : "unloaded");
+    setV("#lai-ctx", run && run.context ? (run.context / 1024) + "k" : "—");
+    // host memory
+    const used = stats.host_ram_used_gb, total = stats.host_ram_total_gb;
+    if (total) {
+      const fill = $("#lai-host-fill");
+      if (fill) fill.style.width = Math.round(used * 100 / total) + "%";
+      setV("#lai-host-txt", `${used} / ${total} GB`);
+    }
+    // installed models — one click to switch the brain (no restart)
+    const host = $("#lai-models");
+    if (host) {
+      const rows = [{ name: "claude", param_size: "CLOUD", quant: "ANTHROPIC" },
+                    ...(models.local || [])];
+      host.innerHTML = rows.map(m => {
+        const isClaude = m.name === "claude";
+        const activeNow = isClaude ? !models.force_local
+                                   : (models.force_local && m.name === models.selected);
+        const spec = isClaude ? "ANTHROPIC · CLOUD"
+          : [m.param_size, m.quant, m.size_gb ? m.size_gb + "GB" : null].filter(Boolean).join(" · ");
+        return `<div class="lai-model${activeNow ? " active" : ""}" data-model="${escapeHTML(m.name)}" tabindex="0" role="button">
+          <span class="lai-m-name">${escapeHTML(m.name)}</span>
+          <span class="lai-m-spec">${escapeHTML(spec || "")}</span>
+          ${activeNow ? '<span class="lai-m-badge">● ACTIVE</span>' : ""}
+        </div>`;
+      }).join("");
+      host.querySelectorAll(".lai-model").forEach(el => {
+        const pick = async () => {
+          el.style.opacity = "0.5";
+          try {
+            await fetch("/api/models/select", { method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ model: el.dataset.model }) });
+          } catch (e) {}
+          refreshLocalAI();
+        };
+        el.addEventListener("click", pick);
+        el.addEventListener("keydown", (e) => { if (e.key === "Enter") pick(); });
+      });
+    }
+  } catch (e) {}
+}
+refreshLocalAI(); setInterval(refreshLocalAI, 25000);
+
+// ── operator productivity ────────────────────────────
+let prodSnap = null;
+function renderProd(d) {
+  prodSnap = d;
+  const sc = $("#prod-score"); if (sc) sc.textContent = d.score;
+  const setN = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  setN("#pc-focus", d.focus_min_today);
+  setN("#pc-sessions", d.sessions_today);
+  setN("#pc-switch", d.switches_today);
+  setN("#pc-done", d.tasks_done_today);
+  const btn = $("#btn-focus");
+  if (btn) btn.textContent = d.focus_active ? "■ END SESSION" : "▶ START DEEP WORK";
+  const clock = $("#focus-clock");
+  if (clock) clock.classList.toggle("live", !!d.focus_active);
+  const inp = $("#task-input");
+  if (inp && document.activeElement !== inp) inp.value = d.current_task || "";
+  tickFocusClock();
+}
+function tickFocusClock() {
+  const clock = $("#focus-clock"); if (!clock || !prodSnap) return;
+  let secs = 0;
+  if (prodSnap.focus_active) {
+    secs = prodSnap.focus_elapsed_sec + Math.floor((Date.now() - prodSnap._rx) / 1000);
+  }
+  const m = Math.floor(secs / 60), s = secs % 60;
+  clock.textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+setInterval(tickFocusClock, 1000);
+
+async function refreshProd() {
+  try {
+    const d = await (await fetch("/api/productivity")).json();
+    d._rx = Date.now();
+    renderProd(d);
+  } catch (e) {}
+}
+async function prodAction(body) {
+  try {
+    const d = await (await fetch("/api/productivity", { method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body) })).json();
+    d._rx = Date.now();
+    renderProd(d);
+  } catch (e) {}
+}
+refreshProd(); setInterval(refreshProd, 20000);
+$("#btn-focus")?.addEventListener("click", () =>
+  prodAction({ action: prodSnap && prodSnap.focus_active ? "focus_stop" : "focus_start" }));
+$("#task-form")?.addEventListener("submit", (e) => {
+  e.preventDefault();
+  prodAction({ action: "task", text: $("#task-input").value.trim() });
+});
+$("#btn-task-done")?.addEventListener("click", () => prodAction({ action: "task_done" }));
+
+// ── knowledge hub ────────────────────────────────────
+async function refreshKbStats() {
+  try {
+    const d = await (await fetch("/api/knowledge/stats")).json();
+    const el = $("#kb-stats");
+    if (el) el.textContent = `${d.total} ITEMS · ${Object.keys(d.sources || {}).length} SOURCES`;
+  } catch (e) {}
+}
+refreshKbStats(); setInterval(refreshKbStats, 60000);
+
+function renderKbResults(items, answer) {
+  const host = $("#kb-results"); if (!host) return;
+  let html = "";
+  if (answer) html += `<div class="kb-item answer"><div class="kb-src">JARVIS · SYNTHESIZED ANSWER</div>
+    <div class="kb-text">${escapeHTML(answer)}</div></div>`;
+  html += (items || []).map(r => `
+    <div class="kb-item">
+      <div class="kb-src">${escapeHTML((r.source || "").toUpperCase())} · ${escapeHTML(r.ref || "")}</div>
+      <div class="kb-text">${escapeHTML(r.text)}</div>
+    </div>`).join("");
+  host.innerHTML = html || '<div class="tf-empty">no matches — try different words</div>';
+}
+$("#kb-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = $("#kb-input").value.trim(); if (!q) return;
+  $("#kb-results").innerHTML = '<div class="tf-empty">searching all sources…</div>';
+  try {
+    const d = await (await fetch("/api/knowledge/search?q=" + encodeURIComponent(q))).json();
+    renderKbResults(d.results);
+  } catch (err) {}
+});
+$("#btn-kb-ask")?.addEventListener("click", async () => {
+  const q = $("#kb-input").value.trim(); if (!q) return;
+  $("#kb-results").innerHTML = '<div class="tf-empty">thinking over the knowledge base…</div>';
+  try {
+    const d = await (await fetch("/api/knowledge/ask", { method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: q }) })).json();
+    renderKbResults(d.sources, d.answer);
+  } catch (err) {}
 });
 
 connect();

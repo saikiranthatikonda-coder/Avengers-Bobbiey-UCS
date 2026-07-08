@@ -17,9 +17,13 @@ from brain import Brain
 from google_sync import GoogleCalendar
 from hub import Hub
 from insights import InsightsEngine
+from knowledge import KnowledgeHub
 from llm_local import LocalLLM
 from local_brain import LocalBrain
 from memory import OperatorMemory
+from orchestrator import Orchestrator
+from productivity import Productivity
+from roadmap import Roadmap
 from routines import schedule_all
 from services import NewsService, SystemMonitor
 from threats import ThreatEngine
@@ -106,10 +110,20 @@ async def lifespan(app: FastAPI):
     insights.threats = threats
     memory = OperatorMemory(hub=hub, brain=brain)
     insights.memory = memory
+    productivity = Productivity(hub=hub, insights=insights, agenda=agenda,
+                                memory=memory)
+    orchestrator = Orchestrator(hub=hub, team=team, sysmon=sysmon,
+                                threats=threats, agenda=agenda,
+                                insights=insights, memory=memory,
+                                productivity=productivity)
+    knowledge = KnowledgeHub(memory=memory, insights=insights, team=team,
+                             threats=threats, agenda=agenda, news=news,
+                             brain=brain)
     scheduler = schedule_all(team=team, news=news, sysmon=sysmon, hub=hub,
                              agenda=agenda, tts=tts,
                              insights=insights if os.getenv("JARVIS_INSIGHTS", "1") != "0" else None,
-                             threats=threats, gcal=gcal, memory=memory)
+                             threats=threats, gcal=gcal, memory=memory,
+                             orchestrator=orchestrator)
     voice = VoiceLoop(hub=hub, brain=brain, team=team,
                       services={"agenda": agenda, "threats": threats,
                                 "insights": insights, "memory": memory}) \
@@ -121,7 +135,10 @@ async def lifespan(app: FastAPI):
         "local_brain": local_brain, "weather": weather, "agenda": agenda,
         "local_llm": local_llm, "insights": insights,
         "threats": threats, "gcal": gcal, "memory": memory,
+        "productivity": productivity, "orchestrator": orchestrator,
+        "knowledge": knowledge,
     })
+    state["roadmap"] = Roadmap(state)
 
     sysmon_task = asyncio.create_task(sysmon.run())
     voice_task = asyncio.create_task(voice.run()) if voice else None
@@ -703,6 +720,132 @@ async def waitlist_endpoint(req: WaitlistReq):
         "msg": f"waitlist signup ({entry.get('intent')}): {req.name} <{req.email}>",
     })
     return {"ok": True}
+
+
+# ═══ PHASE 2 · MULTI-AGENT INTELLIGENCE + PRODUCT EVOLUTION ═══════
+
+@app.get("/api/orchestrator")
+async def orchestrator_endpoint():
+    return state["orchestrator"].snapshot()
+
+
+@app.get("/api/roadmap")
+async def roadmap_endpoint():
+    return state["roadmap"].snapshot()
+
+
+@app.get("/api/recommendations")
+async def recommendations_endpoint():
+    return {"recommendations": state["insights"].recommendations(
+        productivity=state.get("productivity"),
+        orchestrator=state.get("orchestrator"))}
+
+
+@app.get("/api/productivity")
+async def productivity_get():
+    return state["productivity"].snapshot()
+
+
+class ProdReq(BaseModel):
+    action: str            # task | task_done | focus_start | focus_stop
+    text: str | None = None
+
+
+@app.post("/api/productivity")
+async def productivity_post(req: ProdReq):
+    p = state["productivity"]
+    if req.action == "task":
+        return await p.set_task(req.text or "")
+    if req.action == "task_done":
+        return await p.complete_task()
+    if req.action == "focus_start":
+        return await p.focus_start()
+    if req.action == "focus_stop":
+        return await p.focus_stop()
+    return {"error": f"unknown action: {req.action}"}
+
+
+@app.get("/api/knowledge/stats")
+async def knowledge_stats():
+    return state["knowledge"].stats()
+
+
+@app.get("/api/knowledge/search")
+async def knowledge_search(q: str = ""):
+    return state["knowledge"].search(q)
+
+
+class AskKB(BaseModel):
+    query: str
+
+
+@app.post("/api/knowledge/ask")
+async def knowledge_ask(req: AskKB):
+    return await state["knowledge"].ask(req.query.strip()[:200])
+
+
+@app.post("/api/threats/ack/{event_id}")
+async def threats_ack(event_id: str):
+    ok = state["threats"].acknowledge(event_id)
+    if ok:
+        await state["hub"].broadcast({"type": "log", "level": "info",
+                                      "msg": f"incident {event_id} acknowledged by operator"})
+    return {"ok": ok}
+
+
+@app.get("/api/models/stats")
+async def models_stats():
+    """Local AI Control Center: running models (RAM/VRAM/context via Ollama
+    /api/ps), measured latency + tokens/sec, and host memory headroom."""
+    import psutil
+    llm = state["local_llm"]
+    vm = psutil.virtual_memory()
+    return {
+        "running": await llm.running(),
+        "perf": llm.perf(),
+        "selected": llm.model,
+        "force_local": getattr(state["brain"], "force_local", False),
+        "endpoint_online": llm.available,
+        "host_ram_used_gb": round((vm.total - vm.available) / 1e9, 1),
+        "host_ram_total_gb": round(vm.total / 1e9, 1),
+    }
+
+
+_agenda_summary_cache = {"ts": 0.0, "text": None, "sig": None}
+
+
+@app.get("/api/agenda/summary")
+async def agenda_summary():
+    """AI-generated one-paragraph schedule summary (cached 10 min per-day-shape)."""
+    import time as _t
+    snap = state["agenda"].snapshot()
+    intel = snap.get("intel") or {}
+    if intel.get("source") != "google":
+        return {"summary": None, "reason": "calendar not connected"}
+    sig = f"{intel.get('meetings_today')}·{intel.get('next_title')}·{intel.get('conflicts')}"
+    now = _t.time()
+    if (_agenda_summary_cache["text"] and _agenda_summary_cache["sig"] == sig
+            and now - _agenda_summary_cache["ts"] < 600):
+        return {"summary": _agenda_summary_cache["text"], "cached": True}
+    facts = (
+        f"{intel.get('meetings_today', 0)} meetings today ({intel.get('meeting_minutes', 0)} min, "
+        f"{intel.get('density')}), conflicts: {intel.get('conflicts', 0)}, "
+        f"largest free block {intel.get('largest_free_block_min', 0)} min. "
+        + (f"Currently in: {intel['current_title']} (ends in {intel['current_ends_min']} min). "
+           if intel.get("current_title") else "")
+        + (f"Next: {intel['next_title']} in {intel['next_in_min']:.0f} min."
+           if intel.get("next_title") else "Nothing else scheduled.")
+    )
+    text = await state["brain"].think(
+        "Summarize this schedule in ONE crisp butler-toned sentence with the "
+        "single most useful planning insight: " + facts,
+        system="You are JARVIS summarizing sir's calendar. One sentence, plain text.",
+        agent="captain", fast=True, timeout=45)
+    if not text or text.lstrip().startswith("[brain"):
+        text = facts
+    text = text.strip()[:300]
+    _agenda_summary_cache.update(ts=now, text=text, sig=sig)
+    return {"summary": text}
 
 
 @app.websocket("/ws")
