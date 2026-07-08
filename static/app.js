@@ -2096,42 +2096,46 @@ async function openModelManager() {
 }
 function renderModelManager(d) {
   const body = $("#modal-body"); if (!body) return;
-  const claudeStatus = d.cloud_claude ? (d.brain_mode === "llm" ? "loaded" : "available") : "offline";
-  let html = `<div class="model-section">— CLOUD MODELS</div>
-    <div class="model-row disabled">
+  const claudeActive = !d.force_local && d.cloud_claude;
+  let html = `<div class="mb-row" style="margin-bottom:.6rem">ACTIVE BRAIN: <b style="color:var(--success)">${escapeHTML((d.active_brain || "—").toUpperCase())}</b> — click any model to switch. Selection persists across restarts.</div>`;
+  html += `<div class="model-section">— CLOUD</div>
+    <div class="model-row${claudeActive ? " selected" : ""}" data-model="claude" tabindex="0" role="button">
       <span class="mr-name">claude (CLI)</span>
-      <span class="mr-spec">ANTHROPIC · AGENT BRAIN</span>
-      <span class="mr-status ${claudeStatus}">${claudeStatus.toUpperCase()}</span>
+      <span class="mr-spec">ANTHROPIC · CLOUD BRAIN</span>
+      <span class="mr-status ${claudeActive ? "loaded" : (d.cloud_claude ? "available" : "offline")}">${claudeActive ? "ACTIVE" : (d.cloud_claude ? "AVAILABLE" : "OFFLINE")}</span>
     </div>
-    <div class="model-section">— LOCAL OLLAMA MODELS · ${escapeHTML(d.endpoint || "")}</div>`;
+    <div class="model-section">— LOCAL OLLAMA · ${escapeHTML(d.endpoint || "")}</div>`;
   const locals = d.local || [];
   if (!locals.length) {
     html += `<div class="mb-row">no local models detected — install one with <b style="color:var(--accent)">ollama pull llama3.2</b> and reopen.
-      <div class="mb-row-meta">${d.local_available ? "ENDPOINT ONLINE" : "ENDPOINT OFFLINE — start `ollama serve`"}</div></div>`;
+      <div class="mb-row-meta">ENDPOINT OFFLINE — run \`ollama serve\`</div></div>`;
   }
   for (const m of locals) {
     const spec = [m.param_size, m.quant, m.size_gb ? m.size_gb + " GB" : null]
       .filter(Boolean).join(" · ") || (m.family || "local model");
-    const status = m.name === d.selected ? (d.local_available ? "loaded" : "offline") : "available";
-    html += `<div class="model-row${m.name === d.selected ? " selected" : ""}" data-model="${escapeHTML(m.name)}" tabindex="0" role="button">
+    const isActive = d.force_local && m.name === d.selected;
+    const status = isActive ? "loaded" : "available";
+    html += `<div class="model-row${isActive ? " selected" : ""}" data-model="${escapeHTML(m.name)}" tabindex="0" role="button">
       <span class="mr-name">${escapeHTML(m.name)}</span>
       <span class="mr-spec">${escapeHTML(spec.toUpperCase())}</span>
-      <span class="mr-status ${status}">${status.toUpperCase()}</span></div>`;
+      <span class="mr-status ${status}">${isActive ? "ACTIVE" : "AVAILABLE"}</span></div>`;
   }
-  html += `<div class="mb-row" style="margin-top:.5rem">Selection persists across restarts (model_pref.json). The insights engine and local-LLM brain use this model.</div>`;
+  html += `<div class="mb-row" style="margin-top:.5rem">Local models keep everything on-device. On a machine without a GPU they answer slower than Claude — pick based on your priority (privacy vs speed).</div>`;
   body.innerHTML = html;
   body.querySelectorAll(".model-row[data-model]").forEach(r => {
     const pick = async () => {
       const name = r.dataset.model;
-      r.querySelector(".mr-status").textContent = "LOADING…";
+      r.querySelector(".mr-status").textContent = "SWITCHING…";
       try {
         await fetch("/api/models/select", { method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ model: name }) });
         const d2 = await (await fetch("/api/models")).json();
         renderModelManager(d2);
-        const rm = $("#reason-model"); if (rm && d2.selected) rm.textContent = String(d2.selected).slice(0, 20);
-        const sl = $("#st-llm"); if (sl && d2.selected) sl.textContent = String(d2.selected).split(":")[0].slice(0, 9);
+        const rm = $("#reason-model");
+        if (rm) rm.textContent = (d2.active_brain || "").toUpperCase().slice(0, 20);
+        const sl = $("#st-llm");
+        if (sl) sl.textContent = (d2.force_local ? String(d2.selected) : "claude").split(":")[0].slice(0, 9);
       } catch (e) {}
     };
     r.addEventListener("click", pick);
@@ -2469,6 +2473,76 @@ async function pollServiceGrid() {
 pollServiceGrid();
 setInterval(pollServiceGrid, 60000);
 
+/* ═══ EXTRA INTERACTIVITY — clickable detail across the board ═══ */
+
+function initExtraInteractions() {
+  // Weather card → detail modal
+  const wc = $("#weather-card");
+  makeInteractive(wc, async () => {
+    openCustomModal("HYDERABAD WEATHER", "OPEN-METEO · LIVE", null,
+      '<div style="color:var(--text-dim);font-style:italic">fetching…</div>');
+    try {
+      const d = await (await fetch("/api/weather" + (userLat != null ? `?lat=${userLat}&lon=${userLon}` : ""))).json();
+      $("#modal-body").innerHTML = `
+        <div class="mb-grid">
+          <div class="mb-stat"><span class="lbl">CONDITION</span><span class="val">${escapeHTML((d.label||"—").toUpperCase())}</span></div>
+          <div class="mb-stat"><span class="lbl">TEMPERATURE</span><span class="val">${d.temp_c ?? "--"}°C</span></div>
+          <div class="mb-stat"><span class="lbl">FEELS LIKE</span><span class="val">${d.feels_c ?? "--"}°C</span></div>
+          <div class="mb-stat"><span class="lbl">HUMIDITY</span><span class="val">${d.humidity ?? "--"}%</span></div>
+          <div class="mb-stat"><span class="lbl">WIND</span><span class="val">${d.wind_kmh != null ? Math.round(d.wind_kmh) : "--"} km/h</span></div>
+          <div class="mb-stat"><span class="lbl">LOCATION</span><span class="val">${escapeHTML(d.city || "—")}</span></div>
+        </div>`;
+    } catch (e) { $("#modal-body").innerHTML = '<div style="color:var(--error)">weather unavailable</div>'; }
+  }, "Weather detail");
+
+  // Agenda items → event detail
+  $("#agenda-list")?.addEventListener("click", (e) => {
+    const item = e.target.closest(".agenda-item"); if (!item) return;
+    const title = item.querySelector(".agenda-title")?.textContent || "Event";
+    const time = item.querySelector(".agenda-time")?.textContent.trim() || "";
+    const meta = item.querySelector(".agenda-meta")?.textContent || "";
+    openCustomModal(title, "CALENDAR EVENT", null,
+      `<div class="mb-grid"><div class="mb-stat"><span class="lbl">WHEN</span><span class="val">${escapeHTML(time)}</span></div></div>
+       <div class="mb-list"><div class="mb-row">${escapeHTML(meta)}</div></div>`);
+  });
+
+  // Inbox items → email detail
+  $("#inbox-list")?.addEventListener("click", (e) => {
+    const item = e.target.closest(".inbox-item"); if (!item) return;
+    const sender = item.querySelector(".inbox-sender")?.textContent || "";
+    const subj = item.querySelector(".inbox-subject")?.textContent || "";
+    const snip = item.querySelector(".inbox-snippet")?.textContent || "";
+    openCustomModal(subj || "Email", "INBOX MESSAGE", null,
+      `<div class="mb-list"><div class="mb-row"><b>From:</b> ${escapeHTML(sender)}</div>
+       <div class="mb-row">${escapeHTML(snip)}</div></div>`);
+  });
+
+  // Service-grid rows → what each integration is + how to connect
+  const svcInfo = {
+    "svc-claude": ["CLAUDE CLI", "The cloud brain — powers agent replies, insights, and webcam vision. Set CLAUDE_BIN in .env."],
+    "svc-ollama": ["OLLAMA · LOCAL AI", "On-device models for fully offline replies. Run `ollama serve` + `ollama pull`, then pick a model in the AI MODEL MANAGER."],
+    "svc-gcal": ["GOOGLE CALENDAR + GMAIL", "Real events & mail (readonly). Click the G button by AGENDA to connect via OAuth."],
+    "svc-news": ["NEWS FEED", "Live world headlines. Free key at newsapi.org → NEWSAPI_KEY in .env."],
+    "svc-weather": ["WEATHER", "Live Hyderabad weather via Open-Meteo (no key needed)."],
+  };
+  Object.entries(svcInfo).forEach(([id, [t, desc]]) => {
+    const row = $("#" + id);
+    makeInteractive(row, () => {
+      const state = row.querySelector(".rr-state")?.textContent || "—";
+      openCustomModal(t, "SERVICE STATUS", null,
+        `<div class="mb-grid"><div class="mb-stat"><span class="lbl">STATUS</span><span class="val">${escapeHTML(state)}</span></div></div>
+         <div class="mb-list"><div class="mb-row">${escapeHTML(desc)}</div></div>`);
+    }, t + " info");
+  });
+
+  // Live-operations & AI-ops cards → jump to their detailed rows
+  makeInteractive($("#aiops-vision"), () => execDashCmd("camera"), "Vision — jump to operator view");
+  makeInteractive($("#intel-readiness"), () => {}, "Mission readiness");
+  makeInteractive($(".bs-mission"), () => execDashCmd("agenda"), "Live ops — jump to agenda");
+  makeInteractive($(".bs-threat"), () => execDashCmd("threats"), "Threats — jump to threat center");
+}
+initExtraInteractions();
+
 // ── websocket (self-healing) ─────────────────────────
 let ws = null;
 let wsLastMsg = 0;
@@ -2616,6 +2690,9 @@ function handle(msg) {
       break;
     case "memory-updated":                  // operator memory changed on disk
       try { refreshMemory(); } catch (e) {}
+      break;
+    case "models-updated":                  // brain/model switched
+      try { pollServiceGrid(); } catch (e) {}
       break;
     case "insight":
       addInsight(msg);

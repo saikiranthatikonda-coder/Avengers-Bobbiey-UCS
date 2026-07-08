@@ -518,8 +518,11 @@ async def memory_enroll(req: EnrollReq):
         "build, clothing style, notable accessories. No name, no age guess, no "
         "ethnicity. If nobody is clearly visible reply exactly: NOBODY",
         timeout=60)
-    if not desc or desc.lstrip().startswith("[") or "NOBODY" in desc.upper()[:12]:
-        return {"ok": False, "error": "no clear person in frame — face the camera and retry"}
+    low = (desc or "").lower()
+    if (not desc or desc.lstrip().startswith("[") or "NOBODY" in desc.upper()[:12]
+            or any(s in low for s in ("no image", "not attached", "cannot read",
+                                       "nothing to analyze", "unable to", "no file"))):
+        return {"ok": False, "error": "couldn't read the camera frame — ensure the camera is live and retry"}
     mem: OperatorMemory = state["memory"]
     await mem.enroll(desc.strip(), name=req.name)
     who_name = req.name or "sir"
@@ -571,31 +574,53 @@ async def memory_speak():
 @app.get("/api/models")
 async def models_endpoint():
     llm = state["local_llm"]
+    brain = state["brain"]
+    # which brain is actually answering right now
+    active = "local:" + str(llm.model) if getattr(brain, "force_local", False) else \
+             ("claude" if brain.mode == "llm" else brain.mode)
     return {
         "local": await llm.list_models(),
         "selected": llm.model,
         "local_available": llm.available,
         "endpoint": llm.base_url,
-        "cloud_claude": state["brain"].mode == "llm",
-        "brain_mode": state["brain"].mode,
+        "cloud_claude": brain.mode == "llm",
+        "brain_mode": brain.mode,
+        "active_brain": active,
+        "force_local": getattr(brain, "force_local", False),
     }
 
 
 class ModelSel(BaseModel):
-    model: str
+    model: str   # a local model name, or "claude" to switch back to the cloud brain
 
 
 @app.post("/api/models/select")
 async def models_select(req: ModelSel):
     llm = state["local_llm"]
-    llm.model = req.model.strip()
+    brain = state["brain"]
+    name = req.model.strip()
+    if name.lower() == "claude":
+        brain.force_local = False
+        await state["hub"].broadcast({"type": "log", "level": "info",
+                                      "msg": "brain switched → Claude (cloud)"})
+        await state["hub"].broadcast({"type": "models-updated"})
+        return {"ok": True, "selected": "claude", "active_brain": "claude"}
+    # a local model: point the client at it, mark available, and REDIRECT the
+    # brain to actually use it for replies (verify with a quick probe first)
+    llm.model = name
+    ok = await llm.probe()          # confirms endpoint + keeps model
+    llm.model = name                # probe may overwrite; pin the chosen one
     llm.available = True
     llm.save_pref()
+    brain.force_local = True
     await state["hub"].broadcast({
         "type": "log", "level": "info",
-        "msg": f"local model switched → {llm.model} (persisted)",
+        "msg": f"brain switched → local model {name}"
+               + ("" if ok else " (endpoint probe failed — is Ollama running?)"),
     })
-    return {"ok": True, "selected": llm.model}
+    await state["hub"].broadcast({"type": "models-updated"})
+    return {"ok": True, "selected": name, "active_brain": "local:" + name,
+            "endpoint_ok": ok}
 
 
 class AlertReq(BaseModel):

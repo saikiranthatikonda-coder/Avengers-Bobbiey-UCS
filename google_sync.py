@@ -67,8 +67,26 @@ class GoogleCalendar:
                 creds = Credentials.from_authorized_user_file(
                     str(self.token_path), SCOPES)
             except Exception as e:
-                self.last_error = f"token load failed: {e}"
-                return None
+                # Older/web tokens may lack refresh_token → from_authorized_user_file
+                # raises. Try to build creds from whatever fields we have so a
+                # still-valid access token keeps working until it expires.
+                try:
+                    import json as _json
+                    info = _json.loads(self.token_path.read_text(encoding="utf-8"))
+                    if info.get("token"):
+                        creds = Credentials(
+                            token=info.get("token"),
+                            refresh_token=info.get("refresh_token"),
+                            token_uri=info.get("token_uri", "https://oauth2.googleapis.com/token"),
+                            client_id=info.get("client_id"),
+                            client_secret=info.get("client_secret"),
+                            scopes=info.get("scopes", SCOPES))
+                    else:
+                        raise ValueError("no access token")
+                except Exception:
+                    self.last_error = (f"token load failed: {e}. "
+                                       "Reconnect via the G button to grant offline access.")
+                    return None
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
@@ -82,6 +100,11 @@ class GoogleCalendar:
         """Run the OAuth installed-app flow (opens a browser on this machine)."""
         if not self.credentials_present():
             return {"ok": False, "error": "credentials.json not found — see google_sync.py docstring"}
+        # drop any stale token so re-consent issues a fresh one WITH a refresh_token
+        try:
+            self.token_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
         def _free_port(candidates):
             import socket
@@ -111,9 +134,13 @@ class GoogleCalendar:
                 port = 0   # Desktop clients accept any localhost port
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(self.credentials_path), SCOPES)
-            # timeout releases the port if the browser flow is abandoned
+            # access_type=offline + prompt=consent → Google issues a refresh_token
+            # (without these, web clients return a token with no refresh_token and
+            # every later load fails with "missing fields refresh_token").
             creds = flow.run_local_server(port=port, open_browser=True,
                                           authorization_prompt_message="",
+                                          access_type="offline", prompt="consent",
+                                          include_granted_scopes="true",
                                           timeout_seconds=180)
             self.token_path.write_text(creds.to_json(), encoding="utf-8")
             return True

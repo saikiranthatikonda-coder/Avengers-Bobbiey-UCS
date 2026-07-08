@@ -963,6 +963,14 @@ body {
   transition: color 0.2s;
 }
 .note-del:hover { color: var(--error); }
+
+/* affordances for newly-clickable sections */
+.agenda-item, .inbox-item, .weather-card, .region-row { cursor: pointer; }
+.weather-card { transition: border-color 0.25s, box-shadow 0.25s; }
+.weather-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--panel-edge)); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 18%, transparent); }
+.region-row { transition: border-color 0.2s, transform 0.2s; }
+.region-row:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--panel-edge)); transform: translateX(2px); }
+.inbox-item:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--panel-edge)); }
 .note-ts { font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.16em; color: var(--text-dim); margin-top: 0.15rem; }
 
 /* ═══ VISION INTELLIGENCE & OPERATOR MEMORY ══════════ */

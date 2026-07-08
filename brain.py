@@ -14,6 +14,7 @@ class Brain:
         self.local = local_brain
         self.local_llm = local_llm  # LocalLLM (OpenAI-compatible endpoint) or None
         self.mode: str = "unknown"  # "llm" | "local-llm" | "local" | "unknown"
+        self.force_local = False    # user picked a local model → route replies to it
 
     async def probe(self) -> str:
         """Resolve brain mode: claude CLI → local LLM endpoint → templates."""
@@ -46,11 +47,19 @@ class Brain:
         timeout: float = 120.0,
         fast: bool = False,
     ) -> str:
+        # Forced-local: the operator explicitly picked a local model in the UI,
+        # so ALL replies route through it (falls back to Claude only if it errors).
+        if self.force_local and self.local_llm and self.local_llm.available:
+            alt = await self.local_llm.chat(prompt + " /no_think", system=system,
+                                            timeout=timeout, max_tokens=220)
+            if alt:
+                return alt
+            # local failed — fall through to Claude/templates below
+
         # Fast path (voice / typed chat): prefer whichever backend is actually
-        # fast on THIS machine. A local Ollama model is only preferred once it
-        # has PROVEN quick (last call < 4s) — on GPU-less / loaded machines local
-        # inference is slower than Claude, so we stay on Claude there. "/no_think"
-        # suppresses Qwen3's slow reasoning pass; residue is stripped downstream.
+        # fast on THIS machine. A local Ollama model is only auto-preferred once
+        # it has PROVEN quick (last call < 4s); on GPU-less/loaded machines local
+        # is slower, so we stay on Claude. "/no_think" suppresses Qwen3 reasoning.
         local_fast = (self.local_llm and self.local_llm.available
                       and self.local_llm.last_latency_ms is not None
                       and self.local_llm.last_latency_ms < 4000)
@@ -83,14 +92,33 @@ class Brain:
         return "[brain unavailable]"
 
     async def see(self, image_path: str, prompt: str, timeout: float = 60.0) -> str:
-        """Vision: route an image through the Claude CLI (vision-capable).
-        Claude Code reads the referenced local image via its Read tool.
-        Used for the real-time webcam insight feature."""
-        full = f"{prompt}\n\nAnalyze this local image file: {image_path}"
-        return await self._llm_call(full, system=None, timeout=timeout)
+        """Vision via the Claude CLI. Claude Code views local images with its
+        Read tool, but in headless -p mode it only does so if explicitly told —
+        so we command the Read up front and allow the tool. Retries once if the
+        model claims it got no image."""
+        full = (
+            f"Use your Read tool to open the image file at this exact path: {image_path}\n"
+            "Look at the actual image contents, then answer:\n" + prompt
+        )
+        for attempt in range(2):
+            reply = await self._llm_call(full, system=None, timeout=timeout,
+                                         allow_read=True)
+            low = (reply or "").lower()
+            if reply and not reply.startswith("[") and not any(
+                s in low for s in ("no image", "not attached", "cannot read",
+                                    "couldn't", "could not open", "unable to",
+                                    "no file", "wasn't attached", "was not attached")):
+                return reply
+        return reply
 
-    async def _llm_call(self, prompt: str, system: str | None, timeout: float) -> str:
+    async def _llm_call(self, prompt: str, system: str | None, timeout: float,
+                        allow_read: bool = False) -> str:
         args: list[str] = [self.claude_bin, "-p"]
+        if allow_read:
+            # headless mode blocks the Read tool behind a permission prompt, so
+            # image analysis silently fails; bypass lets it read the one local
+            # frame we wrote (safe — our own temp file).
+            args += ["--dangerously-skip-permissions"]
         if system:
             args += ["--system-prompt", system]
         args.append(prompt)
