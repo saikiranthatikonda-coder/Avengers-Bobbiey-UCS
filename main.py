@@ -361,6 +361,115 @@ async def processes_endpoint():
     return {"top_cpu": by_cpu, "top_mem": by_mem, "gpu": _gpu_cache["pct"]}
 
 
+# ── external hardware: power · storage · network · peripherals ───
+_hw_cache = {"ts": 0.0, "data": None}
+_periph_cache = {"ts": 0.0, "data": None}
+
+
+def _scan_hardware() -> dict:
+    """Real hardware state via psutil — works on Windows/macOS/Linux."""
+    import psutil
+    # power
+    power = {"present": False, "ac": True}
+    try:
+        b = psutil.sensors_battery()
+        if b is not None:
+            power = {"present": True, "percent": round(b.percent),
+                     "plugged": bool(b.power_plugged),
+                     "secs_left": (b.secsleft if b.secsleft and b.secsleft > 0 else None)}
+    except Exception:
+        pass
+    # storage volumes
+    vols = []
+    try:
+        for part in psutil.disk_partitions(all=False):
+            try:
+                u = psutil.disk_usage(part.mountpoint)
+            except Exception:
+                continue
+            removable = "removable" in (part.opts or "").lower() or "cdrom" in (part.opts or "").lower()
+            vols.append({
+                "name": part.device.replace("\\", "").rstrip(":") + ":" if ":" in part.device else part.mountpoint,
+                "mount": part.mountpoint,
+                "fstype": part.fstype or "—",
+                "total_gb": round(u.total / 1e9, 1),
+                "used_pct": round(u.percent),
+                "removable": removable,
+            })
+    except Exception:
+        pass
+    # network interfaces (only those that are up)
+    nets = []
+    try:
+        stats = psutil.net_if_stats()
+        addrs = psutil.net_if_addrs()
+        import socket as _sock
+        for name, st in stats.items():
+            if not st.isup:
+                continue
+            ip = ""
+            for a in addrs.get(name, []):
+                if a.family == _sock.AF_INET:
+                    ip = a.address
+                    break
+            nets.append({"name": name[:22], "speed_mbps": st.speed or 0, "addr": ip})
+        nets.sort(key=lambda n: (-(n["speed_mbps"] or 0), n["name"]))
+    except Exception:
+        pass
+    return {"power": power, "volumes": vols[:6], "net": nets[:6]}
+
+
+def _scan_peripherals() -> list[dict]:
+    """Connected devices via Windows PnP (camera/audio/bluetooth/disk/monitor).
+    Returns [] on non-Windows or if enumeration is unavailable."""
+    import subprocess
+    ps = (
+        "Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | "
+        "Where-Object { $_.Class -in @('Camera','Image','AudioEndpoint',"
+        "'Bluetooth','WPD','DiskDrive','Monitor') } | "
+        "Select-Object FriendlyName,Class,Status | ConvertTo-Json -Compress"
+    )
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                           capture_output=True, text=True, timeout=9,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if r.returncode != 0 or not r.stdout.strip():
+            return []
+        import json as _json
+        data = _json.loads(r.stdout)
+        if isinstance(data, dict):
+            data = [data]
+        seen, out = set(), []
+        for d in data:
+            name = (d.get("FriendlyName") or "").strip()
+            cls = (d.get("Class") or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            out.append({"name": name[:44], "cls": cls,
+                        "ok": (d.get("Status") or "").upper() == "OK"})
+        # cameras/bluetooth first — the peripherals an operator cares about
+        order = {"Camera": 0, "Bluetooth": 1, "WPD": 2, "AudioEndpoint": 3,
+                 "DiskDrive": 4, "Monitor": 5, "Image": 6}
+        out.sort(key=lambda x: order.get(x["cls"], 9))
+        return out[:16]
+    except Exception:
+        return []
+
+
+@app.get("/api/hardware")
+async def hardware_endpoint():
+    import time as _t
+    loop = asyncio.get_running_loop()
+    if _t.time() - _hw_cache["ts"] > 8:
+        _hw_cache["data"] = await loop.run_in_executor(None, _scan_hardware)
+        _hw_cache["ts"] = _t.time()
+    if _t.time() - _periph_cache["ts"] > 30:
+        _periph_cache["data"] = await loop.run_in_executor(None, _scan_peripherals)
+        _periph_cache["ts"] = _t.time()
+    return {**(_hw_cache["data"] or {}), "peripherals": _periph_cache["data"] or []}
+
+
 # ── real personal notes (persisted to notes.json, gitignored) ────
 NOTES_FILE = ROOT / "notes.json"
 

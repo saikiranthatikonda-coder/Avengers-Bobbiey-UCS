@@ -3324,6 +3324,65 @@ $("#btn-export")?.addEventListener("click", async () => {
   } catch (e) {}
 });
 
+/* ═══ EXTERNAL HARDWARE — power · storage · network · peripherals ═══ */
+
+const CLS_ICON = { Camera: "◉", Bluetooth: "❋", WPD: "▤", AudioEndpoint: "♪",
+                   DiskDrive: "▤", Monitor: "▢", Image: "◈" };
+
+async function refreshHardware() {
+  try {
+    const d = await (await fetch("/api/hardware")).json();
+    // power
+    const pw = $("#hw-power");
+    if (pw) {
+      const p = d.power || {};
+      if (p.present) {
+        const lvl = p.percent < 20 ? "low" : p.percent < 50 ? "mid" : "";
+        pw.innerHTML = `<span class="hw-batt"><div class="${lvl}" style="width:${p.percent}%"></div></span>
+          <span class="hw-pct">${p.percent}%</span>
+          <span class="hw-ac ${p.plugged ? "on" : ""}">${p.plugged ? "⚡ CHARGING" : "ON BATTERY"}</span>`;
+      } else {
+        pw.innerHTML = `<span class="hw-pct" style="min-width:auto">AC</span>
+          <span class="hw-ac on">⚡ MAINS POWER · NO BATTERY</span>`;
+      }
+    }
+    // storage volumes
+    const vh = $("#hw-vols");
+    if (vh) {
+      const vols = d.volumes || [];
+      vh.innerHTML = vols.length ? vols.map(v => `
+        <div class="hw-vol">
+          <span class="nm">${escapeHTML(v.name)}</span>
+          <span class="bar"><div class="${v.used_pct >= 90 ? "hot" : ""}" style="width:${v.used_pct}%"></div></span>
+          <span class="pc">${v.used_pct}% · ${v.total_gb}G</span>
+          ${v.removable ? '<span class="tag">USB</span>' : `<span class="pc" style="text-align:left">${escapeHTML(v.fstype)}</span>`}
+        </div>`).join("") : '<div class="tf-empty">no volumes detected</div>';
+    }
+    // network interfaces
+    const nh = $("#hw-nets");
+    if (nh) {
+      const nets = d.net || [];
+      const nn = $("#hw-net-n"); if (nn) nn.textContent = nets.length;
+      nh.innerHTML = nets.map(n =>
+        `<span class="hw-net"><b>${escapeHTML(n.name)}</b>${n.speed_mbps ? " · " + n.speed_mbps + "M" : ""}${n.addr ? " · " + escapeHTML(n.addr) : ""}</span>`).join("");
+    }
+    // peripherals
+    const ph = $("#periph-list");
+    if (ph) {
+      const per = d.peripherals || [];
+      const pn = $("#periph-n"); if (pn) pn.textContent = per.length || "0";
+      ph.innerHTML = per.length ? per.map(x => `
+        <div class="periph-item">
+          <span class="nm">${escapeHTML(CLS_ICON[x.cls] || "▪")} ${escapeHTML(x.name)}</span>
+          <span class="cls">${escapeHTML(x.cls.toUpperCase())}</span>
+          <span class="st ${x.ok ? "" : "err"}"></span>
+        </div>`).join("")
+        : '<div class="tf-empty">device enumeration unavailable on this OS</div>';
+    }
+  } catch (e) {}
+}
+refreshHardware(); setInterval(refreshHardware, 20000);
+
 /* ═══ PHASE 5 · DECISION SUPPORT — propose · simulate · execute ═══ */
 
 let decAutonomy = false;
