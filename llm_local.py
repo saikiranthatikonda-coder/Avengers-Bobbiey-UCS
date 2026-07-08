@@ -26,10 +26,12 @@ class LocalLLM:
                          "http://127.0.0.1:11434/v1")).rstrip("/")
         self.model = model or os.getenv("LOCAL_LLM_MODEL") or None
         # persisted selection (survives restarts) takes precedence
+        self.pref_force_local = False   # user chose a local/Ollama brain last time
         try:
             pref = json.loads(PREF_FILE.read_text(encoding="utf-8"))
             if pref.get("model"):
                 self.model = pref["model"]
+            self.pref_force_local = bool(pref.get("force_local"))
         except Exception:
             pass
         self.api_key = api_key or os.getenv("LOCAL_LLM_KEY") or None
@@ -37,9 +39,14 @@ class LocalLLM:
         self.available = False
         self.last_latency_ms: int | None = None
 
-    def save_pref(self) -> None:
+    def save_pref(self, force_local: bool | None = None) -> None:
+        if force_local is not None:
+            self.pref_force_local = force_local
         try:
-            PREF_FILE.write_text(json.dumps({"model": self.model}), encoding="utf-8")
+            PREF_FILE.write_text(json.dumps({
+                "model": self.model,
+                "force_local": self.pref_force_local,
+            }), encoding="utf-8")
         except Exception:
             pass
 

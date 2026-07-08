@@ -71,6 +71,19 @@ async def lifespan(app: FastAPI):
         await hub.broadcast({"type": "log", "level": "info",
                               "msg": f"insights engine: local LLM available ({local_llm.model})"})
 
+    # restore the operator's brain choice across restarts (model_pref.json):
+    # if they last picked a local/Ollama model, keep routing replies to it.
+    if local_llm.pref_force_local and local_llm.available:
+        brain.force_local = True
+        await hub.broadcast({"type": "log", "level": "info",
+                              "msg": f"brain restored → local model {local_llm.model} "
+                                     "(Claude not used for replies)"})
+    elif local_llm.pref_force_local and not local_llm.available:
+        await hub.broadcast({"type": "log", "level": "warn",
+                              "msg": "saved brain is a local model but the Ollama endpoint "
+                                     "is offline — start Ollama and re-select, or replies "
+                                     "fall back to Claude"})
+
     if not os.getenv("NEWSAPI_KEY"):
         await hub.broadcast({"type": "log", "level": "warn",
                               "msg": "News disabled — paste a NEWSAPI_KEY into .env "
@@ -601,6 +614,7 @@ async def models_select(req: ModelSel):
     name = req.model.strip()
     if name.lower() == "claude":
         brain.force_local = False
+        llm.save_pref(force_local=False)   # persist: next boot uses Claude
         await state["hub"].broadcast({"type": "log", "level": "info",
                                       "msg": "brain switched → Claude (cloud)"})
         await state["hub"].broadcast({"type": "models-updated"})
@@ -611,7 +625,7 @@ async def models_select(req: ModelSel):
     ok = await llm.probe()          # confirms endpoint + keeps model
     llm.model = name                # probe may overwrite; pin the chosen one
     llm.available = True
-    llm.save_pref()
+    llm.save_pref(force_local=True)  # persist: next boot keeps this brain
     brain.force_local = True
     await state["hub"].broadcast({
         "type": "log", "level": "info",
