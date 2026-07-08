@@ -75,12 +75,15 @@ class Roadmap:
             ("Multi-camera situational awareness", lambda: True),  # selector + per-camera tagging
             ("Zone monitoring (3×3 sector watch)", lambda: True),  # away-intrusion alerts live
         ]
+        aud = s.get("audit")
+        rbac = s.get("rbac")
         phase4 = [
-            ("Multi-operator deployments", lambda: False),
-            ("Role-based command", lambda: False),
-            ("Audit trails", lambda: False),
+            ("Audit trail (append-only)", lambda: aud is not None),
+            ("Role-based command (commander/observer)", lambda: bool(rbac)),
+            ("Multi-operator profiles", lambda: bool(rbac)),
+            ("Compliance data export", lambda: aud is not None),
             ("On-prem AI clusters", lambda: False),
-            ("Compliance tooling", lambda: False),
+            ("Multi-site deployments", lambda: False),
         ]
         phase5 = [
             ("Decision proposals under human authority", lambda: False),

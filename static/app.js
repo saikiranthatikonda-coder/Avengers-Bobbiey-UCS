@@ -2897,6 +2897,9 @@ function handle(msg) {
     case "models-updated":                  // brain/model switched
       try { pollServiceGrid(); refreshLocalAI(); } catch (e) {}
       break;
+    case "audit":                           // live append to the audit feed
+      try { prependAudit(msg); } catch (e) {}
+      break;
     case "orch":                            // orchestrator cycle summary
       try {
         const os = $("#orch-stat");
@@ -3220,6 +3223,105 @@ $("#btn-kb-ask")?.addEventListener("click", async () => {
       body: JSON.stringify({ query: q }) })).json();
     renderKbResults(d.sources, d.answer);
   } catch (err) {}
+});
+
+/* ═══ PHASE 4 · ENTERPRISE COMMAND — roles · operators · audit · export ═══ */
+
+let entState = { role: "commander", pin_required: false };
+
+function auditRow(e) {
+  const t = new Date(e.ts * 1000).toTimeString().slice(0, 5);
+  return `<div class="aud-row"><span class="aud-t">${t}</span>
+    <span class="aud-a"><b>${escapeHTML(e.action)}</b> ${escapeHTML(e.detail || "")}
+    <span class="who">· ${escapeHTML(e.operator || "")}/${escapeHTML(e.role || "")}</span></span></div>`;
+}
+function prependAudit(e) {
+  const host = $("#ent-audit"); if (!host) return;
+  const empty = host.querySelector(".tf-empty"); if (empty) empty.remove();
+  host.insertAdjacentHTML("afterbegin", auditRow(e));
+  while (host.children.length > 20) host.lastChild.remove();
+  const n = $("#ent-audit-n"); if (n) n.textContent = String(parseInt(n.textContent || "0") + 1);
+}
+
+async function refreshEnterprise() {
+  try {
+    const d = await (await fetch("/api/enterprise")).json();
+    entState = d;
+    const roleEl = $("#ent-role");
+    if (roleEl) roleEl.textContent = (d.role || "—").toUpperCase();
+    const opEl = $("#ent-op"); if (opEl) opEl.textContent = d.operator || "—";
+    $("#btn-role-cmd")?.classList.toggle("on", d.role === "commander");
+    $("#btn-role-obs")?.classList.toggle("on", d.role === "observer");
+    document.body.classList.toggle("observer-mode", d.role === "observer");
+    // operators
+    const ops = $("#ent-ops");
+    if (ops) {
+      ops.innerHTML = (d.operators || []).map(o =>
+        `<span class="ent-opchip${o.name === d.operator ? " active" : ""}" data-name="${escapeHTML(o.name)}" tabindex="0" role="button">
+          ${escapeHTML(o.name.toUpperCase())} <span class="r">· ${escapeHTML((o.role || "").toUpperCase())}</span></span>`).join("")
+        || '<div class="tf-empty">no operators registered</div>';
+      ops.querySelectorAll(".ent-opchip").forEach(ch => ch.addEventListener("click", async () => {
+        try {
+          await fetch("/api/operator", { method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ name: ch.dataset.name }) });
+        } catch (e) {}
+        refreshEnterprise();
+      }));
+    }
+    // audit feed
+    const aud = (d.audit || {});
+    const n = $("#ent-audit-n"); if (n) n.textContent = aud.entries_total ?? 0;
+    const host = $("#ent-audit");
+    if (host) host.innerHTML = (aud.recent || []).map(auditRow).join("")
+      || '<div class="tf-empty">no audited actions yet</div>';
+  } catch (e) {}
+}
+refreshEnterprise(); setInterval(refreshEnterprise, 45000);
+
+async function switchRole(role) {
+  const pinEl = $("#ent-pin");
+  if (role === "commander" && entState.pin_required) {
+    if (pinEl && pinEl.hidden) { pinEl.hidden = false; pinEl.focus(); return; }
+  }
+  try {
+    const d = await (await fetch("/api/role", { method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role, pin: pinEl ? pinEl.value : "" }) })).json();
+    if (!d.ok && d.error) logEvent(`<span class="tag">[rbac]</span> ${escapeHTML(d.error)}`, "warn");
+    if (pinEl) { pinEl.hidden = true; pinEl.value = ""; }
+  } catch (e) {}
+  refreshEnterprise();
+}
+$("#btn-role-cmd")?.addEventListener("click", () => switchRole("commander"));
+$("#btn-role-obs")?.addEventListener("click", () => switchRole("observer"));
+$("#ent-pin")?.addEventListener("keydown", (e) => { if (e.key === "Enter") switchRole("commander"); });
+
+$("#ent-op-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("#ent-op-input").value.trim(); if (!name) return;
+  $("#ent-op-input").value = "";
+  try {
+    const d = await (await fetch("/api/operators", { method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, role: "observer" }) })).json();
+    if (!d.ok && d.error) logEvent(`<span class="tag">[rbac]</span> ${escapeHTML(d.error)}`, "warn");
+  } catch (err) {}
+  refreshEnterprise();
+});
+
+$("#btn-export")?.addEventListener("click", async () => {
+  try {
+    const d = await (await fetch("/api/export")).json();
+    if (d.error) { logEvent(`<span class="tag">[export]</span> ${escapeHTML(d.error)}`, "warn"); return; }
+    const blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `bobbiey-ucs-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    logEvent('<span class="tag">[export]</span> compliance data export downloaded');
+  } catch (e) {}
 });
 
 connect();

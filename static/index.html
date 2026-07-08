@@ -1029,6 +1029,32 @@
 
   </section>
 
+  <!-- ═══ PHASE 4 · ENTERPRISE COMMAND ═══════════════════ -->
+  <section class="ent-row">
+
+    <div class="bs-card" id="ent-card">
+      <div class="bs-head">
+        <div class="bs-title">ENTERPRISE COMMAND</div>
+        <div class="bs-sub">SESSION: <span id="ent-role">—</span> · OPERATOR: <span id="ent-op">—</span></div>
+      </div>
+      <div class="ent-controls">
+        <button class="ghost-btn" id="btn-role-cmd">◈ COMMANDER</button>
+        <button class="ghost-btn" id="btn-role-obs">◇ OBSERVER</button>
+        <input type="password" id="ent-pin" class="ent-pin" placeholder="PIN" maxlength="12" hidden/>
+        <button class="ghost-btn" id="btn-export" title="compliance data export — everything the platform holds, as JSON">⇩ EXPORT DATA</button>
+      </div>
+      <div class="intel-divider">REGISTERED OPERATORS · CLICK TO ACTIVATE</div>
+      <div class="ent-ops" id="ent-ops"><div class="tf-empty">loading…</div></div>
+      <form class="mem-add-form" id="ent-op-form">
+        <input type="text" id="ent-op-input" placeholder="register operator…" maxlength="40" autocomplete="off"/>
+        <button type="submit" class="ghost-btn">ADD</button>
+      </form>
+      <div class="intel-divider">AUDIT TRAIL · <span id="ent-audit-n">0</span> ENTRIES · APPEND-ONLY</div>
+      <div class="ent-audit" id="ent-audit"><div class="tf-empty">no audited actions yet</div></div>
+    </div>
+
+  </section>
+
   <!-- ═══ MAP ROW ═══════════════════════════════════════ -->
   <section class="map-row">
 

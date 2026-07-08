@@ -1087,6 +1087,30 @@ body {
 .kb-item.answer { border-left-color: #22c55e; background: rgba(34,197,94,0.05); }
 .kb-item.answer .kb-src { color: #22c55e; }
 
+/* Phase 4 · enterprise command */
+.ent-row {
+  display: grid;
+  grid-template-columns: minmax(0,1.15fr) minmax(0,1fr);
+  gap: 0.8rem;
+  padding: 0 1rem 0.8rem;
+}
+@media (max-width: 1280px) { .ent-row { grid-template-columns: 1fr; } }
+.ent-controls { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.ent-controls .ghost-btn.on { color: #22c55e; border-color: #22c55e; }
+.ent-pin { width: 5.5rem; background: rgba(6,18,31,0.7); border: 1px solid var(--panel-edge); border-radius: 4px; color: var(--text); font-family: var(--font-mono); font-size: 0.65rem; padding: 0.26rem 0.4rem; outline: none; }
+.ent-ops { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.ent-opchip { font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.1em; color: var(--text-dim); border: 1px solid var(--panel-edge); border-radius: 3px; padding: 0.2rem 0.45rem; cursor: pointer; transition: border-color 0.2s, color 0.2s; }
+.ent-opchip:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--panel-edge)); color: var(--text); }
+.ent-opchip.active { color: #22c55e; border-color: #22c55e; }
+.ent-opchip .r { opacity: 0.6; }
+.ent-audit { display: flex; flex-direction: column; gap: 0.22rem; overflow-y: auto; max-height: 130px; }
+.aud-row { display: grid; grid-template-columns: 2.6rem 1fr; gap: 0.45rem; font-size: 0.56rem; padding: 0.2rem 0.35rem; border-left: 2px solid var(--panel-edge-bright); background: rgba(6,18,31,0.45); border-radius: 3px; }
+.aud-t { font-family: var(--font-mono); color: var(--text-dim); }
+.aud-a { color: var(--text); }
+.aud-a b { color: var(--accent); font-weight: 600; }
+.aud-a .who { color: var(--text-dim); }
+body.observer-mode .ghost-btn:not(#btn-role-cmd):not(#btn-role-obs) { opacity: 0.45; }
+
 /* Phase 3 · multi-camera + zone monitoring */
 .cam-ops { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
 .cam-select {

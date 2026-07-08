@@ -12,6 +12,7 @@ from pydantic import BaseModel
 import browser
 import connectivity
 from agenda import Agenda
+from audit import Audit
 from agents import build_team
 from brain import Brain
 from google_sync import GoogleCalendar
@@ -142,6 +143,11 @@ async def lifespan(app: FastAPI):
         "productivity": productivity, "orchestrator": orchestrator,
         "knowledge": knowledge, "team_memory": team_memory,
     })
+    # Phase 4 · enterprise: audit trail + role-based command session
+    state["audit"] = Audit(hub=hub)
+    state["rbac"] = {"role": "commander", "operator": _load_operators()[0]["name"]}
+    await state["audit"].log("system.start", f"platform online — brain {mode}",
+                             operator=state["rbac"]["operator"])
     state["roadmap"] = Roadmap(state)
 
     sysmon_task = asyncio.create_task(sysmon.run())
@@ -222,6 +228,7 @@ async def ask(req: Ask):
         return {"reply": reply, "agent": target.name, "browser": result}
 
     # ── normal agent flow ─────────────────────────────────────────
+    await _audit("agent.ask", f"@{target.name}: {req.prompt[:80]}")
     reply = await target.handle(req.prompt)
     return {"reply": reply, "agent": target.name, "codename": target.codename}
 
@@ -385,6 +392,8 @@ async def notes_add(req: NoteReq):
 
 @app.delete("/api/notes/{note_id}")
 async def notes_delete(note_id: str):
+    if not _commander():
+        return _locked()
     notes = [n for n in _load_notes() if n.get("id") != note_id]
     _save_notes(notes)
     return {"ok": True}
@@ -541,6 +550,8 @@ async def memory_enroll(req: EnrollReq):
     """'Remember me': Claude writes a short TEXT appearance sketch of the person
     in frame (no biometrics), stored in operator_memory.json for description-
     based recognition."""
+    if not _commander():
+        return _locked()
     import base64 as _b64
     try:
         data = _b64.b64decode(req.frame.split(",", 1)[-1])
@@ -548,6 +559,7 @@ async def memory_enroll(req: EnrollReq):
             return {"ok": False, "error": "empty frame"}
     except Exception:
         return {"ok": False, "error": "bad frame"}
+    await _audit("memory.enroll", f"operator enrollment ({req.name or 'unnamed'})")
     path = ROOT / "vision_frame.jpg"
     path.write_bytes(data)
     desc = await state["brain"].see(
@@ -590,6 +602,9 @@ async def memory_fact(req: FactReq):
 
 @app.post("/api/memory/forget")
 async def memory_forget():
+    if not _commander():
+        return _locked()
+    await _audit("memory.forget", "operator memory wiped")
     await state["memory"].forget()
     await state["hub"].broadcast({"type": "log", "level": "warn",
                                   "msg": "memory: operator memory wiped"})
@@ -635,9 +650,12 @@ class ModelSel(BaseModel):
 
 @app.post("/api/models/select")
 async def models_select(req: ModelSel):
+    if not _commander():
+        return _locked()
     llm = state["local_llm"]
     brain = state["brain"]
     name = req.model.strip()
+    await _audit("brain.switch", f"model → {name}")
     if name.lower() == "claude":
         brain.force_local = False
         llm.save_pref(force_local=False)   # persist: next boot uses Claude
@@ -674,6 +692,7 @@ class AlertReq(BaseModel):
 @app.post("/api/alert")
 async def alert_endpoint(req: AlertReq):
     sev = req.severity if req.severity in ("info", "warning", "critical", "emergency") else "info"
+    await _audit("alert.raise", f"[{sev}] {req.title[:80]}")
     await state["hub"].broadcast({
         "type": "alert", "severity": sev, "title": req.title[:140],
         "detail": (req.detail or "")[:240], "source": req.source or "manual",
@@ -695,6 +714,9 @@ async def calendar_status():
 @app.post("/api/calendar/connect")
 async def calendar_connect():
     """Kick the OAuth flow (opens a browser on this machine). Then syncs."""
+    if not _commander():
+        return _locked()
+    await _audit("google.connect", "OAuth authorization initiated")
     result = await state["gcal"].connect()
     if result.get("ok"):
         events = await state["gcal"].sync()
@@ -729,6 +751,146 @@ async def waitlist_endpoint(req: WaitlistReq):
         "msg": f"waitlist signup ({entry.get('intent')}): {req.name} <{req.email}>",
     })
     return {"ok": True}
+
+
+# ═══ PHASE 4 · ENTERPRISE: RBAC + OPERATORS + AUDIT + EXPORT ═════
+
+OPERATORS_FILE = ROOT / "operators.json"
+
+
+def _load_operators() -> list[dict]:
+    import json as _json
+    try:
+        ops = _json.loads(OPERATORS_FILE.read_text(encoding="utf-8"))
+        if ops:
+            return ops
+    except Exception:
+        pass
+    return [{"name": "operator-1", "role": "commander", "created": 0}]
+
+
+def _save_operators(ops: list[dict]) -> None:
+    import json as _json
+    OPERATORS_FILE.write_text(_json.dumps(ops, indent=1), encoding="utf-8")
+
+
+def _commander() -> bool:
+    return state.get("rbac", {}).get("role") == "commander"
+
+
+def _locked() -> dict:
+    return {"ok": False, "error": "OBSERVER role — command actions are locked. "
+                                  "Switch to COMMANDER to proceed."}
+
+
+async def _audit(action: str, detail: str = "") -> None:
+    a = state.get("audit")
+    if a is not None:
+        rb = state.get("rbac", {})
+        await a.log(action, detail, operator=rb.get("operator", "operator"),
+                    role=rb.get("role", "commander"))
+
+
+@app.get("/api/enterprise")
+async def enterprise_endpoint():
+    rb = state.get("rbac", {})
+    return {
+        "role": rb.get("role"),
+        "operator": rb.get("operator"),
+        "pin_required": bool(os.getenv("JARVIS_PIN")),
+        "operators": _load_operators(),
+        "audit": state["audit"].snapshot(),
+    }
+
+
+class RoleReq(BaseModel):
+    role: str                 # commander | observer
+    pin: str | None = None
+
+
+@app.post("/api/role")
+async def role_endpoint(req: RoleReq):
+    role = req.role if req.role in ("commander", "observer") else "observer"
+    if role == "commander":
+        pin = os.getenv("JARVIS_PIN")
+        if pin and (req.pin or "") != pin:
+            await _audit("role.denied", "bad PIN on commander elevation")
+            return {"ok": False, "error": "PIN incorrect — command remains locked"}
+    state["rbac"]["role"] = role
+    await _audit("role.switch", f"session role → {role}")
+    await state["hub"].broadcast({"type": "log", "level": "warn" if role == "observer" else "info",
+                                  "msg": f"command session role → {role.upper()}"})
+    return {"ok": True, "role": role}
+
+
+class OperatorReq(BaseModel):
+    name: str
+    role: str | None = "observer"
+
+
+@app.post("/api/operators")
+async def operators_add(req: OperatorReq):
+    if not _commander():
+        return _locked()
+    import time as _t
+    name = req.name.strip()[:40]
+    if not name:
+        return {"ok": False, "error": "empty name"}
+    ops = _load_operators()
+    if any(o["name"].lower() == name.lower() for o in ops):
+        return {"ok": False, "error": "operator already registered"}
+    ops.append({"name": name,
+                "role": req.role if req.role in ("commander", "observer") else "observer",
+                "created": _t.time()})
+    _save_operators(ops)
+    await _audit("operator.add", f"registered {name} ({req.role})")
+    return {"ok": True, "operators": ops}
+
+
+class ActiveOpReq(BaseModel):
+    name: str
+
+
+@app.post("/api/operator")
+async def operator_switch(req: ActiveOpReq):
+    ops = _load_operators()
+    match = next((o for o in ops if o["name"].lower() == req.name.strip().lower()), None)
+    if not match:
+        return {"ok": False, "error": "unknown operator"}
+    state["rbac"]["operator"] = match["name"]
+    state["rbac"]["role"] = match["role"]
+    await _audit("operator.switch", f"active operator → {match['name']} ({match['role']})")
+    return {"ok": True, "operator": match["name"], "role": match["role"]}
+
+
+@app.get("/api/export")
+async def export_endpoint():
+    """Compliance tooling: full data-portability export of everything the
+    platform holds about this operator (JSON bundle, commander only)."""
+    if not _commander():
+        return _locked()
+    import json as _json
+    import time as _t
+
+    def _read(p):
+        try:
+            return _json.loads((ROOT / p).read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
+    bundle = {
+        "product": "Bobbiey UCS",
+        "exported_at": _t.time(),
+        "operator": state["rbac"].get("operator"),
+        "operator_memory": _read("operator_memory.json"),
+        "notes": _read("notes.json"),
+        "productivity": _read("productivity.json"),
+        "team_memory": _read("team_memory.json"),
+        "operators": _load_operators(),
+        "audit_recent": state["audit"].recent(120),
+    }
+    await _audit("data.export", "full compliance export generated")
+    return bundle
 
 
 # ═══ PHASE 2 · MULTI-AGENT INTELLIGENCE + PRODUCT EVOLUTION ═══════
@@ -767,7 +929,10 @@ class ProdReq(BaseModel):
 
 @app.post("/api/productivity")
 async def productivity_post(req: ProdReq):
+    if not _commander():
+        return _locked()
     p = state["productivity"]
+    await _audit("productivity." + req.action, (req.text or "")[:60])
     if req.action == "task":
         return await p.set_task(req.text or "")
     if req.action == "task_done":
@@ -800,7 +965,11 @@ async def knowledge_ask(req: AskKB):
 
 @app.post("/api/threats/ack/{event_id}")
 async def threats_ack(event_id: str):
+    if not _commander():
+        return _locked()
     ok = state["threats"].acknowledge(event_id)
+    if ok:
+        await _audit("incident.ack", f"incident {event_id} acknowledged")
     if ok:
         await state["hub"].broadcast({"type": "log", "level": "info",
                                       "msg": f"incident {event_id} acknowledged by operator"})
