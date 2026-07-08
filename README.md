@@ -47,6 +47,12 @@ Bobbiey UCS turns a passive dashboard into an **active operations brain**:
 - 🤖 **Local-first AI** — runs on **Ollama** (Llama 3, Qwen, Mistral, Phi, DeepSeek…) or the Claude CLI, with an in-UI model manager that auto-detects installed models.
 - 🌍 **Live world view** — rotating d3 globe in the orb core, global activity map, India + Telangana regional grids, world clocks, and live Hyderabad weather.
 - 🚨 **JARVIS Insights** — an engine that reads every widget and surfaces the single most useful observation, plus daily executive briefings (spoken).
+- 🕸️ **Multi-agent orchestration** _(Phase 2)_ — Jarvis derives **directives from live conditions**, delegates them to specialist agents over a **shared context blackboard**, resolves competing priorities by preemption, triggers **agent-to-agent consults**, and every agent builds on a persistent **cross-agent team memory**.
+- 🧭 **Command recommendations + Knowledge Hub** _(Phase 2)_ — a standing briefing panel of every currently-applicable action, and one ranked search box across memory, notes, incidents, mail, calendar, agents and news, with AI answers from your chosen brain.
+- 🎥 **Vision operations** _(Phase 3)_ — **multi-camera** enumeration with hot-switching, **3×3 zone monitoring** with away-intrusion alerts naming the sector, and camera-tagged AI observations. Frames never leave the machine.
+- 🏢 **Enterprise command** _(Phase 4)_ — **append-only audit trail** of every command action, **commander/observer roles enforced server-side** (optional PIN), operator profiles, and one-click **compliance data export**.
+- ⚖️ **Decision support** _(Phase 5)_ — the platform **proposes** actions from real conditions, **simulates** their impact from live numbers, and **executes only under human authority** — with an opt-in supervised-autonomy whitelist, fully audited.
+- 📈 **Product Evolution panel** — the public roadmap rendered live inside the product, every feature verified against the running system with auto-versioning.
 
 ---
 
@@ -166,11 +172,13 @@ Full detail and the migration path to the enterprise stack (Next.js · Postgres 
 
 ## 🗺️ Roadmap
 
-- **Phase 1 — AI Command Dashboard** ✅ _(this repo)_
-- **Phase 2 — Multi-Agent Intelligence** — agent-to-agent delegation (LangGraph)
-- **Phase 3 — Computer Vision Operations** — multi-camera, zone monitoring
-- **Phase 4 — Enterprise Command Platform** — multi-operator, on-prem AI, SSO
-- **Phase 5 — Autonomous Decision Support** — propose → simulate → approve → execute
+The roadmap is **live inside the product** — the Product Evolution panel probes the running system and updates itself as features come online.
+
+- **Phase 1 — AI Command Dashboard** ✅ **SHIPPED** — telemetry, agents, voice, vision, real Google Calendar + Gmail, local AI, threat intelligence
+- **Phase 2 — Multi-Agent Intelligence** ✅ **SHIPPED** — orchestration engine, delegation, shared blackboard, priority resolution, agent consults, cross-agent team memory
+- **Phase 3 — Computer Vision Operations** ✅ **SHIPPED** — multi-camera hot-switching, 3×3 zone monitoring with away-intrusion alerts, activity analytics
+- **Phase 4 — Enterprise Command Platform** 🔨 **IN DEVELOPMENT** — live: audit trail, commander/observer roles, operator profiles, compliance export · next: on-prem AI clusters, multi-site
+- **Phase 5 — Autonomous Decision Support** 🔨 **IN DEVELOPMENT** — live: propose → simulate → approve → execute with supervised autonomy · next: fleet-wide operations
 
 The commercial plan lives in [`SAAS_PLAN.md`](SAAS_PLAN.md).
 
@@ -190,7 +198,11 @@ The commercial plan lives in [`SAAS_PLAN.md`](SAAS_PLAN.md).
 Avengers-Bobbiey-UCS/
 ├─ main.py              FastAPI app + all REST/WS endpoints
 ├─ agents.py · brain.py · llm_local.py · local_brain.py
-├─ insights.py · threats.py · agenda.py · google_sync.py
+├─ orchestrator.py · shared_memory.py    Phase 2 · multi-agent intelligence
+├─ roadmap.py · knowledge.py · productivity.py
+├─ audit.py             Phase 4 · append-only enterprise audit trail
+├─ decisions.py         Phase 5 · supervised decision engine
+├─ insights.py · threats.py · agenda.py · google_sync.py · memory.py
 ├─ services.py · weather.py · connectivity.py · voice.py · tts.py · browser.py
 ├─ routines.py          scheduler
 ├─ static/              the dashboard (index.html · app.js · style.css)
