@@ -20,6 +20,7 @@ class Avenger:
     last_activity: float = 0.0
     history: list[dict] = field(default_factory=list)
     local_brain: object | None = None   # LocalBrain used for cheap periodic ticks
+    team_memory: object | None = None   # cross-agent shared memory (Phase 2)
     current_task: str = "—"             # what the agent is doing right now
     task_queue: list = field(default_factory=list)
     confidence: int = 92                # rolling confidence 0-100
@@ -55,9 +56,26 @@ class Avenger:
 
     async def handle(self, prompt: str) -> str:
         await self.set_status("thinking", note=prompt[:80])
-        reply = await self.brain.think(prompt, system=self.system_prompt, agent=self.name, fast=True)
+        # cross-agent shared memory: prefix what OTHER agents recently learned
+        # so replies build on the team's live knowledge, not a blank slate
+        ctx = ""
+        if self.team_memory is not None:
+            try:
+                ctx = self.team_memory.context_block(self.name)
+            except Exception:
+                ctx = ""
+        reply = await self.brain.think(ctx + prompt, system=self.system_prompt,
+                                       agent=self.name, fast=True)
         self.history.append({"q": prompt, "a": reply, "ts": time.time()})
         self.actions_completed += 1
+        # substantive answers become team knowledge for the other agents
+        if (self.team_memory is not None and reply and len(reply) > 40
+                and not reply.lstrip().startswith("[")):
+            try:
+                await self.team_memory.write(
+                    self.name, "reply", f"{prompt[:70]} → {reply[:130]}")
+            except Exception:
+                pass
         # rolling confidence: error markers dent it, clean replies restore it
         if reply.lstrip().startswith("["):
             self.confidence = max(40, self.confidence - 8)
@@ -146,6 +164,7 @@ def build_team(
     brain: Brain,
     speaker: object | None = None,
     local_brain: object | None = None,
+    team_memory: object | None = None,
 ) -> dict[str, Avenger]:
     team: dict[str, Avenger] = {}
     for key, codename, role, color, sysp in AVENGER_SPECS:
@@ -155,5 +174,6 @@ def build_team(
             speaker=speaker,
             speaks_on_tick=(key in SPEAKING_AGENTS),
             local_brain=local_brain,
+            team_memory=team_memory,
         )
     return team

@@ -27,7 +27,8 @@ PRIORITY_LABEL = {1: "CRITICAL", 2: "HIGH", 3: "NORMAL", 4: "ROUTINE"}
 
 class Orchestrator:
     def __init__(self, hub, team, sysmon=None, threats=None, agenda=None,
-                 insights=None, memory=None, productivity=None) -> None:
+                 insights=None, memory=None, productivity=None,
+                 team_memory=None) -> None:
         self.hub = hub
         self.team = team
         self.sysmon = sysmon
@@ -36,13 +37,26 @@ class Orchestrator:
         self.insights = insights
         self.memory = memory
         self.productivity = productivity
+        self.team_memory = team_memory        # cross-agent shared memory
         self.blackboard: dict = {}
         self.active: dict[str, dict] = {}      # key → directive
         self.recent_done: deque = deque(maxlen=12)
         self.delegations_total = 0
         self.preemptions_total = 0
+        self.collabs_total = 0
         self.cycles = 0
         self._patrol_idx = 0
+
+    # agent-to-agent collaboration: who consults whom, per domain
+    CONSULT_PARTNER = {
+        "widow": "vision",     # intel verifies with observation
+        "stark": "hawkeye",    # engineering checks the vitals
+        "hulk": "stark",       # compute consults engineering
+        "captain": "thor",     # schedule aligns with announcements
+        "hawkeye": "widow",    # vitals cross-checks intel
+        "vision": "widow",     # synthesis pulls research
+        "thor": "captain",
+    }
 
     # ── shared context blackboard ─────────────────────────────────
     def _update_blackboard(self) -> dict:
@@ -155,6 +169,11 @@ class Orchestrator:
                     "type": "log", "level": "info",
                     "msg": f"orchestrator: ✓ {d['agent']} completed \"{d['title'][:60]}\"",
                 })
+                # completed real directives become team knowledge
+                if self.team_memory is not None and not d["patrol"]:
+                    await self.team_memory.write(
+                        d["agent"], "directive",
+                        f"completed \"{d['title']}\" — {d.get('detail', '')}")
 
         # raise new directives (priority resolution: replace a lower-priority
         # active directive on the same agent — the old one re-queues next tick)
@@ -217,6 +236,37 @@ class Orchestrator:
                 "msg": (f"orchestrator: → {d['agent']} assigned "
                         f"[{PRIORITY_LABEL[d['priority']]}] \"{d['title'][:60]}\""),
             })
+        # agent-to-agent collaboration: on urgent directives the assignee
+        # pulls a consult from its partner specialist; the partner's live
+        # domain read goes into shared team memory for everyone
+        if not patrol and d["priority"] <= P_HIGH:
+            await self._consult(directive)
+
+    async def _consult(self, directive: dict) -> None:
+        partner_key = self.CONSULT_PARTNER.get(directive["agent"])
+        partner = self.team.get(partner_key) if partner_key else None
+        if partner is None:
+            return
+        note = ""
+        try:
+            if partner.local_brain is not None:
+                note = partner.local_brain.for_agent(partner_key)   # real live read
+        except Exception:
+            note = ""
+        if not note:
+            note = f"standing by on the {directive['title'][:40]} tasking"
+        self.collabs_total += 1
+        directive["consult"] = partner_key
+        line = (f"{partner_key} → {directive['agent']} on "
+                f"\"{directive['title'][:48]}\": {note}")
+        partner.history.append({"q": f"[consult:{directive['agent']}]",
+                                "a": note, "ts": time.time()})
+        if self.team_memory is not None:
+            await self.team_memory.write(partner_key, "consult", line)
+        await self.hub.broadcast({
+            "type": "log", "level": "info",
+            "msg": f"collab: {partner_key.upper()} ⇄ {directive['agent'].upper()} — {note[:90]}",
+        })
 
     # ── API surface ───────────────────────────────────────────────
     def summary(self) -> dict:
@@ -224,6 +274,7 @@ class Orchestrator:
             "active": len(self.active),
             "delegations_total": self.delegations_total,
             "preemptions_total": self.preemptions_total,
+            "collabs_total": self.collabs_total,
             "coordinator": "jarvis",
         }
 

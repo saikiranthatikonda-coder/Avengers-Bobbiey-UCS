@@ -26,6 +26,7 @@ from productivity import Productivity
 from roadmap import Roadmap
 from routines import schedule_all
 from services import NewsService, SystemMonitor
+from shared_memory import TeamMemory
 from threats import ThreatEngine
 from tts import TTSPlayer
 from voice import VoiceLoop
@@ -102,7 +103,9 @@ async def lifespan(app: FastAPI):
                                      + ("(connected)" if gcal.token_present()
                                         else "(POST /api/calendar/connect to authorize)")})
 
-    team = build_team(hub=hub, brain=brain, speaker=tts, local_brain=local_brain)
+    team_memory = TeamMemory(hub=hub)
+    team = build_team(hub=hub, brain=brain, speaker=tts, local_brain=local_brain,
+                      team_memory=team_memory)
     insights = InsightsEngine(hub=hub, sysmon=sysmon, news=news, agenda=agenda,
                               team=team, local_llm=local_llm, brain=brain, tts=tts)
     threats = ThreatEngine(hub=hub, sysmon=sysmon, news=news, agenda=agenda,
@@ -115,10 +118,11 @@ async def lifespan(app: FastAPI):
     orchestrator = Orchestrator(hub=hub, team=team, sysmon=sysmon,
                                 threats=threats, agenda=agenda,
                                 insights=insights, memory=memory,
-                                productivity=productivity)
+                                productivity=productivity,
+                                team_memory=team_memory)
     knowledge = KnowledgeHub(memory=memory, insights=insights, team=team,
                              threats=threats, agenda=agenda, news=news,
-                             brain=brain)
+                             brain=brain, team_memory=team_memory)
     scheduler = schedule_all(team=team, news=news, sysmon=sysmon, hub=hub,
                              agenda=agenda, tts=tts,
                              insights=insights if os.getenv("JARVIS_INSIGHTS", "1") != "0" else None,
@@ -136,7 +140,7 @@ async def lifespan(app: FastAPI):
         "local_llm": local_llm, "insights": insights,
         "threats": threats, "gcal": gcal, "memory": memory,
         "productivity": productivity, "orchestrator": orchestrator,
-        "knowledge": knowledge,
+        "knowledge": knowledge, "team_memory": team_memory,
     })
     state["roadmap"] = Roadmap(state)
 
@@ -727,6 +731,11 @@ async def waitlist_endpoint(req: WaitlistReq):
 @app.get("/api/orchestrator")
 async def orchestrator_endpoint():
     return state["orchestrator"].snapshot()
+
+
+@app.get("/api/team-memory")
+async def team_memory_endpoint():
+    return state["team_memory"].snapshot()
 
 
 @app.get("/api/roadmap")

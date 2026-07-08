@@ -2882,7 +2882,7 @@ async function refreshOrch() {
     const d = await (await fetch("/api/orchestrator")).json();
     const os = $("#orch-stat");
     if (os) os.textContent =
-      `${d.active} ACTIVE · ${d.delegations_total} DELEGATED · ${d.preemptions_total} PREEMPTED`;
+      `${d.active} ACTIVE · ${d.delegations_total} DELEGATED · ${d.collabs_total ?? 0} COLLABS`;
     // shared context blackboard chips
     const bb = d.blackboard || {}; const bbEl = $("#orch-bb");
     if (bbEl && bb.ts) {
@@ -2911,7 +2911,7 @@ async function refreshOrch() {
           <span class="orch-p p${x.priority}">${(d.priority_labels || {})[x.priority] || "P" + x.priority}</span>
           <span class="orch-main">
             <div class="orch-title">${escapeHTML(x.title)}</div>
-            <div class="orch-detail">${escapeHTML(x.detail || "")}</div>
+            <div class="orch-detail">${escapeHTML(x.detail || "")}${x.consult ? " · ⇄ consulted " + escapeHTML(x.consult.toUpperCase()) : ""}</div>
           </span>
           <span class="orch-agent">${escapeHTML((x.agent || "").toUpperCase())}</span>
         </div>`).join("")

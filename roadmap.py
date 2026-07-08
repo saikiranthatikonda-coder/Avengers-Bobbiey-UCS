@@ -64,8 +64,9 @@ class Roadmap:
             ("Command recommendations feed", lambda: insights is not None),
             ("Knowledge hub (searchable memory)", lambda: knw is not None),
             ("Operator productivity intelligence", lambda: prod is not None),
-            ("Agent-to-agent collaboration", lambda: False),   # next up
-            ("Cross-agent shared memory", lambda: False),      # next up
+            ("Agent-to-agent collaboration", lambda: orch is not None
+                                                     and orch.team_memory is not None),
+            ("Cross-agent shared memory", lambda: s.get("team_memory") is not None),
         ]
         phase3 = [
             ("Identity-free presence awareness", lambda: mem is not None),

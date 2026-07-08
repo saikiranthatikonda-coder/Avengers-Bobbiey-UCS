@@ -24,6 +24,7 @@ ROOT = Path(__file__).parent
 SOURCE_WEIGHT = {
     "memory-fact": 3.0, "note": 2.6, "observation": 2.0, "insight": 1.8,
     "agent": 1.6, "incident": 1.5, "calendar": 2.2, "email": 1.8, "news": 1.0,
+    "team-memory": 2.0,
 }
 
 _WORD = re.compile(r"[a-z0-9]{2,}")
@@ -35,7 +36,7 @@ def _tokens(text: str) -> set[str]:
 
 class KnowledgeHub:
     def __init__(self, memory=None, insights=None, team=None, threats=None,
-                 agenda=None, news=None, brain=None) -> None:
+                 agenda=None, news=None, brain=None, team_memory=None) -> None:
         self.memory = memory
         self.insights = insights
         self.team = team
@@ -43,6 +44,7 @@ class KnowledgeHub:
         self.agenda = agenda
         self.news = news
         self.brain = brain
+        self.team_memory = team_memory
 
     # ── corpus assembly (live, cheap) ─────────────────────────────
     def _docs(self) -> list[dict]:
@@ -112,6 +114,12 @@ class KnowledgeHub:
                 docs.append({"source": "news", "ts": now,
                              "text": a.get("title", ""),
                              "ref": a.get("source", "news feed")})
+
+        if self.team_memory is not None:
+            for e in self.team_memory.recent(n=30):
+                docs.append({"source": "team-memory", "ts": e.get("ts", now),
+                             "text": e.get("text", ""),
+                             "ref": f"{e.get('agent', '?')} · {e.get('kind', '')}"})
         return docs
 
     # ── ranked retrieval ──────────────────────────────────────────
