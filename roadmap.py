@@ -85,10 +85,12 @@ class Roadmap:
             ("On-prem AI clusters", lambda: False),
             ("Multi-site deployments", lambda: False),
         ]
+        dec = s.get("decisions")
         phase5 = [
-            ("Decision proposals under human authority", lambda: False),
-            ("Operational simulation", lambda: False),
-            ("Autonomous execution (supervised)", lambda: False),
+            ("Decision proposals under human authority", lambda: dec is not None),
+            ("Impact simulation (predicted outcomes)", lambda: dec is not None),
+            ("Supervised autonomous execution", lambda: dec is not None),
+            ("Fleet-wide autonomous operations", lambda: False),
         ]
         return [
             {"n": 1, "name": "AI Command Dashboard", "features": phase1},

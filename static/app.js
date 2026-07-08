@@ -3324,4 +3324,69 @@ $("#btn-export")?.addEventListener("click", async () => {
   } catch (e) {}
 });
 
+/* ═══ PHASE 5 · DECISION SUPPORT — propose · simulate · execute ═══ */
+
+let decAutonomy = false;
+
+async function refreshDecisions() {
+  try {
+    const d = await (await fetch("/api/decisions")).json();
+    decAutonomy = !!d.autonomy;
+    const btn = $("#btn-autonomy");
+    if (btn) {
+      btn.textContent = decAutonomy ? "◈ AUTONOMY ON" : "◇ AUTONOMY OFF";
+      btn.classList.toggle("on", decAutonomy);
+    }
+    const note = $("#dec-auto-note");
+    if (note) note.textContent = decAutonomy
+      ? `auto-executes: ${(d.whitelist || []).join(", ")} · every action audited`
+      : "low-risk whitelist only · every action audited";
+    const cnt = $("#dec-count"); if (cnt) cnt.textContent = (d.proposals || []).length;
+    const list = $("#dec-list");
+    if (list) {
+      list.innerHTML = (d.proposals || []).length ? d.proposals.map(p => `
+        <div class="dec-item ${p.risk}">
+          <div class="dec-title">${escapeHTML(p.title)}</div>
+          <div class="dec-why">${escapeHTML(p.rationale || "")}</div>
+          <div class="dec-impact">${escapeHTML(p.impact || "")}</div>
+          <div class="dec-actions">
+            <button class="dec-btn ok" data-id="${escapeHTML(p.id)}" data-act="execute">✓ APPROVE</button>
+            <button class="dec-btn no" data-id="${escapeHTML(p.id)}" data-act="dismiss">✕ DISMISS</button>
+          </div>
+        </div>`).join("")
+        : '<div class="tf-empty">no proposals — conditions don\'t warrant action</div>';
+      list.querySelectorAll(".dec-btn").forEach(b => b.addEventListener("click", async () => {
+        b.disabled = true; b.textContent = "…";
+        try {
+          const r = await (await fetch("/api/decisions/" + b.dataset.act, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ id: b.dataset.id }) })).json();
+          if (!r.ok && r.error) logEvent(`<span class="tag">[decision]</span> ${escapeHTML(r.error)}`, "warn");
+          else if (r.note) logEvent(`<span class="tag">[decision]</span> executed — ${escapeHTML(r.note)}`);
+        } catch (e) {}
+        refreshDecisions(); refreshProd(); seedThreats();
+      }));
+    }
+    const en = $("#dec-exec-n"); if (en) en.textContent = d.executed_total ?? 0;
+    const done = $("#dec-done");
+    if (done) {
+      done.innerHTML = (d.executed || []).length ? d.executed.slice(0, 4).map(x => `
+        <div class="dec-done-item"><b>✓</b> ${escapeHTML(x.title)} — ${escapeHTML(x.note || "")}
+          <span class="by">${x.by === "autonomy" ? "AUTO" : "APPROVED"}</span></div>`).join("")
+        : '<div class="tf-empty">nothing executed yet</div>';
+    }
+  } catch (e) {}
+}
+refreshDecisions(); setInterval(refreshDecisions, 30000);
+
+$("#btn-autonomy")?.addEventListener("click", async () => {
+  try {
+    const r = await (await fetch("/api/decisions/autonomy", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ on: !decAutonomy }) })).json();
+    if (!r.ok && r.error) logEvent(`<span class="tag">[decision]</span> ${escapeHTML(r.error)}`, "warn");
+  } catch (e) {}
+  refreshDecisions();
+});
+
 connect();

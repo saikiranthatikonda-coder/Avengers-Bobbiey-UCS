@@ -3,6 +3,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -15,6 +16,7 @@ from agenda import Agenda
 from audit import Audit
 from agents import build_team
 from brain import Brain
+from decisions import DecisionEngine
 from google_sync import GoogleCalendar
 from hub import Hub
 from insights import InsightsEngine
@@ -148,6 +150,15 @@ async def lifespan(app: FastAPI):
     state["rbac"] = {"role": "commander", "operator": _load_operators()[0]["name"]}
     await state["audit"].log("system.start", f"platform online — brain {mode}",
                              operator=state["rbac"]["operator"])
+    # Phase 5 · supervised decision support
+    decisions = DecisionEngine(hub=hub, brain=brain, local_llm=local_llm,
+                               threats=threats, agenda=agenda,
+                               insights=insights, productivity=productivity,
+                               orchestrator=orchestrator, audit=state["audit"],
+                               tts=tts)
+    state["decisions"] = decisions
+    scheduler.add_job(decisions.tick, IntervalTrigger(seconds=45),
+                      max_instances=1, coalesce=True)
     state["roadmap"] = Roadmap(state)
 
     sysmon_task = asyncio.create_task(sysmon.run())
@@ -903,6 +914,42 @@ async def orchestrator_endpoint():
 @app.get("/api/team-memory")
 async def team_memory_endpoint():
     return state["team_memory"].snapshot()
+
+
+# ═══ PHASE 5 · SUPERVISED DECISION SUPPORT ═══════════════════════
+
+@app.get("/api/decisions")
+async def decisions_endpoint():
+    return state["decisions"].snapshot()
+
+
+class DecisionReq(BaseModel):
+    id: str
+
+
+@app.post("/api/decisions/execute")
+async def decisions_execute(req: DecisionReq):
+    if not _commander():
+        return _locked()
+    return await state["decisions"].execute(req.id, approved_by=state["rbac"]["operator"])
+
+
+@app.post("/api/decisions/dismiss")
+async def decisions_dismiss(req: DecisionReq):
+    if not _commander():
+        return _locked()
+    return await state["decisions"].dismiss(req.id)
+
+
+class AutonomyReq(BaseModel):
+    on: bool
+
+
+@app.post("/api/decisions/autonomy")
+async def decisions_autonomy(req: AutonomyReq):
+    if not _commander():
+        return _locked()
+    return await state["decisions"].set_autonomy(req.on)
 
 
 @app.get("/api/roadmap")
