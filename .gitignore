@@ -23,3 +23,5 @@ team_memory.json
 audit.log
 operators.json
 decisions.json
+fleet_token.txt
+node_id.txt

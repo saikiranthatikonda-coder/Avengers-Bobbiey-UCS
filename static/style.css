@@ -1093,6 +1093,41 @@ body {
 .kb-item.answer { border-left-color: #22c55e; background: rgba(34,197,94,0.05); }
 .kb-item.answer .kb-src { color: #22c55e; }
 
+/* Phase 4 · command fleet (multi-site nodes) */
+.fleet-row { padding: 0 1rem 0.8rem; }
+.fleet-agg { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.2rem; }
+.fleet-agg .chip { font-family: var(--font-mono); font-size: 0.55rem; color: var(--text-dim); border: 1px solid var(--panel-edge); border-radius: 3px; padding: 0.16rem 0.45rem; background: rgba(0,217,255,0.04); }
+.fleet-agg .chip b { color: var(--accent); font-weight: 600; }
+.fleet-nodes { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.6rem; }
+.node-card { border: 1px solid var(--panel-edge); border-radius: 6px; padding: 0.55rem 0.65rem; background: rgba(6,18,31,0.55); cursor: pointer; transition: border-color 0.25s, transform 0.25s; }
+.node-card:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--panel-edge)); transform: translateY(-2px); }
+.node-card.offline { opacity: 0.5; }
+.node-card.local { border-color: color-mix(in srgb, #22c55e 45%, var(--panel-edge)); }
+.node-head { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.45rem; }
+.node-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.node-dot.online { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.8); animation: pulse 2s infinite; }
+.node-dot.stale { background: #facc15; box-shadow: 0 0 6px rgba(250,204,21,0.7); }
+.node-dot.offline { background: var(--text-dim); }
+.node-name { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 0.62rem; letter-spacing: 0.1em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-local { font-size: 0.44rem; letter-spacing: 0.12em; color: #22c55e; border: 1px solid #22c55e; border-radius: 3px; padding: 0.06rem 0.28rem; margin-left: 0.3rem; }
+.node-plat { font-family: var(--font-display); font-size: 0.46rem; letter-spacing: 0.1em; color: var(--text-dim); white-space: nowrap; }
+.node-bars { display: flex; flex-direction: column; gap: 0.24rem; }
+.nb { display: grid; grid-template-columns: 2.2rem 1fr 2.4rem; gap: 0.4rem; align-items: center; }
+.nb-l { font-family: var(--font-display); font-size: 0.46rem; letter-spacing: 0.12em; color: var(--text-dim); }
+.nb-bar { height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--panel-edge) 55%, transparent); overflow: hidden; }
+.nb-bar div { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.6s ease; }
+.nb-bar div.warm { background: #facc15; } .nb-bar div.hot { background: var(--error); }
+.nb-v { font-family: var(--font-mono); font-size: 0.55rem; color: var(--text); text-align: right; }
+.node-foot { margin-top: 0.4rem; font-family: var(--font-mono); font-size: 0.5rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fleet-add { margin-top: 0.7rem; }
+.fleet-add summary { font-family: var(--font-display); font-size: 0.52rem; letter-spacing: 0.14em; color: var(--accent); cursor: pointer; padding: 0.3rem 0; list-style: none; }
+.fleet-add summary::-webkit-details-marker { display: none; }
+.fleet-add summary:hover { text-shadow: 0 0 8px var(--accent-glow); }
+.fleet-add-body { font-size: 0.6rem; color: var(--text-dim); line-height: 1.6; padding: 0.4rem 0; }
+.fleet-add-body code, .fleet-cmd { display: block; font-family: var(--font-mono); font-size: 0.58rem; color: var(--accent); background: rgba(0,0,0,0.4); border: 1px solid var(--panel-edge); border-radius: 4px; padding: 0.4rem 0.5rem; margin: 0.3rem 0; white-space: pre-wrap; word-break: break-all; cursor: pointer; }
+.fleet-cmd:hover { border-color: var(--accent); }
+.fleet-add-body b { color: var(--text); }
+
 /* Phase 4 · enterprise command */
 .ent-row {
   display: grid;

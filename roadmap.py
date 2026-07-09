@@ -77,13 +77,14 @@ class Roadmap:
         ]
         aud = s.get("audit")
         rbac = s.get("rbac")
+        flt = s.get("fleet")
         phase4 = [
             ("Audit trail (append-only)", lambda: aud is not None),
             ("Role-based command (commander/observer)", lambda: bool(rbac)),
             ("Multi-operator profiles", lambda: bool(rbac)),
             ("Compliance data export", lambda: aud is not None),
+            ("Multi-site fleet (node agents)", lambda: flt is not None),
             ("On-prem AI clusters", lambda: False),
-            ("Multi-site deployments", lambda: False),
         ]
         dec = s.get("decisions")
         phase5 = [

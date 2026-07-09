@@ -3383,6 +3383,100 @@ async function refreshHardware() {
 }
 refreshHardware(); setInterval(refreshHardware, 20000);
 
+/* ═══ PHASE 4 · COMMAND FLEET — multi-site node telemetry ═══ */
+
+function nodeBar(label, pct) {
+  const cls = pct >= 90 ? "hot" : pct >= 70 ? "warm" : "";
+  return `<div class="nb"><span class="nb-l">${label}</span>
+    <span class="nb-bar"><div class="${cls}" style="width:${Math.min(100, pct || 0)}%"></div></span>
+    <span class="nb-v">${pct == null ? "—" : Math.round(pct) + "%"}</span></div>`;
+}
+function humanUptime(min) {
+  if (min == null) return "—";
+  if (min < 60) return min + "m";
+  const h = Math.floor(min / 60);
+  return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+function humanSeen(sec) {
+  if (sec == null) return "—";
+  if (sec < 60) return sec + "s ago";
+  if (sec < 3600) return Math.floor(sec / 60) + "m ago";
+  return Math.floor(sec / 3600) + "h ago";
+}
+
+async function refreshFleet() {
+  try {
+    const d = await (await fetch("/api/fleet")).json();
+    const agg = d.aggregate || {};
+    const stat = $("#fleet-stat");
+    if (stat) stat.textContent = `${agg.online}/${agg.nodes} ONLINE`;
+    const aggEl = $("#fleet-agg");
+    if (aggEl) aggEl.innerHTML = [
+      ["NODES", agg.nodes], ["ONLINE", agg.online],
+      ["TOTAL CORES", agg.cpu_cores], ["TOTAL RAM", (agg.mem_total_gb || 0) + "G"],
+      ["FLEET CPU", (agg.avg_cpu || 0) + "%"],
+    ].map(([k, v]) => `<span class="chip">${k} <b>${v}</b></span>`).join("");
+    const host = $("#fleet-nodes");
+    if (host) {
+      const nodes = d.nodes || [];
+      host.innerHTML = nodes.length ? nodes.map((n, i) => `
+        <div class="node-card ${n.status} ${n.is_local ? "local" : ""}" data-idx="${i}">
+          <div class="node-head">
+            <span class="node-dot ${n.status}"></span>
+            <span class="node-name">${escapeHTML(n.name || "node")}${n.is_local ? '<span class="node-local">LOCAL</span>' : ""}</span>
+            <span class="node-plat">${escapeHTML(n.platform || "")}</span>
+          </div>
+          <div class="node-bars">
+            ${nodeBar("CPU", n.cpu)}${nodeBar("MEM", n.mem)}${nodeBar("DISK", n.disk)}
+          </div>
+          <div class="node-foot">${n.cpu_cores || "?"} cores · ${n.mem_total_gb || "?"}G RAM · GPU ${n.gpu == null ? "N/A" : Math.round(n.gpu) + "%"} · up ${humanUptime(n.uptime_min)} · ${n.status === "online" ? humanSeen(n.last_seen_sec) : "<b style='color:var(--text-dim)'>" + n.status.toUpperCase() + "</b>"}</div>
+        </div>`).join("") : '<div class="tf-empty">no nodes reporting</div>';
+      // click a node → full hardware detail
+      host.querySelectorAll(".node-card").forEach(c => c.addEventListener("click", () => {
+        const n = nodes[+c.dataset.idx]; if (!n) return;
+        const vols = (n.volumes || []).map(v => `${v.name} ${v.used_pct}% of ${v.total_gb}G`).join(" · ") || "—";
+        const per = (n.peripherals || []).map(p => p.name).join(", ") || "none reported";
+        const nets = (n.net || []).map(x => `${x.name}${x.addr ? " " + x.addr : ""}`).join(" · ") || "—";
+        openCustomModal(n.name + (n.is_local ? " · LOCAL HOST" : ""),
+          `${n.platform} · ${n.status.toUpperCase()}`, null,
+          `<div class="mb-grid">
+            <div class="mb-stat"><span class="lbl">CPU</span><span class="val">${n.cpu}% · ${n.cpu_cores} cores</span></div>
+            <div class="mb-stat"><span class="lbl">MEMORY</span><span class="val">${n.mem}% of ${n.mem_total_gb}G</span></div>
+            <div class="mb-stat"><span class="lbl">GPU</span><span class="val">${n.gpu == null ? "N/A" : Math.round(n.gpu) + "%"}</span></div>
+            <div class="mb-stat"><span class="lbl">UPTIME</span><span class="val">${humanUptime(n.uptime_min)}</span></div>
+          </div>
+          <div class="mb-list"><div class="mb-row"><b>Storage:</b> ${escapeHTML(vols)}</div>
+          <div class="mb-row"><b>Network:</b> ${escapeHTML(nets)}</div>
+          <div class="mb-row"><b>Peripherals:</b> ${escapeHTML(per)}</div></div>`);
+      }));
+    }
+  } catch (e) {}
+}
+refreshFleet(); setInterval(refreshFleet, 8000);
+
+// join instructions (token only fetches successfully on the host machine)
+(async function fleetJoinHelp() {
+  const body = $("#fleet-add-body"); if (!body) return;
+  let token = "<TOKEN>";
+  try {
+    const t = await (await fetch("/api/fleet/token")).json();
+    if (t.ok && t.token) token = t.token;
+  } catch (e) {}
+  const origin = location.origin.includes("127.0.0.1") || location.origin.includes("localhost")
+    ? "http://<THIS-LAPTOP-LAN-IP>:8765" : location.origin;
+  const cmd = `python node_agent.py --server ${origin} --token ${token} --name "My-Laptop"`;
+  body.innerHTML = `On the other machine: install Python + <b>pip install psutil</b>, copy
+    <b>node_probe.py</b> and <b>node_agent.py</b> from this project (or clone the repo), then run:
+    <div class="fleet-cmd" title="click to copy">${escapeHTML(cmd)}</div>
+    It appears here within seconds. ${origin.includes("LAN-IP") ? "Replace <b>&lt;THIS-LAPTOP-LAN-IP&gt;</b> with this machine's network IP (ipconfig / ifconfig), and make sure the server is started with <b>JARVIS_HOST=0.0.0.0</b>." : ""}
+    <br>The token is shown only on the host machine.`;
+  const cmdEl = body.querySelector(".fleet-cmd");
+  if (cmdEl) cmdEl.addEventListener("click", () => {
+    navigator.clipboard?.writeText(cmd).then(() =>
+      logEvent('<span class="tag">[fleet]</span> join command copied to clipboard')).catch(() => {});
+  });
+})();
+
 /* ═══ PHASE 5 · DECISION SUPPORT — propose · simulate · execute ═══ */
 
 let decAutonomy = false;

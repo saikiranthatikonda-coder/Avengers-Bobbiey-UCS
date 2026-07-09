@@ -5,7 +5,7 @@ from pathlib import Path
 
 from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -17,6 +17,7 @@ from audit import Audit
 from agents import build_team
 from brain import Brain
 from decisions import DecisionEngine
+from fleet import Fleet
 from google_sync import GoogleCalendar
 from hub import Hub
 from insights import InsightsEngine
@@ -159,6 +160,22 @@ async def lifespan(app: FastAPI):
     state["decisions"] = decisions
     scheduler.add_job(decisions.tick, IntervalTrigger(seconds=45),
                       max_instances=1, coalesce=True)
+
+    # Phase 4 · multi-site fleet: token + registry + this host as a node
+    state["fleet_token"] = _fleet_token()
+    from node_probe import NodeProbe
+    _self_probe = NodeProbe(name=os.getenv("JARVIS_NODE_NAME"))
+    fleet = Fleet(hub=hub, local_id=_self_probe.node_id)
+    state["fleet"] = fleet
+
+    async def fleet_self_report():
+        loop = asyncio.get_running_loop()
+        sample = await loop.run_in_executor(None, _self_probe.sample)
+        await fleet.ingest_and_notify(sample)
+    scheduler.add_job(fleet_self_report, IntervalTrigger(seconds=8),
+                      max_instances=1, coalesce=True)
+    await fleet_self_report()   # register the host immediately at boot
+
     state["roadmap"] = Roadmap(state)
 
     sysmon_task = asyncio.create_task(sysmon.run())
@@ -359,6 +376,29 @@ async def processes_endpoint():
         _gpu_cache["pct"] = await loop.run_in_executor(None, _read_gpu)
         _gpu_cache["ts"] = _t.time()
     return {"top_cpu": by_cpu, "top_mem": by_mem, "gpu": _gpu_cache["pct"]}
+
+
+# ── fleet token: env var, else a persisted generated one ─────────
+FLEET_TOKEN_FILE = ROOT / "fleet_token.txt"
+
+
+def _fleet_token() -> str:
+    tok = os.getenv("JARVIS_FLEET_TOKEN")
+    if tok:
+        return tok.strip()
+    try:
+        existing = FLEET_TOKEN_FILE.read_text(encoding="utf-8").strip()
+        if existing:
+            return existing
+    except Exception:
+        pass
+    import secrets
+    tok = secrets.token_hex(16)
+    try:
+        FLEET_TOKEN_FILE.write_text(tok, encoding="utf-8")
+    except Exception:
+        pass
+    return tok
 
 
 # ── external hardware: power · storage · network · peripherals ───
@@ -1023,6 +1063,34 @@ async def orchestrator_endpoint():
 @app.get("/api/team-memory")
 async def team_memory_endpoint():
     return state["team_memory"].snapshot()
+
+
+# ═══ PHASE 4 · MULTI-SITE FLEET ══════════════════════════════════
+
+@app.get("/api/fleet")
+async def fleet_endpoint():
+    return state["fleet"].snapshot()
+
+
+@app.post("/api/fleet/report")
+async def fleet_report(report: dict, request: Request):
+    """A node agent pushes its telemetry here. Token-gated (crosses machines)."""
+    token = request.headers.get("x-fleet-token", "")
+    if token != state.get("fleet_token"):
+        return {"ok": False, "error": "invalid fleet token"}
+    if not isinstance(report, dict) or not report.get("node_id"):
+        return {"ok": False, "error": "bad report"}
+    return await state["fleet"].ingest_and_notify(report)
+
+
+@app.get("/api/fleet/token")
+async def fleet_token(request: Request):
+    """Reveal the fleet token ONLY to a local request on the host — so the
+    operator can copy it into agents, without leaking it to remote viewers."""
+    client = (request.client.host if request.client else "")
+    if client not in ("127.0.0.1", "::1", "localhost"):
+        return {"ok": False, "error": "token is only readable from the host machine"}
+    return {"ok": True, "token": state.get("fleet_token")}
 
 
 # ═══ PHASE 5 · SUPERVISED DECISION SUPPORT ═══════════════════════
