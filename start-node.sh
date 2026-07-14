@@ -9,14 +9,14 @@ set -e
 cd "$(dirname "$0")"
 
 if [ -z "$1" ]; then
-  echo "Usage: ./start-node.sh <server-url> <token> [\"node name\"]"
-  echo "Example: ./start-node.sh http://192.168.1.20:8765 YOURTOKEN \"Studio-Mac\""
+  echo "Usage: ./start-node.sh <server-url> [\"node name\"]"
+  echo "Example: ./start-node.sh http://192.168.1.20:8765 \"Studio-Mac\""
+  echo "It will ask for the 6-char ACCESS CODE shown on the commander dashboard."
   exit 1
 fi
 
 SERVER="$1"
-TOKEN="$2"
-NODENAME="${3:-}"
+NODENAME="${2:-}"
 
 # ensure psutil is present (only dependency the agent needs)
 python3 -c "import psutil" 2>/dev/null || {
@@ -25,7 +25,7 @@ python3 -c "import psutil" 2>/dev/null || {
 }
 
 if [ -z "$NODENAME" ]; then
-  python3 node_agent.py --server "$SERVER" --token "$TOKEN"
+  python3 node_agent.py --server "$SERVER" --pair
 else
-  python3 node_agent.py --server "$SERVER" --token "$TOKEN" --name "$NODENAME"
+  python3 node_agent.py --server "$SERVER" --pair --name "$NODENAME"
 fi

@@ -26,3 +26,5 @@ decisions.json
 fleet_token.txt
 node_id.txt
 auth.json
+pair_code.txt
+node_token.txt

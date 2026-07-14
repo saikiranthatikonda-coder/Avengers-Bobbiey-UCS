@@ -35,13 +35,56 @@ for _stream in (sys.stdout, sys.stderr):
 
 from node_probe import NodeProbe
 
+# where this node caches the token it obtained by pairing (so it pairs once)
+TOKEN_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "node_token.txt")
+
+
+def _pair(server: str, code: str) -> str:
+    """Exchange the short access code for the fleet token."""
+    url = server.rstrip("/") + "/api/fleet/pair"
+    body = json.dumps({"code": code}).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=12) as r:
+        d = json.loads(r.read())
+    if not d.get("ok"):
+        raise SystemExit(f"[node-agent] pairing failed: {d.get('error', 'unknown')}")
+    print(f"[node-agent] paired with command host '{d.get('server', '?')}'")
+    return d["token"]
+
+
+def _resolve_token(args) -> str:
+    """Token from --token, else the cached token, else pair with the code."""
+    if args.token:
+        return args.token
+    if not args.pair:
+        try:
+            with open(TOKEN_CACHE, encoding="utf-8") as f:
+                cached = f.read().strip()
+            if cached:
+                return cached
+        except Exception:
+            pass
+    code = args.code or input("Enter the access code shown on the commander dashboard: ").strip()
+    token = _pair(args.server, code)
+    try:
+        with open(TOKEN_CACHE, "w", encoding="utf-8") as f:
+            f.write(token)
+    except Exception:
+        pass
+    return token
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Bobbiey UCS fleet node agent")
     ap.add_argument("--server", default=os.getenv("JARVIS_SERVER", "http://127.0.0.1:8765"),
                     help="command server base URL, e.g. http://192.168.1.20:8765")
     ap.add_argument("--token", default=os.getenv("JARVIS_FLEET_TOKEN", ""),
-                    help="fleet token (from /api/fleet/token on the host)")
+                    help="fleet token (advanced; prefer --pair with the access code)")
+    ap.add_argument("--pair", action="store_true",
+                    help="pair using the short access code from the commander dashboard")
+    ap.add_argument("--code", default=os.getenv("JARVIS_PAIR_CODE", ""),
+                    help="access code (with --pair; prompts if omitted)")
     ap.add_argument("--name", default=os.getenv("JARVIS_NODE_NAME"),
                     help="friendly node name (defaults to hostname)")
     ap.add_argument("--interval", type=float,
@@ -49,13 +92,11 @@ def main() -> int:
                     help="seconds between reports")
     args = ap.parse_args()
 
+    token = _resolve_token(args)
     url = args.server.rstrip("/") + "/api/fleet/report"
     probe = NodeProbe(name=args.name)
     print(f"[node-agent] {probe.name} ({probe.platform}) -> {url}")
     print(f"[node-agent] node id: {probe.node_id} - interval {args.interval}s")
-    if not args.token:
-        print("[node-agent] WARNING: no --token given; the host will reject reports "
-              "unless it was started with an empty JARVIS_FLEET_TOKEN.")
 
     ok_streak, fail_streak = 0, 0
     while True:

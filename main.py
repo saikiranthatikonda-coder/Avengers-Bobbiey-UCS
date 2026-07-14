@@ -186,6 +186,7 @@ async def lifespan(app: FastAPI):
 
     # Phase 4 · multi-site fleet: token + registry + this host as a node
     state["fleet_token"] = _fleet_token()
+    state["pair_code"] = _pairing_code()
     from node_probe import NodeProbe
     _self_probe = NodeProbe(name=os.getenv("JARVIS_NODE_NAME"))
     fleet = Fleet(hub=hub, local_id=_self_probe.node_id)
@@ -244,7 +245,8 @@ async def auth_gate(request: Request, call_next):
         return await _pass()
     if any(path == p or path.startswith(p) for p in PUBLIC_PATHS):
         return await _pass()
-    if path == "/api/fleet/report":          # node agents carry X-Fleet-Token
+    if path in ("/api/fleet/report", "/api/fleet/pair"):
+        # node agents authenticate with their own token / the pairing code
         return await _pass()
     if not AUTH.password_set:
         if path.startswith("/api/"):
@@ -607,8 +609,31 @@ async def geo_endpoint():
     return _geo_cache["data"]
 
 
-# ── fleet token: env var, else a persisted generated one ─────────
+# ── fleet token + human-friendly pairing code ───────────────────
 FLEET_TOKEN_FILE = ROOT / "fleet_token.txt"
+PAIRCODE_FILE = ROOT / "pair_code.txt"
+# unambiguous alphabet (no 0/O/1/I/L) so codes are easy to read + type
+_PAIR_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+
+def _new_pair_code() -> str:
+    import secrets
+    return "".join(secrets.choice(_PAIR_ALPHABET) for _ in range(6))
+
+
+def _pairing_code() -> str:
+    try:
+        c = PAIRCODE_FILE.read_text(encoding="utf-8").strip()
+        if c:
+            return c
+    except Exception:
+        pass
+    c = _new_pair_code()
+    try:
+        PAIRCODE_FILE.write_text(c, encoding="utf-8")
+    except Exception:
+        pass
+    return c
 
 
 def _fleet_token() -> str:
@@ -1320,6 +1345,52 @@ async def fleet_token(request: Request):
     if client not in ("127.0.0.1", "::1", "localhost"):
         return {"ok": False, "error": "token is only readable from the host machine"}
     return {"ok": True, "token": state.get("fleet_token")}
+
+
+@app.get("/api/fleet/paircode")
+async def fleet_paircode():
+    """The short access code shown on the commander dashboard. Only reachable
+    by an authenticated request (the auth middleware already gated remotes)."""
+    import socket as _s
+    return {"code": state.get("pair_code"), "server": _s.gethostname()}
+
+
+@app.post("/api/fleet/paircode/rotate")
+async def fleet_paircode_rotate():
+    if not _commander():
+        return _locked()
+    code = _new_pair_code()
+    state["pair_code"] = code
+    try:
+        PAIRCODE_FILE.write_text(code, encoding="utf-8")
+    except Exception:
+        pass
+    await _audit("fleet.paircode_rotate", "pairing access code rotated")
+    return {"ok": True, "code": code}
+
+
+class PairReq(BaseModel):
+    code: str
+
+
+@app.post("/api/fleet/pair")
+async def fleet_pair(req: PairReq, request: Request):
+    """A new node exchanges the short access code for the fleet token.
+    Rate-limited per IP (reuses the auth lockout) so the code can't be guessed."""
+    import socket as _s
+    ip = request.client.host if request.client else "?"
+    locked = AUTH.is_locked(ip)
+    if locked:
+        return {"ok": False, "error": f"too many attempts — locked out {locked}s"}
+    if (req.code or "").strip().upper() != str(state.get("pair_code", "")).upper():
+        AUTH.record_failure(ip)
+        await _audit("fleet.pair_failed", f"bad access code from {ip}")
+        return {"ok": False, "error": "invalid access code"}
+    AUTH.clear_failures(ip)
+    await _audit("fleet.pair", f"new node paired from {ip}")
+    await state["hub"].broadcast({"type": "log", "level": "info",
+                                  "msg": f"fleet: a new node paired from {ip}"})
+    return {"ok": True, "token": state["fleet_token"], "server": _s.gethostname()}
 
 
 # ═══ PHASE 5 · SUPERVISED DECISION SUPPORT ═══════════════════════

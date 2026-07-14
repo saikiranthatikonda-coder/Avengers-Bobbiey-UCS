@@ -9,14 +9,14 @@ setlocal
 cd /d "%~dp0"
 
 if "%~1"=="" (
-  echo Usage: start-node.cmd ^<server-url^> ^<token^> ["node name"]
-  echo Example: start-node.cmd http://192.168.1.20:8765 YOURTOKEN "Studio-Laptop"
+  echo Usage: start-node.cmd ^<server-url^> ["node name"]
+  echo Example: start-node.cmd http://192.168.1.20:8765 "Studio-Laptop"
+  echo It will ask for the 6-char ACCESS CODE shown on the commander dashboard.
   exit /b 1
 )
 
 set SERVER=%~1
-set TOKEN=%~2
-set NODENAME=%~3
+set NODENAME=%~2
 
 REM ensure psutil is present (only dependency the agent needs)
 python -c "import psutil" 2>nul
@@ -26,8 +26,8 @@ if errorlevel 1 (
 )
 
 if "%NODENAME%"=="" (
-  python node_agent.py --server %SERVER% --token %TOKEN%
+  python node_agent.py --server %SERVER% --pair
 ) else (
-  python node_agent.py --server %SERVER% --token %TOKEN% --name %NODENAME%
+  python node_agent.py --server %SERVER% --pair --name %NODENAME%
 )
 endlocal
