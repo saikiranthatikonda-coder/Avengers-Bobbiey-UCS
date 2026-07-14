@@ -440,8 +440,8 @@ function renderCities() {
       <text x="${x + 9}" y="${y + 4}" class="city-label">${c.name}</text>`;
     host.appendChild(g);
   }
-  const nodes = document.getElementById("map-nodes");
-  if (nodes) nodes.textContent = `${CITIES.length} NODES`;
+  // NOTE: #map-nodes badge is owned by the live fleet (refreshFleet), not the
+  // static city list — don't overwrite it here.
 }
 function renderArcs() {
   const arcs = document.getElementById("map-arcs"); if (!arcs) return;
@@ -617,6 +617,10 @@ renderRealWorldMap();
 // ── weather ──────────────────────────────────────────
 let userLat = null, userLon = null;
 let weatherCity = "HYDERABAD";
+// module-scope live-data stashes — declared HERE (early) so functions called
+// during load (refreshWeather via initGeo, etc.) never hit a temporal-dead-zone
+// ReferenceError, which would halt all remaining top-level init.
+let lastAgenda = null, lastThreat = null, lastMemorySnap = null, lastWeatherOk = null;
 
 function setWeatherState(state, message) {
   const card = $("#weather-card"); if (!card) return;
@@ -2615,7 +2619,6 @@ $("#btn-mem-speak")?.addEventListener("click", async () => {
    Live Operations, personal Notes (disk-persisted), Service Grid, and the
    orb-flank readouts all bind to real endpoints/telemetry. */
 
-let lastAgenda = null, lastThreat = null, lastMemorySnap = null, lastWeatherOk = null;
 
 function updateLiveOps() {
   const set = (id, txt, barId, pct) => {
@@ -3444,12 +3447,39 @@ function humanSeen(sec) {
   return Math.floor(sec / 3600) + "h ago";
 }
 
+// plot the live fleet on the world map (real projected coordinates)
+function renderFleetOnMap(nodes) {
+  const host = document.getElementById("map-fleet");
+  if (!host || typeof projectCity !== "function") return;
+  host.innerHTML = "";
+  for (const n of nodes) {
+    if (n.lat == null || n.lon == null) continue;
+    const xy = projectCity({ lat: n.lat, lon: n.lon });
+    const x = xy[0], y = xy[1];
+    if (!isFinite(x) || !isFinite(y)) continue;
+    const col = n.status === "online" ? "#22c55e" : n.status === "stale" ? "#facc15" : "#7e96b3";
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("class", "fleet-marker" + (n.is_local ? " local" : ""));
+    g.innerHTML = `
+      <circle cx="${x}" cy="${y}" r="5" fill="none" stroke="${col}" stroke-width="1" opacity="0.5">
+        ${n.status === "online" ? '<animate attributeName="r" values="4;10;4" dur="2.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.6;0;0.6" dur="2.5s" repeatCount="indefinite"/>' : ""}
+      </circle>
+      <circle cx="${x}" cy="${y}" r="${n.is_local ? 4 : 3}" fill="${col}"/>
+      <text x="${x + 8}" y="${y + 3}" fill="${col}" font-family="Orbitron" font-size="8" opacity="0.9">${(n.name || "").slice(0, 14).toUpperCase()}</text>`;
+    host.appendChild(g);
+  }
+}
+
 async function refreshFleet() {
   try {
     const d = await (await fetch("/api/fleet")).json();
+    try { renderFleetOnMap(d.nodes || []); } catch (e) {}
     const agg = d.aggregate || {};
     const stat = $("#fleet-stat");
     if (stat) stat.textContent = `${agg.online}/${agg.nodes} ONLINE`;
+    // the world-map badge reflects the REAL fleet, not a placeholder count
+    const mapNodes = $("#map-nodes");
+    if (mapNodes) mapNodes.textContent = `${agg.nodes} NODE${agg.nodes === 1 ? "" : "S"}`;
     const aggEl = $("#fleet-agg");
     if (aggEl) aggEl.innerHTML = [
       ["NODES", agg.nodes], ["ONLINE", agg.online],

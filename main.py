@@ -1323,7 +1323,25 @@ async def team_memory_endpoint():
 
 @app.get("/api/fleet")
 async def fleet_endpoint():
-    return state["fleet"].snapshot()
+    snap = state["fleet"].snapshot()
+    # geo-locate nodes for the maps: the fleet site (host public-IP location),
+    # with a small deterministic per-node offset so co-located nodes are visible
+    geo = _geo_cache["data"]
+    if geo is None:
+        geo = await _resolve_geo()
+        _geo_cache["data"] = geo
+        import time as _t
+        _geo_cache["ts"] = _t.time()
+    base_lat = geo.get("lat") or 17.385
+    base_lon = geo.get("lon") or 78.4867
+    for n in snap.get("nodes", []):
+        h = sum(ord(c) for c in (n.get("node_id") or "x"))
+        n["lat"] = round(base_lat + ((h % 21) - 10) * 0.013, 4)
+        n["lon"] = round(base_lon + (((h // 21) % 21) - 10) * 0.013, 4)
+        n["site"] = geo.get("city")
+    snap["site"] = {"city": geo.get("city"), "region": geo.get("region"),
+                    "country": geo.get("country"), "lat": base_lat, "lon": base_lon}
+    return snap
 
 
 @app.post("/api/fleet/report")
