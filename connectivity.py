@@ -99,6 +99,47 @@ async def bluetooth_info() -> dict:
         return {"count": 0, "devices": []}
 
 
+# ── Active uplink (the REAL primary connection, wifi or wired) ─────
+def _primary_ip() -> str | None:
+    """Outbound IP via the default route — identifies the real uplink NIC."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except Exception:
+        return None
+    finally:
+        s.close()
+
+
+def active_link() -> dict | None:
+    """The interface that actually carries traffic to the internet, with its
+    link type and speed — so the dashboard shows Ethernet when WiFi is down."""
+    import socket
+    import psutil
+    pip = _primary_ip()
+    if not pip:
+        return None
+    try:
+        stats = psutil.net_if_stats()
+        for name, alist in psutil.net_if_addrs().items():
+            for a in alist:
+                if a.family == socket.AF_INET and a.address == pip:
+                    st = stats.get(name)
+                    low = name.lower()
+                    is_wifi = any(k in low for k in ("wi-fi", "wifi", "wireless", "wlan"))
+                    return {
+                        "name": name, "addr": a.address,
+                        "type": "wifi" if is_wifi else "ethernet",
+                        "speed_mbps": (st.speed if st else 0) or 0,
+                        "up": bool(st.isup) if st else True,
+                    }
+    except Exception:
+        pass
+    return None
+
+
 # ── Ping ──────────────────────────────────────────────────────────
 async def ping_ms(url: str = "https://www.google.com/generate_204") -> int:
     t = time.time()
@@ -112,4 +153,5 @@ async def ping_ms(url: str = "https://www.google.com/generate_204") -> int:
 
 async def gather() -> dict:
     wifi, ble, ping = await asyncio.gather(wifi_info(), bluetooth_info(), ping_ms())
-    return {"wifi": wifi, "bluetooth": ble, "ping_ms": ping, "os": OS}
+    return {"wifi": wifi, "bluetooth": ble, "ping_ms": ping, "os": OS,
+            "link": active_link()}

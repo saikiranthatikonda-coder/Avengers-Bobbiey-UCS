@@ -672,11 +672,20 @@ async function refreshConnectivity() {
   try {
     const r = await fetch("/api/connectivity"); const d = await r.json();
     const wifi = d.wifi || {};
+    const link = d.link || null;
     const wifiRow = $("#conn-wifi"); const wifiVal = $("#wifi-val");
-    if (wifi.connected) {
+    const linkLabel = $("#conn-link-label");
+    if (wifi.connected) {                          // on WiFi
+      if (linkLabel) linkLabel.textContent = "WIFI";
       wifiVal.textContent = `${wifi.ssid || "WIFI"} · ${wifi.signal || "—"}`;
       wifiRow.classList.remove("bad"); wifiRow.classList.add("ok");
-    } else {
+    } else if (link && link.up) {                  // WiFi down but wired/other uplink is live
+      if (linkLabel) linkLabel.textContent = link.type === "wifi" ? "WIFI" : "ETHERNET";
+      const spd = link.speed_mbps ? ` · ${link.speed_mbps} Mbps` : "";
+      wifiVal.textContent = `${link.name.slice(0, 14)}${spd}`;
+      wifiRow.classList.remove("bad"); wifiRow.classList.add("ok");
+    } else {                                        // genuinely offline
+      if (linkLabel) linkLabel.textContent = "LINK";
       wifiVal.textContent = "offline";
       wifiRow.classList.remove("ok"); wifiRow.classList.add("bad");
     }
@@ -694,42 +703,63 @@ async function refreshConnectivity() {
     else if (p < 300) { $("#ping-val").textContent = `${p} ms`; pingRow.classList.add("warn"); pingRow.classList.remove("ok","bad"); }
     else              { $("#ping-val").textContent = `${p} ms`; pingRow.classList.add("bad");  pingRow.classList.remove("ok","warn"); }
 
-    // also keep tool-card network stat in sync
+    // wifi link speed takes precedence in the network tool-card when present
     const tcNet = $("#tc-net");
-    if (tcNet && wifi.connected) {
-      const speed = wifi.speed_rx_mbps ? `${Math.round(parseFloat(wifi.speed_rx_mbps))} Mbps` : `${p > 0 ? p : "—"} ms`;
-      tcNet.textContent = `${speed} · ${wifi.ssid || "WIFI"}`;
+    if (tcNet && wifi.connected && wifi.speed_rx_mbps) {
+      window._wifiSpeedShown = true;
+      tcNet.textContent = `${Math.round(parseFloat(wifi.speed_rx_mbps))} Mbps · ${wifi.ssid || "WIFI"}`;
+    } else {
+      window._wifiSpeedShown = false;   // fall back to live throughput from metrics
     }
   } catch (e) {}
 }
 refreshConnectivity(); setInterval(refreshConnectivity, 30000);
 
-// ── battery ──────────────────────────────────────────
+// ── battery (real, from server psutil — browser getBattery is dead in Chrome) ─
 async function refreshBattery() {
   try {
-    if (!navigator.getBattery) { $("#bat-val").textContent = "n/a"; return; }
-    const b = await navigator.getBattery();
-    const update = () => {
-      const pct = Math.round(b.level * 100);
-      const sym = b.charging ? "⚡" : "";
-      $("#bat-val").textContent = `${pct}% ${sym}`.trim();
-      const row = $("#conn-bat");
-      row.classList.remove("ok","warn","bad");
-      if (pct > 30 || b.charging) row.classList.add("ok");
-      else if (pct > 15) row.classList.add("warn");
-      else row.classList.add("bad");
-    };
-    update();
-    b.addEventListener("levelchange", update);
-    b.addEventListener("chargingchange", update);
+    const d = await (await fetch("/api/hardware")).json();
+    const p = d.power || {};
+    const row = $("#conn-bat"); const val = $("#bat-val");
+    if (!row || !val) return;
+    row.classList.remove("ok", "warn", "bad");
+    if (!p.present) { val.textContent = "AC POWER ⚡"; row.classList.add("ok"); return; }
+    const pct = p.percent;
+    val.textContent = `${pct}%${p.plugged ? " ⚡" : ""}`;
+    if (pct > 30 || p.plugged) row.classList.add("ok");
+    else if (pct > 15) row.classList.add("warn");
+    else row.classList.add("bad");
   } catch (e) {}
 }
-refreshBattery();
+refreshBattery(); setInterval(refreshBattery, 30000);
 
-// ── geolocation + reverse geocode ────────────────────
+// ── location: real IP geolocation baseline, refined by precise GPS ───
 function updateLocation(text, coords) {
   if (text) $("#location-value").textContent = text;
   if (coords) $("#location-coords").textContent = coords;
+}
+function fmtCoords(lat, lon) {
+  return `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"} · ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? "E" : "W"}`;
+}
+async function initGeo() {
+  try {
+    const g = await (await fetch("/api/geo")).json();
+    if (g && g.lat != null) {
+      userLat = g.lat; userLon = g.lon;
+      window._geo = g;
+      const parts = [g.city, g.region, g.country].filter(Boolean);
+      if (parts.length) updateLocation(parts.map(s => String(s).toUpperCase()).join(" · "));
+      updateLocation(null, fmtCoords(g.lat, g.lon));
+      if (g.city) {
+        weatherCity = String(g.city).toUpperCase();
+        const wc = $("#weather-city"); if (wc) wc.textContent = `${weatherCity} · WEATHER`;
+      }
+      const isp = $("#isp-value");
+      if (isp) isp.textContent = g.isp ? `${g.isp}${g.ip ? " · " + g.ip : ""}`.slice(0, 38) : "—";
+      refreshWeather(true);
+    }
+  } catch (e) {}
+  detectLocation();   // refine with precise browser GPS if the user grants it
 }
 function detectLocation() {
   if (!navigator.geolocation) return;
@@ -754,7 +784,7 @@ function detectLocation() {
     console.warn("geolocation denied/unavailable:", err && err.message);
   }, { timeout: 8000, maximumAge: 60_000 });
 }
-detectLocation();
+initGeo();
 
 // ── agenda + inbox ───────────────────────────────────
 function fmtTime(ts) { return new Date(ts * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }); }
@@ -2104,18 +2134,21 @@ $("#gcal-btn")?.addEventListener("click", async () => {
 /* ═══ SESSION TRACKING (vision) ══════════════════════ */
 
 let sessionStart = null;
-setInterval(() => {
+function updateSessionVal() {
   const el = $("#session-val"); if (!el) return;
   const present = Presence.state === "active" || Presence.state === "idle";
   if (present && !sessionStart) sessionStart = Date.now();
   if (!present) sessionStart = null;
-  if (sessionStart) {
+  if (sessionStart) {                       // live camera session
     const m = Math.floor((Date.now() - sessionStart) / 60000);
-    el.textContent = m >= 60 ? `ACTIVE ${Math.floor(m / 60)}H ${m % 60}M` : `ACTIVE ${m}M`;
-  } else {
-    el.textContent = "—";
+    el.textContent = m >= 60 ? `LIVE ${Math.floor(m / 60)}H ${m % 60}M` : `LIVE ${m}M`;
+    return;
   }
-}, 15000);
+  // camera off → show today's REAL tracked presence from operator memory
+  const mins = (lastMemorySnap && lastMemorySnap.active_minutes_today) || 0;
+  el.textContent = mins ? `TODAY ${Math.floor(mins / 60)}H ${mins % 60}M` : "STANDBY";
+}
+setInterval(updateSessionVal, 5000); updateSessionVal();
 
 /* ═══ PROCESS MONITOR + NETWORK TRAFFIC ══════════════ */
 
@@ -2803,6 +2836,13 @@ function handle(msg) {
       $("#m-disk-fill").style.width = msg.disk + "%";
       $("#m-up").textContent = msg.net_up;
       $("#m-down").textContent = msg.net_down;
+      // network tool-card: real live throughput (was a hardcoded placeholder)
+      try {
+        const tot = Math.round(msg.net_up + msg.net_down);
+        const tc = $("#tc-net");
+        if (tc && !window._wifiSpeedShown)
+          tc.textContent = `${tot} KB/s · ${Math.round(msg.net_down)}↓ ${Math.round(msg.net_up)}↑`;
+      } catch (e) {}
       pushChart(cpuChart, msg.cpu); pushChart(memChart, msg.mem);
       updateResource(msg.cpu, msg.mem, msg.disk);
       try { updateAiopsTele(msg); } catch (e) {}

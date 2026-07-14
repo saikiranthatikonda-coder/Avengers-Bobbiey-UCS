@@ -568,6 +568,45 @@ async def processes_endpoint():
     return {"top_cpu": by_cpu, "top_mem": by_mem, "gpu": _gpu_cache["pct"]}
 
 
+# ── real geolocation (public-IP based, cached long) ─────────────
+_geo_cache = {"ts": 0.0, "data": None}
+
+
+async def _resolve_geo() -> dict:
+    """Approximate location from the host's public IP — real city/region/ISP
+    and coordinates. Falls back to the configured city if the lookup fails."""
+    import httpx as _httpx
+    fallback = {"city": "Hyderabad", "region": "Telangana", "country": "India",
+                "lat": 17.385, "lon": 78.4867, "isp": None, "ip": None,
+                "source": "default"}
+    for url, mapper in (
+        ("http://ip-api.com/json/?fields=status,country,regionName,city,lat,lon,isp,query",
+         lambda d: {"city": d.get("city"), "region": d.get("regionName"),
+                    "country": d.get("country"), "lat": d.get("lat"),
+                    "lon": d.get("lon"), "isp": d.get("isp"), "ip": d.get("query")}
+         if d.get("status") == "success" else None),
+    ):
+        try:
+            async with _httpx.AsyncClient(timeout=6, trust_env=False) as c:
+                r = await c.get(url)
+                r.raise_for_status()
+                m = mapper(r.json())
+                if m and m.get("lat") is not None:
+                    return {**m, "source": "ip-geo"}
+        except Exception:
+            continue
+    return fallback
+
+
+@app.get("/api/geo")
+async def geo_endpoint():
+    import time as _t
+    if _geo_cache["data"] is None or _t.time() - _geo_cache["ts"] > 3600:
+        _geo_cache["data"] = await _resolve_geo()
+        _geo_cache["ts"] = _t.time()
+    return _geo_cache["data"]
+
+
 # ── fleet token: env var, else a persisted generated one ─────────
 FLEET_TOKEN_FILE = ROOT / "fleet_token.txt"
 
