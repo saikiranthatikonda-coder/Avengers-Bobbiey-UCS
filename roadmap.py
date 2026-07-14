@@ -84,6 +84,8 @@ class Roadmap:
             ("Multi-operator profiles", lambda: bool(rbac)),
             ("Compliance data export", lambda: aud is not None),
             ("Multi-site fleet (node agents)", lambda: flt is not None),
+            ("Authenticated remote access (login + API tokens)",
+             lambda: s.get("auth") is not None),
             ("On-prem AI clusters", lambda: False),
         ]
         dec = s.get("decisions")

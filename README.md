@@ -52,6 +52,7 @@ Bobbiey UCS turns a passive dashboard into an **active operations brain**:
 - 🎥 **Vision operations** _(Phase 3)_ — **multi-camera** enumeration with hot-switching, **3×3 zone monitoring** with away-intrusion alerts naming the sector, and camera-tagged AI observations. Frames never leave the machine.
 - 🏢 **Enterprise command** _(Phase 4)_ — **append-only audit trail** of every command action, **commander/observer roles enforced server-side** (optional PIN), operator profiles, and one-click **compliance data export**.
 - 🛰️ **Command Fleet** _(Phase 4)_ — turn **every machine you own** into a live node: a tiny agent (`pip install psutil`, nothing else) reports each laptop's real CPU/RAM/disk/network/GPU/hardware/peripherals to one command view with a fleet overview, per-node detail, and token-gated ingestion. See [`FLEET.md`](FLEET.md).
+- 🔐 **Authenticated remote access** _(Phase 4)_ — the perimeter that makes `0.0.0.0` exposure safe: the loopback console is always trusted, remote access is **denied by default** until you set a password, then remote operators log in (PBKDF2 + HMAC-signed HttpOnly sessions) and scripts use **API bearer tokens** — with per-IP lockout, revocable sessions/tokens, and full audit logging. Stdlib-only crypto, no dependencies.
 - ⚖️ **Decision support** _(Phase 5)_ — the platform **proposes** actions from real conditions, **simulates** their impact from live numbers, and **executes only under human authority** — with an opt-in supervised-autonomy whitelist, fully audited.
 - 📈 **Product Evolution panel** — the public roadmap rendered live inside the product, every feature verified against the running system with auto-versioning.
 
@@ -178,7 +179,7 @@ The roadmap is **live inside the product** — the Product Evolution panel probe
 - **Phase 1 — AI Command Dashboard** ✅ **SHIPPED** — telemetry, agents, voice, vision, real Google Calendar + Gmail, local AI, threat intelligence
 - **Phase 2 — Multi-Agent Intelligence** ✅ **SHIPPED** — orchestration engine, delegation, shared blackboard, priority resolution, agent consults, cross-agent team memory
 - **Phase 3 — Computer Vision Operations** ✅ **SHIPPED** — multi-camera hot-switching, 3×3 zone monitoring with away-intrusion alerts, activity analytics
-- **Phase 4 — Enterprise Command Platform** 🔨 **IN DEVELOPMENT** — live: audit trail, commander/observer roles, operator profiles, compliance export, **multi-site fleet** (node agents) · next: on-prem AI clusters
+- **Phase 4 — Enterprise Command Platform** 🔨 **IN DEVELOPMENT** — live: audit trail, commander/observer roles, operator profiles, compliance export, **multi-site fleet** (node agents), **authenticated remote access** (login + API tokens) · next: on-prem AI clusters
 - **Phase 5 — Autonomous Decision Support** 🔨 **IN DEVELOPMENT** — live: propose → simulate → approve → execute with supervised autonomy · next: fleet-wide operations
 
 The commercial plan lives in [`SAAS_PLAN.md`](SAAS_PLAN.md).
@@ -203,6 +204,7 @@ Avengers-Bobbiey-UCS/
 ├─ roadmap.py · knowledge.py · productivity.py
 ├─ audit.py             Phase 4 · append-only enterprise audit trail
 ├─ fleet.py · node_probe.py · node_agent.py   Phase 4 · multi-site fleet
+├─ auth.py              Phase 4 · authenticated remote access (login + tokens)
 ├─ decisions.py         Phase 5 · supervised decision engine
 ├─ insights.py · threats.py · agenda.py · google_sync.py · memory.py
 ├─ services.py · weather.py · connectivity.py · voice.py · tts.py · browser.py

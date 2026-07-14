@@ -3542,4 +3542,107 @@ $("#btn-autonomy")?.addEventListener("click", async () => {
   refreshDecisions();
 });
 
+/* ═══ PHASE 4 · REMOTE ACCESS & AUTH — the perimeter panel ═══ */
+
+async function refreshSecurity() {
+  try {
+    const [st, panel] = await Promise.all([
+      (await fetch("/api/auth/status")).json(),
+      (await fetch("/api/auth/panel")).json(),
+    ]);
+    const lanExposed = st.binding !== "127.0.0.1";
+    const state = $("#sec-state");
+    if (state) state.textContent = lanExposed
+      ? (st.password_set ? "LAN · SECURED" : "LAN · REMOTE DISABLED")
+      : "LOCAL ONLY";
+    const status = $("#sec-status");
+    if (status) {
+      status.innerHTML = [
+        [`BINDING <b>${escapeHTML(st.binding)}</b>`, lanExposed ? "warn" : "ok"],
+        [st.password_set ? "PASSWORD <b>ARMED</b>" : "PASSWORD <b>NOT SET</b>",
+         st.password_set ? "ok" : (lanExposed ? "warn" : "")],
+        [`SESSIONS <b>${(panel.sessions || []).length}</b>`, ""],
+        [`TOKENS <b>${(panel.tokens || []).length}</b>`, ""],
+        [lanExposed && !st.password_set
+          ? "REMOTE <b>BLOCKED UNTIL ARMED</b>" : `REMOTE <b>${lanExposed ? "LOGIN REQUIRED" : "OFF"}</b>`,
+         lanExposed && !st.password_set ? "err" : "ok"],
+      ].map(([t, c]) => `<span class="sec-chip ${c}">${t}</span>`).join("");
+    }
+    const tn = $("#sec-tok-n"); if (tn) tn.textContent = (panel.tokens || []).length;
+    const toks = $("#sec-tokens");
+    if (toks) {
+      toks.innerHTML = (panel.tokens || []).map(t => `
+        <div class="sec-row">
+          <span class="nm">🔑 ${escapeHTML(t.label)}</span>
+          <span class="meta">${escapeHTML(t.prefix)}…</span>
+          <button class="sec-revoke" data-prefix="${escapeHTML(t.prefix)}" title="revoke token">✕</button>
+        </div>`).join("");
+      toks.querySelectorAll(".sec-revoke").forEach(b => b.addEventListener("click", async () => {
+        await fetch("/api/auth/revoke", { method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ prefix: b.dataset.prefix }) }).catch(() => {});
+        refreshSecurity();
+      }));
+    }
+    const sn = $("#sec-ses-n"); if (sn) sn.textContent = (panel.sessions || []).length;
+    const ses = $("#sec-sessions");
+    if (ses) {
+      ses.innerHTML = (panel.sessions || []).length ? panel.sessions.map(s => `
+        <div class="sec-row">
+          <span class="nm">◉ ${escapeHTML(s.ip)}</span>
+          <span class="meta">${s.age_min}m · ${escapeHTML((s.ua || "").split(" ")[0].slice(0, 18))}</span>
+          <button class="sec-revoke" data-sid="${escapeHTML(s.sid)}" title="revoke session">✕</button>
+        </div>`).join("") : '<div class="tf-empty">no remote sessions</div>';
+      ses.querySelectorAll(".sec-revoke").forEach(b => b.addEventListener("click", async () => {
+        await fetch("/api/auth/revoke", { method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sid: b.dataset.sid }) }).catch(() => {});
+        refreshSecurity();
+      }));
+    }
+    // off-host: setting password / minting tokens is disabled by the server
+    const onHost = panel.on_host !== false;
+    ["#sec-pw", "#btn-sec-pw", "#sec-tok-label"].forEach(sel => {
+      const el = $(sel); if (el) el.disabled = !onHost;
+    });
+    if (!onHost) {
+      const pw = $("#sec-pw"); if (pw) pw.placeholder = "password changes: host console only";
+    }
+  } catch (e) {}
+}
+refreshSecurity(); setInterval(refreshSecurity, 60000);
+
+$("#sec-pw-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pw = $("#sec-pw").value;
+  if (pw.length < 8) { logEvent('<span class="tag">[auth]</span> password must be 8+ characters', "warn"); return; }
+  try {
+    const d = await (await fetch("/api/auth/password", { method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password: pw }) })).json();
+    if (d.ok) { $("#sec-pw").value = ""; logEvent('<span class="tag">[auth]</span> remote access armed — password set'); }
+    else if (d.error) logEvent(`<span class="tag">[auth]</span> ${escapeHTML(d.error)}`, "warn");
+  } catch (err) {}
+  refreshSecurity();
+});
+
+$("#sec-tok-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const label = $("#sec-tok-label").value.trim() || "token";
+  try {
+    const d = await (await fetch("/api/auth/token", { method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label }) })).json();
+    const once = $("#sec-token-once");
+    if (d.ok && d.token && once) {
+      once.hidden = false;
+      once.innerHTML = `${escapeHTML(d.token)}<small>COPY NOW — SHOWN ONLY ONCE · CLICK TO COPY</small>`;
+      once.onclick = () => navigator.clipboard?.writeText(d.token).then(() =>
+        logEvent('<span class="tag">[auth]</span> token copied to clipboard')).catch(() => {});
+      $("#sec-tok-label").value = "";
+    } else if (d.error) logEvent(`<span class="tag">[auth]</span> ${escapeHTML(d.error)}`, "warn");
+  } catch (err) {}
+  refreshSecurity();
+});
+
 connect();

@@ -4,7 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
+  <link rel="stylesheet" href="/static/style.css?v=3.6" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -1115,6 +1116,28 @@
       <div class="dec-done" id="dec-done"><div class="tf-empty">nothing executed yet</div></div>
     </div>
 
+    <div class="bs-card" id="sec-card">
+      <div class="bs-head">
+        <div class="bs-title">REMOTE ACCESS &amp; AUTH</div>
+        <div class="bs-sub">PERIMETER · <span id="sec-state">—</span></div>
+      </div>
+      <div class="sec-status" id="sec-status"></div>
+      <div class="intel-divider">ACCESS PASSWORD · HOST CONSOLE ONLY</div>
+      <form class="mem-add-form" id="sec-pw-form">
+        <input type="password" id="sec-pw" placeholder="new access password (8+ chars)…" maxlength="64" autocomplete="new-password"/>
+        <button type="submit" class="cmd-btn" id="btn-sec-pw">ARM</button>
+      </form>
+      <div class="intel-divider">API TOKENS · <span id="sec-tok-n">0</span> ACTIVE</div>
+      <form class="mem-add-form" id="sec-tok-form">
+        <input type="text" id="sec-tok-label" placeholder="token label (e.g. phone, script)…" maxlength="32" autocomplete="off"/>
+        <button type="submit" class="cmd-btn">MINT</button>
+      </form>
+      <div class="sec-token-once" id="sec-token-once" hidden></div>
+      <div class="sec-list" id="sec-tokens"></div>
+      <div class="intel-divider">REMOTE SESSIONS · <span id="sec-ses-n">0</span> OPEN</div>
+      <div class="sec-list" id="sec-sessions"><div class="tf-empty">no remote sessions</div></div>
+    </div>
+
   </section>
 
   <!-- ═══ MAP ROW ═══════════════════════════════════════ -->
@@ -1255,6 +1278,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=3.6"></script>
 </body>
 </html>

@@ -82,9 +82,12 @@ stays live.
 - The report endpoint is **token-gated** (`X-Fleet-Token`). Rotate the token by
   editing `fleet_token.txt` (or `JARVIS_FLEET_TOKEN`) and restarting.
 - The token is only served to **localhost** on the host, never to remote viewers.
-- The dashboard itself has **no login yet** — on `0.0.0.0` anyone on the network
-  can view/command it. Keep it to a trusted LAN, or use a VPN, until the
-  authenticated-remote-access milestone lands.
+- The dashboard is protected by **authenticated remote access**: the loopback
+  console is always trusted, but remote requests are **denied by default** until
+  you set an access password (REMOTE ACCESS & AUTH panel, host console only).
+  Remote operators then log in at `/login` (HMAC-signed, HttpOnly, 12 h sessions);
+  scripts use API bearer tokens. 5 failed logins → 5-minute IP lockout. See the
+  security panel in the dashboard.
 - Nodes push **only telemetry** — no remote code execution, no file access.
 
 ---

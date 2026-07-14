@@ -6,7 +6,7 @@ from pathlib import Path
 from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -14,6 +14,7 @@ import browser
 import connectivity
 from agenda import Agenda
 from audit import Audit
+from auth import SESSION_TTL, AuthManager
 from agents import build_team
 from brain import Brain
 from decisions import DecisionEngine
@@ -42,6 +43,27 @@ ROOT = Path(__file__).parent
 STATIC = ROOT / "static"
 
 state: dict = {}
+
+# Phase 4 · authenticated remote access — the perimeter for 0.0.0.0 exposure.
+AUTH = AuthManager()
+
+LOOPBACK = ("127.0.0.1", "::1", "localhost")
+
+# paths a remote client may reach WITHOUT a session (login surface + public
+# marketing page; static assets are needed by the login page itself)
+PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/status",
+                "/static/", "/landing", "/api/waitlist", "/favicon.ico")
+
+
+def _is_loopback(host: str | None) -> bool:
+    return (host or "") in LOOPBACK
+
+
+def _authed(request: Request) -> bool:
+    hdr = request.headers.get("authorization", "")
+    if hdr.startswith("Bearer ") and AUTH.verify_api_token(hdr[7:].strip()):
+        return True
+    return AUTH.verify_session(request.cookies.get("bucs_session", ""))
 
 
 @asynccontextmanager
@@ -147,6 +169,7 @@ async def lifespan(app: FastAPI):
         "knowledge": knowledge, "team_memory": team_memory,
     })
     # Phase 4 · enterprise: audit trail + role-based command session
+    state["auth"] = AUTH
     state["audit"] = Audit(hub=hub)
     state["rbac"] = {"role": "commander", "operator": _load_operators()[0]["name"]}
     await state["audit"].log("system.start", f"platform online — brain {mode}",
@@ -201,14 +224,181 @@ app = FastAPI(lifespan=lifespan, title="JARVIS")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
+@app.middleware("http")
+async def auth_gate(request: Request, call_next):
+    """The remote-access perimeter. Loopback (the host console) is always
+    trusted; remote requests need a login session or an API bearer token.
+    With no password set, remote access is fully DISABLED (secure default)."""
+    client = request.client.host if request.client else ""
+    path = request.url.path
+
+    async def _pass():
+        resp = await call_next(request)
+        # dashboard + assets must always revalidate — stale cached app.js/css
+        # after an update breaks new panels silently
+        if path == "/" or path == "/login" or path.startswith("/static/"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+    if _is_loopback(client):
+        return await _pass()
+    if any(path == p or path.startswith(p) for p in PUBLIC_PATHS):
+        return await _pass()
+    if path == "/api/fleet/report":          # node agents carry X-Fleet-Token
+        return await _pass()
+    if not AUTH.password_set:
+        if path.startswith("/api/"):
+            return JSONResponse({"ok": False, "error":
+                                 "remote access disabled — set an access password "
+                                 "on the host machine (Remote Access panel)"},
+                                status_code=403)
+        return RedirectResponse("/login")
+    if _authed(request):
+        return await _pass()
+    if path.startswith("/api/"):
+        return JSONResponse({"ok": False, "error": "authentication required"},
+                            status_code=401)
+    return RedirectResponse("/login")
+
+
 @app.get("/")
 async def root():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/login")
+async def login_page():
+    return FileResponse(STATIC / "login.html")
+
+
 @app.get("/landing")
 async def landing():
     return FileResponse(STATIC / "landing.html")
+
+
+# ═══ PHASE 4 · AUTHENTICATED REMOTE ACCESS ═══════════════════════
+
+class LoginReq(BaseModel):
+    password: str
+
+
+@app.post("/api/auth/login")
+async def auth_login(req: LoginReq, request: Request):
+    ip = request.client.host if request.client else "?"
+    if not AUTH.password_set:
+        return {"ok": False, "error": "remote access disabled — no password set on the host"}
+    locked = AUTH.is_locked(ip)
+    if locked:
+        return {"ok": False, "error": f"locked out — retry in {locked}s"}
+    if not AUTH.verify_password(req.password):
+        n = AUTH.record_failure(ip)
+        await _audit("auth.login_failed", f"from {ip} (attempt {n})")
+        if n >= 5:
+            await state["hub"].broadcast({
+                "type": "alert", "severity": "warning",
+                "title": f"Repeated failed logins from {ip}",
+                "detail": f"{n} failed remote login attempts — source locked out.",
+                "source": "auth · perimeter",
+                "action": "Verify who is probing the command center.",
+            })
+        return {"ok": False, "error": "incorrect password"}
+    AUTH.clear_failures(ip)
+    cookie = AUTH.create_session(ip, request.headers.get("user-agent", ""))
+    await _audit("auth.login", f"remote session opened from {ip}")
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie("bucs_session", cookie, max_age=SESSION_TTL,
+                    httponly=True, samesite="lax", path="/")
+    return resp
+
+
+@app.post("/api/auth/logout")
+async def auth_logout(request: Request):
+    sid = (request.cookies.get("bucs_session", "") or "").split(".")[0]
+    if sid:
+        AUTH.revoke_session(sid)
+        await _audit("auth.logout", "remote session closed")
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("bucs_session", path="/")
+    return resp
+
+
+@app.get("/api/auth/status")
+async def auth_status(request: Request):
+    client = request.client.host if request.client else ""
+    local = _is_loopback(client)
+    return {
+        "password_set": AUTH.password_set,
+        "remote": not local,
+        "authenticated": local or _authed(request),
+        "binding": os.getenv("JARVIS_HOST", "127.0.0.1"),
+    }
+
+
+@app.get("/api/auth/panel")
+async def auth_panel(request: Request):
+    client = request.client.host if request.client else ""
+    return {**AUTH.snapshot(),
+            "binding": os.getenv("JARVIS_HOST", "127.0.0.1"),
+            "on_host": _is_loopback(client)}
+
+
+class PasswordReq(BaseModel):
+    password: str
+
+
+@app.post("/api/auth/password")
+async def auth_set_password(req: PasswordReq, request: Request):
+    """Set/change the remote-access password — host console + commander only."""
+    client = request.client.host if request.client else ""
+    if not _is_loopback(client):
+        return {"ok": False, "error": "password can only be set from the host machine"}
+    if not _commander():
+        return _locked()
+    if not AUTH.set_password(req.password):
+        return {"ok": False, "error": "password must be at least 8 characters"}
+    await _audit("auth.password_set", "remote-access password updated")
+    await state["hub"].broadcast({"type": "log", "level": "info",
+                                  "msg": "remote access armed — password set; remote logins now possible"})
+    return {"ok": True}
+
+
+class TokenReq(BaseModel):
+    label: str = "token"
+
+
+@app.post("/api/auth/token")
+async def auth_create_token(req: TokenReq, request: Request):
+    """Mint an API bearer token — host console + commander only; shown once."""
+    client = request.client.host if request.client else ""
+    if not _is_loopback(client):
+        return {"ok": False, "error": "tokens can only be created on the host machine"}
+    if not _commander():
+        return _locked()
+    raw = AUTH.create_api_token(req.label)
+    await _audit("auth.token_created", f"API token '{req.label}' ({raw[:12]}…)")
+    return {"ok": True, "token": raw}
+
+
+class RevokeReq(BaseModel):
+    prefix: str | None = None    # token prefix
+    sid: str | None = None       # session id prefix
+
+
+@app.post("/api/auth/revoke")
+async def auth_revoke(req: RevokeReq):
+    if not _commander():
+        return _locked()
+    if req.prefix:
+        ok = AUTH.revoke_api_token(req.prefix)
+        if ok:
+            await _audit("auth.token_revoked", req.prefix)
+        return {"ok": ok}
+    if req.sid:
+        ok = AUTH.revoke_session(req.sid)
+        if ok:
+            await _audit("auth.session_revoked", req.sid)
+        return {"ok": ok}
+    return {"ok": False, "error": "nothing to revoke"}
 
 
 class Ask(BaseModel):
@@ -1257,6 +1447,16 @@ async def agenda_summary():
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
+    # same perimeter as HTTP: loopback trusted; remote needs the session
+    # cookie (sent automatically by the logged-in browser) or ?token=
+    client = ws.client.host if ws.client else ""
+    if not _is_loopback(client):
+        cookie = ws.cookies.get("bucs_session", "")
+        token = ws.query_params.get("token", "")
+        if not (AUTH.password_set and (AUTH.verify_session(cookie)
+                                       or AUTH.verify_api_token(token))):
+            await ws.close(code=1008)
+            return
     await ws.accept()
     hub: Hub = state["hub"]
     q = hub.subscribe()
