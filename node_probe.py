@@ -42,6 +42,21 @@ def _platform_label() -> str:
     return f"{s} {platform.release()}"
 
 
+def _detect_ollama() -> dict:
+    """Does this node run Ollama? If so, advertise its models so the command
+    host can route inference here (on-prem AI cluster)."""
+    import json as _json
+    import urllib.request
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=2) as r:
+            data = _json.loads(r.read())
+        models = [m.get("name") for m in data.get("models", []) if m.get("name")]
+        return {"available": True, "port": 11434, "models": models[:12],
+                "count": len(models)}
+    except Exception:
+        return {"available": False, "count": 0, "models": []}
+
+
 def _read_gpu():
     try:
         r = subprocess.run(
@@ -103,6 +118,8 @@ class NodeProbe:
         self._prev_ts = 0.0
         self._periph = []
         self._periph_ts = 0.0
+        self._ollama = {"available": False, "count": 0, "models": []}
+        self._ollama_ts = 0.0
         psutil.cpu_percent(interval=None)  # prime the first reading
 
     def _net_rate(self):
@@ -179,6 +196,9 @@ class NodeProbe:
         if now - self._periph_ts > 30:
             self._periph = _scan_peripherals()
             self._periph_ts = now
+        if now - self._ollama_ts > 25:      # inference capability (on-prem cluster)
+            self._ollama = _detect_ollama()
+            self._ollama_ts = now
         try:
             uptime_min = round((now - psutil.boot_time()) / 60)
         except Exception:
@@ -201,4 +221,5 @@ class NodeProbe:
             "volumes": self._volumes(),
             "net": self._nets(),
             "peripherals": self._periph,
+            "ollama": self._ollama,
         }

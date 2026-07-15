@@ -174,17 +174,8 @@ async def lifespan(app: FastAPI):
     state["rbac"] = {"role": "commander", "operator": _load_operators()[0]["name"]}
     await state["audit"].log("system.start", f"platform online — brain {mode}",
                              operator=state["rbac"]["operator"])
-    # Phase 5 · supervised decision support
-    decisions = DecisionEngine(hub=hub, brain=brain, local_llm=local_llm,
-                               threats=threats, agenda=agenda,
-                               insights=insights, productivity=productivity,
-                               orchestrator=orchestrator, audit=state["audit"],
-                               tts=tts)
-    state["decisions"] = decisions
-    scheduler.add_job(decisions.tick, IntervalTrigger(seconds=45),
-                      max_instances=1, coalesce=True)
-
     # Phase 4 · multi-site fleet: token + registry + this host as a node
+    # (created BEFORE decisions so the decision engine can reference it)
     state["fleet_token"] = _fleet_token()
     state["pair_code"] = _pairing_code()
     from node_probe import NodeProbe
@@ -199,6 +190,16 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(fleet_self_report, IntervalTrigger(seconds=8),
                       max_instances=1, coalesce=True)
     await fleet_self_report()   # register the host immediately at boot
+
+    # Phase 5 · supervised decision support (+ fleet-wide autonomous ops)
+    decisions = DecisionEngine(hub=hub, brain=brain, local_llm=local_llm,
+                               threats=threats, agenda=agenda,
+                               insights=insights, productivity=productivity,
+                               orchestrator=orchestrator, audit=state["audit"],
+                               tts=tts, fleet=fleet)
+    state["decisions"] = decisions
+    scheduler.add_job(decisions.tick, IntervalTrigger(seconds=45),
+                      max_instances=1, coalesce=True)
 
     state["roadmap"] = Roadmap(state)
 
@@ -1352,7 +1353,79 @@ async def fleet_report(report: dict, request: Request):
         return {"ok": False, "error": "invalid fleet token"}
     if not isinstance(report, dict) or not report.get("node_id"):
         return {"ok": False, "error": "bad report"}
+    # record the node's reachable IP so the host can route inference to its
+    # Ollama endpoint (on-prem AI cluster)
+    report["ip"] = request.client.host if request.client else None
     return await state["fleet"].ingest_and_notify(report)
+
+
+@app.get("/api/cluster")
+async def cluster_endpoint():
+    """On-prem AI cluster: fleet nodes that can serve inference, aggregate GPU."""
+    snap = state["fleet"].snapshot()
+    providers, total_models, gpu_nodes = [], 0, 0
+    for n in snap.get("nodes", []):
+        oll = n.get("ollama") or {}
+        gpu = n.get("gpu")
+        if gpu is not None:
+            gpu_nodes += 1
+        if oll.get("available"):
+            total_models += oll.get("count", 0)
+            providers.append({
+                "node_id": n.get("node_id"), "name": n.get("name"),
+                "ip": n.get("ip"), "status": n.get("status"),
+                "gpu": gpu, "models": oll.get("models", []),
+                "count": oll.get("count", 0), "is_local": n.get("is_local"),
+                "port": oll.get("port", 11434),
+            })
+    llm = state["local_llm"]
+    return {
+        "providers": providers,
+        "provider_count": len(providers),
+        "total_models": total_models,
+        "gpu_nodes": gpu_nodes,
+        "active_endpoint": llm.base_url,
+        "active_model": llm.model,
+        "routed_remote": bool(getattr(llm, "remote_node", None)),
+        "remote_node": getattr(llm, "remote_node", None),
+    }
+
+
+class ClusterRouteReq(BaseModel):
+    node_id: str | None = None    # route brain to this node's Ollama; None = back to local
+
+
+@app.post("/api/cluster/route")
+async def cluster_route(req: ClusterRouteReq):
+    """Route the brain's inference to a fleet node's Ollama endpoint (or back
+    to the local endpoint). Commander only."""
+    if not _commander():
+        return _locked()
+    llm = state["local_llm"]
+    brain = state["brain"]
+    if not req.node_id:
+        llm.base_url = os.getenv("LOCAL_LLM_URL", "http://127.0.0.1:11434/v1").rstrip("/")
+        llm.remote_node = None
+        await llm.probe()
+        await _audit("cluster.route", "inference routed back to local endpoint")
+        return {"ok": True, "endpoint": llm.base_url, "remote": False}
+    node = next((n for n in state["fleet"].snapshot()["nodes"]
+                 if n.get("node_id") == req.node_id), None)
+    if not node or not node.get("ip"):
+        return {"ok": False, "error": "node not found or has no reachable IP"}
+    oll = node.get("ollama") or {}
+    if not oll.get("available"):
+        return {"ok": False, "error": "that node is not advertising Ollama"}
+    llm.base_url = f"http://{node['ip']}:{oll.get('port', 11434)}/v1"
+    llm.remote_node = node.get("name")
+    brain.force_local = True
+    ok = await llm.probe()
+    llm.save_pref(force_local=True)
+    await _audit("cluster.route", f"inference routed to {node.get('name')} ({llm.base_url})")
+    await state["hub"].broadcast({"type": "log", "level": "info",
+                                  "msg": f"cluster: brain inference routed to node {node.get('name')}"})
+    return {"ok": True, "endpoint": llm.base_url, "remote": True,
+            "node": node.get("name"), "reachable": ok}
 
 
 @app.get("/api/fleet/token")

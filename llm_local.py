@@ -37,6 +37,7 @@ class LocalLLM:
         self.api_key = api_key or os.getenv("LOCAL_LLM_KEY") or None
         self.hub = hub
         self.available = False
+        self.remote_node = None                    # set when routed to a fleet node's Ollama
         self.last_latency_ms: int | None = None
         self.last_tps: float | None = None        # completion tokens / second
         self.last_tokens: int | None = None

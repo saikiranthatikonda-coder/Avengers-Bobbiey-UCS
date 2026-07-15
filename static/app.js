@@ -3172,6 +3172,39 @@ async function refreshLocalAI() {
 }
 refreshLocalAI(); setInterval(refreshLocalAI, 25000);
 
+// on-prem AI cluster: fleet nodes that can serve inference (Phase 4)
+async function refreshCluster() {
+  try {
+    const d = await (await fetch("/api/cluster")).json();
+    const stat = $("#cluster-stat");
+    if (stat) stat.textContent = `${d.provider_count} PROVIDER${d.provider_count === 1 ? "" : "S"} · ${d.total_models} MODELS · ${d.gpu_nodes} GPU`;
+    const host = $("#lai-cluster"); if (!host) return;
+    const provs = d.providers || [];
+    host.innerHTML = provs.length ? provs.map(p => {
+      const routed = d.routed_remote && d.remote_node === p.name;
+      return `<div class="lai-model${routed ? " active" : ""}" data-node="${escapeHTML(p.is_local ? "" : p.node_id)}" tabindex="0" role="button" title="route inference here">
+        <span class="lai-m-name">${escapeHTML((p.name || "").toUpperCase())}${p.is_local ? " (LOCAL)" : ""}</span>
+        <span class="lai-m-spec">${p.count} MODELS · GPU ${p.gpu == null ? "N/A" : Math.round(p.gpu) + "%"}</span>
+        ${routed ? '<span class="lai-m-badge">● ROUTED</span>' : (p.is_local ? "" : '<span class="lai-m-spec">→ ROUTE</span>')}
+      </div>`;
+    }).join("") : '<div class="tf-empty">no fleet node is advertising Ollama — start Ollama on a node to add inference capacity</div>';
+    host.querySelectorAll(".lai-model[data-node]").forEach(el => {
+      el.addEventListener("click", async () => {
+        el.style.opacity = "0.5";
+        try {
+          const r = await (await fetch("/api/cluster/route", { method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ node_id: el.dataset.node || null }) })).json();
+          if (r.ok) logEvent(`<span class="tag">[cluster]</span> inference routed ${r.remote ? "to " + r.node : "back to local"}`);
+          else if (r.error) logEvent(`<span class="tag">[cluster]</span> ${escapeHTML(r.error)}`, "warn");
+        } catch (e) {}
+        refreshCluster(); refreshLocalAI();
+      });
+    });
+  } catch (e) {}
+}
+refreshCluster(); setInterval(refreshCluster, 20000);
+
 // ── operator productivity ────────────────────────────
 let prodSnap = null;
 function renderProd(d) {

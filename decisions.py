@@ -33,7 +33,7 @@ AUTONOMY_WHITELIST = {"ack_resolved", "switch_claude"}
 class DecisionEngine:
     def __init__(self, hub=None, brain=None, local_llm=None, threats=None,
                  agenda=None, insights=None, productivity=None,
-                 orchestrator=None, audit=None, tts=None) -> None:
+                 orchestrator=None, audit=None, tts=None, fleet=None) -> None:
         self.hub = hub
         self.brain = brain
         self.local_llm = local_llm
@@ -44,6 +44,7 @@ class DecisionEngine:
         self.orchestrator = orchestrator
         self.audit = audit
         self.tts = tts
+        self.fleet = fleet          # Phase 5: fleet-wide autonomous operations
         self.autonomy = False
         self.proposals: dict[str, dict] = {}     # key → proposal
         self.executed: deque = deque(maxlen=10)
@@ -157,6 +158,45 @@ class DecisionEngine:
                 })
         except Exception:
             pass
+
+        # ── FLEET-WIDE autonomous operations (Phase 5) ────────────
+        try:
+            if self.fleet is not None:
+                snap = self.fleet.snapshot()
+                nodes = snap.get("nodes", [])
+                for n in nodes:
+                    if n.get("is_local") or n.get("status") != "online":
+                        continue
+                    if (n.get("disk") or 0) >= 90:
+                        out.append({
+                            "key": f"fleet_disk_{n['node_id']}", "risk": "medium",
+                            "title": f"Node {n['name']}: disk critical {n['disk']}%",
+                            "rationale": "A fleet node is nearly full; saves/updates may fail there.",
+                            "impact": f"SIM: raises a flagged alert for {n['name']} — no remote writes performed",
+                        })
+                    if (n.get("mem") or 0) >= 92:
+                        out.append({
+                            "key": f"fleet_mem_{n['node_id']}", "risk": "low",
+                            "title": f"Node {n['name']}: memory pressure {n['mem']}%",
+                            "rationale": "A fleet node is under heavy memory load.",
+                            "impact": f"SIM: notes {n['name']} as degraded in the fleet log",
+                        })
+                # offload inference: an idle-GPU node is available but the brain
+                # is running locally without a GPU
+                local_gpu = next((x.get("gpu") for x in nodes if x.get("is_local")), None)
+                idle_gpu_node = next(
+                    (x for x in nodes if not x.get("is_local") and x.get("status") == "online"
+                     and (x.get("ollama") or {}).get("available") and (x.get("gpu") or 0) < 50), None)
+                if idle_gpu_node and (local_gpu is None or local_gpu == 0) \
+                        and not getattr(self.local_llm, "remote_node", None):
+                    out.append({
+                        "key": "fleet_offload", "risk": "medium",
+                        "title": f"Offload inference to {idle_gpu_node['name']} (idle GPU)",
+                        "rationale": "This host has no free GPU; a fleet node offers Ollama with spare GPU.",
+                        "impact": f"SIM: routes the brain to {idle_gpu_node['name']} — faster local-model replies, zero Claude quota",
+                    })
+        except Exception:
+            pass
         return out
 
     # ── lifecycle ─────────────────────────────────────────────────
@@ -226,6 +266,35 @@ class DecisionEngine:
                      "title": "Storage triage — identify reclaim candidates",
                      "detail": "raised by decision support"}, time.time())
                 done, note = True, "directive delegated to STARK"
+            elif p["key"].startswith("fleet_disk_") or p["key"].startswith("fleet_mem_"):
+                # flag the node — raise an alert, do NOT touch the remote machine
+                if self.hub:
+                    await self.hub.broadcast({
+                        "type": "alert", "severity": "warning",
+                        "title": p["title"], "detail": p["rationale"],
+                        "source": "decision-support · fleet",
+                        "action": "Check the node in the Command Fleet panel.",
+                    })
+                done, note = True, "fleet node flagged"
+            elif p["key"] == "fleet_offload" and self.local_llm is not None:
+                # route the brain to the idle-GPU node's Ollama (safe, reversible)
+                import re as _re
+                m = _re.search(r"to (.+?) \(idle", p["title"])
+                target = m.group(1) if m else None
+                node = None
+                if self.fleet is not None and target:
+                    node = next((n for n in self.fleet.snapshot()["nodes"]
+                                 if n.get("name") == target and n.get("ip")), None)
+                if node:
+                    oll = node.get("ollama") or {}
+                    self.local_llm.base_url = f"http://{node['ip']}:{oll.get('port', 11434)}/v1"
+                    self.local_llm.remote_node = node.get("name")
+                    if self.brain is not None:
+                        self.brain.force_local = True
+                    await self.local_llm.probe()
+                    done, note = True, f"inference offloaded to {node.get('name')}"
+                else:
+                    done, note = False, ""
         except Exception as e:
             return {"ok": False, "error": str(e)[:120]}
         if not done:
