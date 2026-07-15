@@ -174,13 +174,13 @@ Full detail and the migration path to the enterprise stack (Next.js · Postgres 
 
 ## 🗺️ Roadmap
 
-The roadmap is **live inside the product** — the Product Evolution panel probes the running system and updates itself as features come online.
+The roadmap is **live inside the product** — the Product Evolution panel probes the running system and versions itself. **All five phases are shipped: v5.0 · 100% built.**
 
-- **Phase 1 — AI Command Dashboard** ✅ **SHIPPED** — telemetry, agents, voice, vision, real Google Calendar + Gmail, local AI, threat intelligence
+- **Phase 1 — AI Command Dashboard** ✅ **SHIPPED** — telemetry, agents, voice, vision, Google Calendar + Gmail, local AI, threat intelligence
 - **Phase 2 — Multi-Agent Intelligence** ✅ **SHIPPED** — orchestration engine, delegation, shared blackboard, priority resolution, agent consults, cross-agent team memory
 - **Phase 3 — Computer Vision Operations** ✅ **SHIPPED** — multi-camera hot-switching, 3×3 zone monitoring with away-intrusion alerts, activity analytics
-- **Phase 4 — Enterprise Command Platform** 🔨 **IN DEVELOPMENT** — live: audit trail, commander/observer roles, operator profiles, compliance export, **multi-site fleet** (node agents), **authenticated remote access** (login + API tokens) · next: on-prem AI clusters
-- **Phase 5 — Autonomous Decision Support** 🔨 **IN DEVELOPMENT** — live: propose → simulate → approve → execute with supervised autonomy · next: fleet-wide operations
+- **Phase 4 — Enterprise Command Platform** ✅ **SHIPPED** — audit trail, commander/observer roles, operator profiles, compliance export, **multi-site fleet** (node agents on the maps), **authenticated remote access** (login + API tokens), **on-prem AI clusters** (route inference to a fleet GPU node)
+- **Phase 5 — Autonomous Decision Support** ✅ **SHIPPED** — propose → simulate → approve → execute with supervised autonomy, including **fleet-wide operations** (flag strained nodes, offload inference)
 
 The commercial plan lives in [`SAAS_PLAN.md`](SAAS_PLAN.md).
 

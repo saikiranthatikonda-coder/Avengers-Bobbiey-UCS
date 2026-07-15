@@ -3485,6 +3485,30 @@ function renderFleetOnMap(nodes) {
   const host = document.getElementById("map-fleet");
   if (!host || typeof projectCity !== "function") return;
   host.innerHTML = "";
+  // command-link lines: host node → every other node (a live command network)
+  const local = nodes.find(n => n.is_local && n.lat != null);
+  if (local) {
+    const lxy = projectCity({ lat: local.lat, lon: local.lon });
+    if (isFinite(lxy[0])) {
+      for (const n of nodes) {
+        if (n.is_local || n.lat == null) continue;
+        const xy = projectCity({ lat: n.lat, lon: n.lon });
+        if (!isFinite(xy[0])) continue;
+        const mx = (lxy[0] + xy[0]) / 2, my = Math.min(lxy[1], xy[1]) - 24;
+        const col = n.status === "online" ? "#22c55e" : "#7e96b3";
+        const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        p.setAttribute("d", `M ${lxy[0]} ${lxy[1]} Q ${mx} ${my} ${xy[0]} ${xy[1]}`);
+        p.setAttribute("fill", "none");
+        p.setAttribute("stroke", col);
+        p.setAttribute("stroke-width", "0.8");
+        p.setAttribute("stroke-dasharray", "3 4");
+        p.setAttribute("opacity", "0.4");
+        if (n.status === "online")
+          p.innerHTML = '<animate attributeName="stroke-dashoffset" values="14;0" dur="1.2s" repeatCount="indefinite"/>';
+        host.appendChild(p);
+      }
+    }
+  }
   for (const n of nodes) {
     if (n.lat == null || n.lon == null) continue;
     const xy = projectCity({ lat: n.lat, lon: n.lon });
