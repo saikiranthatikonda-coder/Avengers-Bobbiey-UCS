@@ -1917,7 +1917,7 @@ const AlertSystem = {
   },
 
   beep(freq, dur, delay = 0, type = "sine", vol = 0.07) {
-    if (!this.unlocked || !this.ctx) return;
+    if (!this.unlocked || !this.ctx || window.dashAudioMuted) return;
     try {
       const t = this.ctx.currentTime + delay;
       const o = this.ctx.createOscillator(), g = this.ctx.createGain();
@@ -1937,7 +1937,7 @@ const AlertSystem = {
   },
 
   startSiren() {
-    if (!this.unlocked || !this.ctx || this.siren) return;
+    if (!this.unlocked || !this.ctx || this.siren || window.dashAudioMuted) return;
     try {
       const o = this.ctx.createOscillator(), g = this.ctx.createGain(),
             lfo = this.ctx.createOscillator(), lg = this.ctx.createGain();
@@ -2940,6 +2940,9 @@ function handle(msg) {
     case "models-updated":                  // brain/model switched
       try { pollServiceGrid(); refreshLocalAI(); } catch (e) {}
       break;
+    case "audio":                           // mute/volume changed (sync viewers)
+      try { AudioCtl.muted = !!msg.muted; AudioCtl.volume = msg.volume ?? 100; AudioCtl.paint(); } catch (e) {}
+      break;
     case "audit":                           // live append to the audit feed
       try { prependAudit(msg); } catch (e) {}
       break;
@@ -3005,6 +3008,54 @@ $("#news-refresh").addEventListener("click", async () => {
   try { await fetch("/api/news/refresh", { method: "POST" }); }
   finally { setTimeout(() => { $("#news-refresh").disabled = false; }, 1500); }
 });
+
+/* ═══ DASHBOARD AUDIO — mute + volume (agent speech + alert sounds) ═══
+   Agent speech is server-side TTS (host speakers), so mute/volume hit the
+   backend; the browser alert siren is gated locally via window.dashAudioMuted. */
+window.dashAudioMuted = false;
+const AudioCtl = {
+  muted: false, volume: 100,
+  icon(v) { return this.muted || v === 0 ? "🔇" : v < 45 ? "🔉" : "🔊"; },
+  paint() {
+    const ctl = $("#audio-ctl"), btn = $("#audio-mute"), vol = $("#audio-vol");
+    window.dashAudioMuted = this.muted;
+    if (btn) btn.textContent = this.icon(this.volume);
+    if (ctl) ctl.classList.toggle("muted", this.muted);
+    if (vol && document.activeElement !== vol) vol.value = this.muted ? 0 : this.volume;
+    const title = this.muted ? "Audio muted — click to unmute"
+      : `Dashboard audio · ${this.volume}%`;
+    if (ctl) ctl.title = title;
+  },
+  async load() {
+    try {
+      const d = await (await fetch("/api/audio")).json();
+      this.muted = !!d.muted; this.volume = d.volume ?? 100;
+    } catch (e) {}
+    this.paint();
+  },
+  async push(body) {
+    try {
+      await fetch("/api/audio", { method: "POST",
+        headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    } catch (e) {}
+  },
+  async toggleMute() {
+    this.muted = !this.muted;
+    if (this.muted && typeof AlertSystem !== "undefined") { try { AlertSystem.stopSiren?.(); } catch (e) {} }
+    this.paint();
+    await this.push({ muted: this.muted });
+    logEvent(`<span class="tag">[audio]</span> dashboard audio ${this.muted ? "muted" : "unmuted"}`);
+  },
+  async setVolume(v) {
+    this.volume = Math.max(0, Math.min(100, parseInt(v, 10) || 0));
+    if (this.volume > 0 && this.muted) this.muted = false;   // dragging up unmutes
+    this.paint();
+    await this.push({ volume: this.volume, muted: this.muted });
+  },
+};
+$("#audio-mute")?.addEventListener("click", () => AudioCtl.toggleMute());
+$("#audio-vol")?.addEventListener("input", (e) => AudioCtl.setVolume(e.target.value));
+AudioCtl.load();
 
 /* ═══════════════════════════════════════════════════════════════
    PHASE 2 · MULTI-AGENT INTELLIGENCE — panel controllers

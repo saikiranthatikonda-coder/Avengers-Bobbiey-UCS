@@ -34,8 +34,8 @@ if ($host_ -eq "0.0.0.0") {
     $lan = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Where-Object { $_.InterfaceAlias -notmatch "Loopback|vEthernet|WSL" -and $_.IPAddress -notmatch "^169\." } |
         Select-Object -ExpandProperty IPAddress) -join ", "
-    Write-Host "[jarvis] Booting on 0.0.0.0:$port (LAN-reachable) — nodes/browsers use: $lan" -ForegroundColor Cyan
+    Write-Host "[jarvis] Booting on 0.0.0.0:$port (LAN-reachable). Nodes/browsers use: $lan" -ForegroundColor Cyan
 } else {
-    Write-Host "[jarvis] Booting on http://$host_`:$port" -ForegroundColor Cyan
+    Write-Host "[jarvis] Booting on http://${host_}:$port" -ForegroundColor Cyan
 }
 & .\.venv\Scripts\python.exe -m uvicorn main:app --host $host_ --port $port

@@ -404,6 +404,17 @@ body {
 .ghost-btn:hover { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); transform: rotate(120deg); }
 .mini-card-title { font-family: var(--font-display); font-size: 0.6rem; letter-spacing: 0.28em; color: var(--accent); text-shadow: 0 0 6px var(--accent-glow); }
 
+/* header dashboard-audio control (mute + volume) */
+.audio-ctl { display: flex; align-items: center; gap: 0.4rem; padding: 0.15rem 0.4rem; border: 1px solid var(--panel-edge); border-radius: 6px; background: rgba(6,18,31,0.5); }
+.audio-btn { background: transparent; border: none; cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0; filter: grayscale(0.2); transition: transform 0.15s, opacity 0.2s; }
+.audio-btn:hover { transform: scale(1.12); }
+.audio-ctl.muted .audio-btn { opacity: 0.55; }
+.audio-vol { width: 62px; height: 4px; -webkit-appearance: none; appearance: none; background: color-mix(in srgb, var(--panel-edge) 60%, transparent); border-radius: 3px; outline: none; cursor: pointer; }
+.audio-vol::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); cursor: pointer; }
+.audio-vol::-moz-range-thumb { width: 11px; height: 11px; border: none; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); cursor: pointer; }
+.audio-ctl.muted .audio-vol { opacity: 0.4; }
+@media (max-width: 1100px) { .audio-vol { display: none; } }
+
 /* ── avengers list ──────────────────────────────────── */
 .avengers-list { display: flex; flex-direction: column; gap: 0.32rem; overflow-y: auto; max-height: 42vh; padding-right: 2px; }
 .agent-card { display: grid; grid-template-columns: 38px 1fr auto; gap: 0.55rem; align-items: center; padding: 0.42rem 0.55rem; border: 1px solid rgba(13, 58, 90, 0.55); border-radius: 5px; background: linear-gradient(90deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.15)); transition: all 0.25s ease; position: relative; overflow: hidden; }

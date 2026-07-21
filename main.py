@@ -479,6 +479,29 @@ async def speak(payload: dict):
     return {"spoken": True}
 
 
+@app.get("/api/audio")
+async def audio_get():
+    return state["tts"].audio_state()
+
+
+class AudioReq(BaseModel):
+    muted: bool | None = None
+    volume: int | None = None
+
+
+@app.post("/api/audio")
+async def audio_set(req: AudioReq):
+    """Runtime dashboard-audio control: mute/unmute + volume for agent speech
+    (server-side TTS). Persists across restarts."""
+    tts = state["tts"]
+    if req.muted is not None:
+        tts.set_muted(req.muted)
+    if req.volume is not None:
+        tts.set_volume(req.volume)
+    await state["hub"].broadcast({"type": "audio", **tts.audio_state()})
+    return {"ok": True, **tts.audio_state()}
+
+
 @app.get("/api/status")
 async def status():
     return {

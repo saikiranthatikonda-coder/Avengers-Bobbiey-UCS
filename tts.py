@@ -25,11 +25,57 @@ class TTSPlayer:
         self.hub = hub
         self.q: queue.Queue = queue.Queue()
         self.max_queue = max_queue
-        self.enabled = False
+        self.enabled = False          # engine available (set at start)
+        self.muted = False            # operator mute toggle (runtime)
+        self.volume = 100             # 0-100 (Windows System.Speech)
         self.thread: threading.Thread | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
         self.voice_hint = os.getenv("JARVIS_VOICE_NAME", "Microsoft David")
         self.rate = self._parse_rate(os.getenv("JARVIS_VOICE_RATE", "180"))
+        self._load_pref()
+
+    # ── operator audio preference (persists across restarts) ──────
+    _PREF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "audio_pref.json")
+
+    def _load_pref(self) -> None:
+        import json
+        try:
+            with open(self._PREF, encoding="utf-8") as f:
+                d = json.load(f)
+            self.muted = bool(d.get("muted", False))
+            self.volume = max(0, min(100, int(d.get("volume", 100))))
+        except Exception:
+            pass
+
+    def _save_pref(self) -> None:
+        import json
+        try:
+            with open(self._PREF, "w", encoding="utf-8") as f:
+                json.dump({"muted": self.muted, "volume": self.volume}, f)
+        except Exception:
+            pass
+
+    def set_muted(self, muted: bool) -> None:
+        self.muted = bool(muted)
+        if self.muted:
+            self._drain()             # drop anything already queued
+        self._save_pref()
+
+    def set_volume(self, volume: int) -> None:
+        self.volume = max(0, min(100, int(volume)))
+        self._save_pref()
+
+    def _drain(self) -> None:
+        try:
+            while not self.q.empty():
+                item = self.q.get_nowait()
+                if item and item[1] and self.loop and not item[1].done():
+                    self.loop.call_soon_threadsafe(item[1].set_result, True)
+        except Exception:
+            pass
+
+    def audio_state(self) -> dict:
+        return {"available": self.enabled, "muted": self.muted, "volume": self.volume}
 
     @staticmethod
     def _parse_rate(s: str) -> int:
@@ -106,7 +152,7 @@ class TTSPlayer:
         return (
             "Add-Type -AssemblyName System.Speech; "
             "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-            "$s.Volume = 100; "
+            f"$s.Volume = {self.volume}; "
             f"$s.Rate = {self.rate}; "
             + voice_part +
             f"$bytes = [Convert]::FromBase64String('{b64}'); "
@@ -154,7 +200,7 @@ class TTSPlayer:
                     self.loop.call_soon_threadsafe(fut.set_result, True)
 
     async def say(self, text: str) -> None:
-        if not self.enabled or not text or not text.strip():
+        if not self.enabled or self.muted or self.volume == 0 or not text or not text.strip():
             return
         if text.lstrip().startswith("["):
             return  # don't speak internal error markers
