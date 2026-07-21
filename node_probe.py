@@ -7,6 +7,9 @@ A single, dependency-light collector (psutil + stdlib only) used by BOTH:
 Deliberately no FastAPI / httpx import so the agent stays tiny: another laptop
 only needs `pip install psutil` to join the fleet.
 """
+# lazy annotations → the `str | None` etc. type hints don't get evaluated at
+# runtime, so a node can run on Python 3.7+ (not just 3.10+).
+from __future__ import annotations
 
 import platform
 import socket

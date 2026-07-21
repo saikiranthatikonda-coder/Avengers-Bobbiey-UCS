@@ -16,6 +16,7 @@ peripherals) to your command server every few seconds.
   The agent auto-reconnects; leave it running (or install it as a service /
   launch item). Ctrl-C to stop.
 """
+from __future__ import annotations   # runs on Python 3.7+ (lazy annotations)
 
 import argparse
 import json
