@@ -3642,22 +3642,26 @@ async function renderFleetJoin() {
   } catch (e) {}
   const origin = location.origin.includes("127.0.0.1") || location.origin.includes("localhost")
     ? "http://<THIS-LAPTOP-LAN-IP>:8765" : location.origin;
-  const cmd = `python node_agent.py --server ${origin} --pair --name "My-Laptop"`;
+  const macCmd = `./join-fleet.sh ${origin}`;
+  const winCmd = `join-fleet.cmd ${origin}`;
   body.innerHTML = `
     <div class="pair-code-box">
       <div class="pair-code-label">ACCESS CODE</div>
       <div class="pair-code" id="pair-code" title="click to copy">${escapeHTML(code)}</div>
       <button class="cmd-btn" id="btn-rotate-code" title="generate a new code">↻ ROTATE</button>
     </div>
-    <b>1.</b> On the other laptop: install Python, then <b>git clone</b> this repo (or copy the folder) and <b>pip install psutil</b>.<br>
-    <b>2.</b> Run this — it will ask for the access code above:
-    <div class="fleet-cmd" title="click to copy">${escapeHTML(cmd)}</div>
+    <b>1.</b> On the other laptop: <b>git clone</b> this repo, then <code>cd</code> into it.<br>
+    <b>2.</b> Run ONE command — it auto-installs what it needs and asks for the code above:
+    <div class="fleet-cmd" data-cmd="mac" title="click to copy">macOS / Linux&nbsp;&nbsp;${escapeHTML(macCmd)}</div>
+    <div class="fleet-cmd" data-cmd="win" title="click to copy">Windows&nbsp;&nbsp;${escapeHTML(winCmd)}</div>
     <b>3.</b> Type the 6-character code. The node appears here within seconds.
-    ${origin.includes("LAN-IP") ? "<br><br>Replace <b>&lt;THIS-LAPTOP-LAN-IP&gt;</b> with this machine's network IP (run <b>ipconfig</b>), and start the server with <b>JARVIS_HOST=0.0.0.0</b> so other machines can reach it." : ""}`;
+    ${origin.includes("LAN-IP") ? "<br><br>Replace <b>&lt;THIS-LAPTOP-LAN-IP&gt;</b> with this machine's Wi-Fi IP (run <b>ipconfig</b>); the server already binds <b>0.0.0.0</b> when JARVIS_HOST is set in .env." : ""}
+    <br><br><span style="opacity:0.7">Both machines must be on the same network. On office Wi-Fi that blocks device-to-device traffic, use a phone hotspot for both.</span>`;
   const cp = (txt, msg) => navigator.clipboard?.writeText(txt).then(() =>
     logEvent(`<span class="tag">[fleet]</span> ${msg}`)).catch(() => {});
   body.querySelector("#pair-code")?.addEventListener("click", () => cp(code, "access code copied"));
-  body.querySelector(".fleet-cmd")?.addEventListener("click", () => cp(cmd, "join command copied"));
+  body.querySelectorAll(".fleet-cmd").forEach(el => el.addEventListener("click", () =>
+    cp(el.dataset.cmd === "win" ? winCmd : macCmd, "join command copied")));
   body.querySelector("#btn-rotate-code")?.addEventListener("click", async () => {
     try {
       const r = await (await fetch("/api/fleet/paircode/rotate", { method: "POST" })).json();

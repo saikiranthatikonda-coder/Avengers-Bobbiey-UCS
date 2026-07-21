@@ -34,7 +34,19 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-from node_probe import NodeProbe
+try:
+    from node_probe import NodeProbe
+except ModuleNotFoundError as _e:
+    if "psutil" in str(_e):
+        sys.stderr.write(
+            "\n[node-agent] psutil is required and this Python doesn't have it.\n"
+            "  Easiest fix: run the one-command joiner instead:\n"
+            "    ./join-fleet.sh http://<host-ip>:8765        (macOS/Linux)\n"
+            "    join-fleet.cmd http://<host-ip>:8765         (Windows)\n"
+            "  Or install psutil into THIS interpreter:\n"
+            f"    {sys.executable} -m pip install psutil\n\n")
+        sys.exit(1)
+    raise
 
 # where this node caches the token it obtained by pairing (so it pairs once)
 TOKEN_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "node_token.txt")
@@ -92,6 +104,8 @@ def main() -> int:
                     default=float(os.getenv("JARVIS_NODE_INTERVAL", "5")),
                     help="seconds between reports")
     args = ap.parse_args()
+    # tolerate copy-paste mistakes like http://<10.0.0.5>:8765
+    args.server = args.server.strip().strip("<>").strip().replace("<", "").replace(">", "")
 
     token = _resolve_token(args)
     url = args.server.rstrip("/") + "/api/fleet/report"

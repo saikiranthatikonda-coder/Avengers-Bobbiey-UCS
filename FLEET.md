@@ -53,27 +53,29 @@ Pin your own instead by setting `JARVIS_FLEET_TOKEN` in `.env`.
 
 ---
 
-## 2 · Join a node (on each other laptop)
+## 2 · Join a node (on each other laptop) — one command
 
-Copy `node_probe.py` and `node_agent.py` to that machine (or clone the repo),
-then:
+Clone the repo, `cd` into it, and run the joiner. It auto-finds a working
+Python, installs `psutil` if needed, and pairs — then asks for the access code.
 
 ```bash
-pip install psutil          # the ONLY dependency the agent needs
-
-# Windows
-start-node.cmd http://192.168.1.20:8765 <TOKEN> "Studio-Laptop"
+git clone https://github.com/saikiranthatikonda-coder/Avengers-Bobbiey-UCS.git
+cd Avengers-Bobbiey-UCS
 
 # macOS / Linux
-./start-node.sh http://192.168.1.20:8765 <TOKEN> "Studio-Mac"
+./join-fleet.sh http://192.168.1.20:8765            # then type the access code
 
-# or directly:
-python node_agent.py --server http://192.168.1.20:8765 --token <TOKEN> --name "Studio-Mac"
+# Windows
+join-fleet.cmd http://192.168.1.20:8765
 ```
 
-The node appears in the COMMAND FLEET section within seconds. Leave the agent
-running (or add it to Startup / Login Items / a systemd service) so the node
-stays live.
+Get the **access code** from the dashboard's ADD NODE panel (or `pair_code.txt`
+on the host). The node appears in COMMAND FLEET within seconds. Leave the joiner
+running (or add it to Startup / Login Items / a systemd service) so it stays live.
+
+> The joiner handles the common gotchas automatically: it picks a Python that
+> has (or can install) psutil, and strips stray `< >` brackets from the URL.
+> Advanced: `python node_agent.py --server <url> --pair` still works directly.
 
 ---
 
