@@ -54,6 +54,8 @@ Bobbiey UCS turns a passive dashboard into an **active operations brain**:
 - 🛰️ **Command Fleet** _(Phase 4)_ — turn **every machine you own** into a live node: a tiny agent (`pip install psutil`, nothing else) reports each laptop's real CPU/RAM/disk/network/GPU/hardware/peripherals to one command view with a fleet overview, per-node detail, and token-gated ingestion. See [`FLEET.md`](FLEET.md).
 - 🔐 **Authenticated remote access** _(Phase 4)_ — the perimeter that makes `0.0.0.0` exposure safe: the loopback console is always trusted, remote access is **denied by default** until you set a password, then remote operators log in (PBKDF2 + HMAC-signed HttpOnly sessions) and scripts use **API bearer tokens** — with per-IP lockout, revocable sessions/tokens, and full audit logging. Stdlib-only crypto, no dependencies.
 - ⚖️ **Decision support** _(Phase 5)_ — the platform **proposes** actions from real conditions, **simulates** their impact from live numbers, and **executes only under human authority** — with an opt-in supervised-autonomy whitelist, fully audited.
+- 💳 **License & monetization** _(Phase 6)_ — live subscription editions (Community/Pro/Team/Enterprise), **AI-credit metering**, and feature **entitlements** in-dashboard; multiple monetization paths coexist (subscriptions, credits, marketplace, services, on-prem, optional token).
+- 🪙 **Web3 Command Center** _(Phase 6, optional & modular)_ — a toggleable blockchain layer styled into the HUD: **wallet** (MetaMask/injected), token analytics, treasury, governance, premium-access staking, marketplace and community. **Off by default; the platform runs fully without it.** Mock/demo data until any token exists — the token is access & participation, never speculation or a requirement.
 - 📈 **Product Evolution panel** — the public roadmap rendered live inside the product, every feature verified against the running system with auto-versioning.
 
 ---
@@ -181,6 +183,7 @@ The roadmap is **live inside the product** — the Product Evolution panel probe
 - **Phase 3 — Computer Vision Operations** ✅ **SHIPPED** — multi-camera hot-switching, 3×3 zone monitoring with away-intrusion alerts, activity analytics
 - **Phase 4 — Enterprise Command Platform** ✅ **SHIPPED** — audit trail, commander/observer roles, operator profiles, compliance export, **multi-site fleet** (node agents on the maps), **authenticated remote access** (login + API tokens), **on-prem AI clusters** (route inference to a fleet GPU node)
 - **Phase 5 — Autonomous Decision Support** ✅ **SHIPPED** — propose → simulate → approve → execute with supervised autonomy, including **fleet-wide operations** (flag strained nodes, offload inference)
+- **Phase 6 — Ecosystem & Monetization** 🔨 **IN DEVELOPMENT** — live: subscription editions (Community→Enterprise), AI-credit metering, entitlements, and an **optional, modular Web3 Command Center** (wallet, token, treasury, governance, marketplace, community) · next: live token market data, on-chain staking
 
 The commercial plan lives in [`SAAS_PLAN.md`](SAAS_PLAN.md).
 
@@ -206,6 +209,8 @@ Avengers-Bobbiey-UCS/
 ├─ fleet.py · node_probe.py · node_agent.py   Phase 4 · multi-site fleet
 ├─ auth.py              Phase 4 · authenticated remote access (login + tokens)
 ├─ decisions.py         Phase 5 · supervised decision engine
+├─ billing.py           Phase 6 · editions, AI credits, entitlements
+├─ web3_service.py      Phase 6 · optional modular Web3 layer (mock)
 ├─ insights.py · threats.py · agenda.py · google_sync.py · memory.py
 ├─ services.py · weather.py · connectivity.py · voice.py · tts.py · browser.py
 ├─ routines.py          scheduler

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=4.3" />
+  <link rel="stylesheet" href="/static/style.css?v=4.4" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -1147,6 +1147,107 @@
 
   </section>
 
+  <!-- ═══ PHASE 6 · LICENSE & MONETIZATION ════════════════ -->
+  <section class="ent-row">
+    <div class="bs-card" id="license-card">
+      <div class="bs-head">
+        <div class="bs-title">LICENSE &amp; MONETIZATION</div>
+        <div class="bs-sub">EDITION: <span id="lic-edition">—</span> · AI CREDITS</div>
+      </div>
+      <div class="lic-credits">
+        <div class="lic-credit-row"><span>AI CREDITS THIS CYCLE</span><span id="lic-credit-txt">—</span></div>
+        <div class="lic-credit-bar"><div id="lic-credit-fill"></div></div>
+      </div>
+      <div class="intel-divider">EDITIONS · CLICK TO SWITCH (DEMO)</div>
+      <div class="lic-tiers" id="lic-tiers"></div>
+      <div class="lic-paths-label">ALSO AVAILABLE</div>
+      <div class="lic-paths" id="lic-paths"></div>
+    </div>
+
+    <div class="bs-card" id="web3-toggle-card">
+      <div class="bs-head">
+        <div class="bs-title">WEB3 COMMAND CENTER</div>
+        <div class="bs-sub">OPTIONAL MODULE · <span id="web3-state">DISABLED</span></div>
+      </div>
+      <div class="web3-intro">
+        An optional token &amp; community layer. The command platform runs fully
+        without it — enable to unlock the Web3 widgets below.
+      </div>
+      <div class="dec-autonomy">
+        <button class="cmd-btn" id="btn-web3-toggle">◇ ENABLE WEB3</button>
+        <span class="dec-auto-note">mock/demo data · no funds move · disable anytime</span>
+      </div>
+      <div class="web3-wallet-mini" id="web3-wallet-mini">
+        <div class="tf-empty">enable the module, then connect a wallet</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ PHASE 6 · WEB3 WIDGETS (hidden until enabled) ═══ -->
+  <section class="web3-row" id="web3-row" hidden>
+
+    <div class="bs-card" id="w3-wallet">
+      <div class="bs-head">
+        <div class="bs-title">WALLET &amp; NETWORK</div>
+        <div class="bs-sub">EIP-1193 · METAMASK / INJECTED</div>
+      </div>
+      <div class="w3-wallet-body" id="w3-wallet-body">
+        <div class="tf-empty">no wallet connected</div>
+      </div>
+      <div class="dec-autonomy">
+        <button class="cmd-btn" id="btn-wallet-connect">◈ CONNECT WALLET</button>
+        <button class="cmd-btn" id="btn-wallet-disconnect" hidden>DISCONNECT</button>
+      </div>
+    </div>
+
+    <div class="bs-card" id="w3-token">
+      <div class="bs-head">
+        <div class="bs-title">TOKEN ANALYTICS</div>
+        <div class="bs-sub"><span id="w3-token-sym">BBUCS</span> · SUPPLY &amp; ALLOCATION</div>
+      </div>
+      <div class="w3-token-stats" id="w3-token-stats"></div>
+      <div class="intel-divider">ALLOCATION</div>
+      <div class="w3-alloc" id="w3-alloc"></div>
+    </div>
+
+    <div class="bs-card" id="w3-treasury">
+      <div class="bs-head">
+        <div class="bs-title">TREASURY &amp; PREMIUM ACCESS</div>
+        <div class="bs-sub">TOKEN-GATED CAPABILITIES</div>
+      </div>
+      <div class="w3-treasury-top" id="w3-treasury-top"></div>
+      <div class="intel-divider">STAKE TO UNLOCK</div>
+      <div class="w3-premium" id="w3-premium"></div>
+    </div>
+
+    <div class="bs-card" id="w3-gov">
+      <div class="bs-head">
+        <div class="bs-title">GOVERNANCE</div>
+        <div class="bs-sub">PROPOSALS · <span id="w3-gov-active">0</span> ACTIVE · POWER <span id="w3-gov-power">0</span></div>
+      </div>
+      <div class="w3-gov-list" id="w3-gov-list"></div>
+    </div>
+
+    <div class="bs-card" id="w3-market">
+      <div class="bs-head">
+        <div class="bs-title">MARKETPLACE</div>
+        <div class="bs-sub">AGENTS · PLUGINS · WORKFLOWS</div>
+      </div>
+      <div class="w3-market-list" id="w3-market-list"></div>
+    </div>
+
+    <div class="bs-card" id="w3-community">
+      <div class="bs-head">
+        <div class="bs-title">COMMUNITY</div>
+        <div class="bs-sub">MEMBERS · CONTRIBUTORS · ANNOUNCEMENTS</div>
+      </div>
+      <div class="w3-comm-stats" id="w3-comm-stats"></div>
+      <div class="intel-divider">ECOSYSTEM</div>
+      <div class="w3-comm-news" id="w3-comm-news"></div>
+    </div>
+
+  </section>
+
   <!-- ═══ MAP ROW ═══════════════════════════════════════ -->
   <section class="map-row">
 
@@ -1286,6 +1387,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=4.3"></script>
+  <script src="/static/app.js?v=4.4"></script>
 </body>
 </html>

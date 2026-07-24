@@ -100,12 +100,27 @@ class Roadmap:
             ("Fleet-wide autonomous operations",
              lambda: dec is not None and dec.fleet is not None),
         ]
+        bill = s.get("billing")
+        w3 = s.get("web3")
+        phase6 = [
+            ("Subscription editions (Community→Enterprise)", lambda: bill is not None),
+            ("AI-credit metering", lambda: bill is not None),
+            ("Feature entitlements", lambda: bill is not None),
+            ("Web3 Command Center (optional module)", lambda: w3 is not None),
+            ("Wallet integration (MetaMask / injected)", lambda: w3 is not None),
+            ("Token + treasury dashboard", lambda: w3 is not None),
+            ("Governance UI", lambda: w3 is not None),
+            ("Plugin marketplace (UI)", lambda: w3 is not None),
+            ("Live token market data", lambda: False),   # future — no token yet
+            ("On-chain staking (rewards)", lambda: False),
+        ]
         return [
             {"n": 1, "name": "AI Command Dashboard", "features": phase1},
             {"n": 2, "name": "Multi-Agent Intelligence", "features": phase2},
             {"n": 3, "name": "Computer Vision Operations", "features": phase3},
             {"n": 4, "name": "Enterprise Command Platform", "features": phase4},
             {"n": 5, "name": "Autonomous Decision Support", "features": phase5},
+            {"n": 6, "name": "Ecosystem & Monetization", "features": phase6},
         ]
 
     def snapshot(self) -> dict:

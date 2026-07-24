@@ -15,6 +15,8 @@ import connectivity
 from agenda import Agenda
 from audit import Audit
 from auth import SESSION_TTL, AuthManager
+from billing import Billing
+from web3_service import Web3Service
 from agents import build_team
 from brain import Brain
 from decisions import DecisionEngine
@@ -200,6 +202,10 @@ async def lifespan(app: FastAPI):
     state["decisions"] = decisions
     scheduler.add_job(decisions.tick, IntervalTrigger(seconds=45),
                       max_instances=1, coalesce=True)
+
+    # Phase 6 · ecosystem: monetization + optional Web3 (both modular)
+    state["billing"] = Billing(hub=hub)
+    state["web3"] = Web3Service(hub=hub)
 
     state["roadmap"] = Roadmap(state)
 
@@ -1341,6 +1347,65 @@ async def orchestrator_endpoint():
 @app.get("/api/team-memory")
 async def team_memory_endpoint():
     return state["team_memory"].snapshot()
+
+
+# ═══ PHASE 6 · MONETIZATION (editions · AI credits · entitlements) ═══
+
+@app.get("/api/billing")
+async def billing_endpoint():
+    return state["billing"].snapshot()
+
+
+class EditionReq(BaseModel):
+    edition: str
+
+
+@app.post("/api/billing/edition")
+async def billing_set_edition(req: EditionReq):
+    if not _commander():
+        return _locked()
+    res = await state["billing"].set_edition(req.edition)
+    if res.get("ok"):
+        await _audit("billing.edition", f"edition → {req.edition} (demo)")
+    return res
+
+
+# ═══ PHASE 6 · WEB3 COMMAND CENTER (optional, modular) ═══════════
+
+@app.get("/api/web3")
+async def web3_endpoint():
+    return state["web3"].snapshot()
+
+
+class Web3Toggle(BaseModel):
+    on: bool
+
+
+@app.post("/api/web3/toggle")
+async def web3_toggle(req: Web3Toggle):
+    if not _commander():
+        return _locked()
+    res = await state["web3"].set_enabled(req.on)
+    await _audit("web3.toggle", f"Web3 module {'enabled' if req.on else 'disabled'}")
+    return res
+
+
+class WalletReq(BaseModel):
+    address: str
+    network: str | None = ""
+    chain_id: int | str | None = None
+    balance: float | str | None = None
+
+
+@app.post("/api/web3/wallet")
+async def web3_wallet(req: WalletReq):
+    return await state["web3"].connect_wallet(
+        req.address, req.network or "", req.chain_id, req.balance)
+
+
+@app.post("/api/web3/wallet/disconnect")
+async def web3_wallet_disconnect():
+    return await state["web3"].disconnect_wallet()
 
 
 # ═══ PHASE 4 · MULTI-SITE FLEET ══════════════════════════════════

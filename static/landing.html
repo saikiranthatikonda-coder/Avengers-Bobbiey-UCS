@@ -313,7 +313,10 @@ form textarea{min-height:84px;resize:vertical}
 /* pricing */
 .pricing{padding:6.5rem 0;background:linear-gradient(180deg,transparent,rgba(7,12,22,.7) 18%,rgba(7,12,22,.7) 82%,transparent)}
 .price-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.2rem;margin-top:2.8rem;align-items:stretch}
+.price-grid.four{grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}
+@media(max-width:1100px){.price-grid.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:920px){.price-grid{grid-template-columns:1fr}}
+@media(max-width:620px){.price-grid.four{grid-template-columns:1fr}}
 .price-card{position:relative;border:1px solid var(--edge);border-radius:14px;padding:1.9rem 1.5rem 1.6rem;background:linear-gradient(160deg,rgba(8,22,36,.5),rgba(3,7,14,.85));display:flex;flex-direction:column;gap:1rem;transition:transform .3s,border-color .3s,box-shadow .3s}
 .price-card:hover{transform:translateY(-6px);border-color:var(--edge2);box-shadow:0 20px 50px rgba(0,0,0,.5)}
 .price-card.featured{border-color:var(--cy);box-shadow:0 0 34px rgba(0,217,255,.16);background:linear-gradient(160deg,rgba(0,40,60,.55),rgba(3,7,14,.9))}
@@ -573,6 +576,11 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
         <h4>Autonomous Decision Support System</h4>
         <p>The full vision, live: a command platform that proposes, simulates and executes operational decisions under human authority — a supervised decision engine deriving proposals from real conditions (including <b>fleet-wide operations</b>: flagging strained nodes, offloading inference to idle-GPU nodes), predicting their impact, and executing only on approval or via an audited low-risk autonomy whitelist.</p>
       </div>
+      <div class="phase now reveal">
+        <div class="ph">PHASE 6 <span class="now-badge">IN DEVELOPMENT</span></div>
+        <h4>Ecosystem &amp; Monetization</h4>
+        <p>Turning the platform into a business: live subscription editions (Community → Enterprise), AI-credit metering, and feature entitlements — plus an <b>optional, modular Web3 Command Center</b> (wallet, token analytics, treasury, governance, marketplace and community widgets) that enhances the platform without ever being required. The AI command center stays the product; crypto is one monetization &amp; community layer among many.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -582,32 +590,44 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
   <div class="wrap">
     <div class="reveal">
       <div class="eyebrow">— PRICING</div>
-      <h2 class="sect">Simple plans.<br>Founding-member prices.</h2>
-      <p class="sect-sub">Early operators lock in founding pricing for life. Every plan ships the full cinematic command console.</p>
+      <h2 class="sect">Free to start.<br>Scales to the enterprise.</h2>
+      <p class="sect-sub">The full command center is free forever on Community. Paid tiers add cloud AI, multi-operator fleets, and enterprise controls. Every edition is live in the dashboard's License &amp; Monetization module today.</p>
     </div>
-    <div class="price-grid">
+    <div class="price-grid four">
       <div class="price-card reveal">
-        <div class="pc-name">OPERATOR</div>
-        <div class="pc-price">FREE<small>during beta</small></div>
+        <div class="pc-name">COMMUNITY</div>
+        <div class="pc-price">FREE<small>forever · 1 operator</small></div>
         <ul class="pc-feats">
-          <li>Full local command console</li>
-          <li>8 AI agents + voice command</li>
-          <li>Local AI (Ollama) support</li>
-          <li>Vision presence awareness</li>
-          <li>Community support</li>
+          <li>Full command dashboard + HUD</li>
+          <li>8-agent roster + orchestration</li>
+          <li>Local AI (Ollama) + telemetry</li>
+          <li>Threat intelligence</li>
+          <li>100 AI credits / month</li>
         </ul>
-        <a class="btn ghost" href="#access">JOIN THE BETA</a>
+        <a class="btn ghost" href="#access">START FREE</a>
+      </div>
+      <div class="price-card reveal">
+        <div class="pc-name">PRO</div>
+        <div class="pc-price">$19<small>/month</small></div>
+        <ul class="pc-feats">
+          <li>Everything in Community</li>
+          <li>Claude cloud brain + webcam vision</li>
+          <li>Executive briefings + Knowledge Hub</li>
+          <li>Google Calendar + Gmail</li>
+          <li>2,000 AI credits / month</li>
+        </ul>
+        <a class="btn ghost" href="#access">GO PRO</a>
       </div>
       <div class="price-card featured reveal">
-        <div class="pc-badge">FOUNDING MEMBER</div>
-        <div class="pc-name">COMMANDER</div>
-        <div class="pc-price">$29<small>/month · or $290/year</small></div>
+        <div class="pc-badge">MOST POPULAR</div>
+        <div class="pc-name">TEAM</div>
+        <div class="pc-price">$49<small>/user/month</small></div>
         <ul class="pc-feats">
-          <li>Everything in Operator</li>
-          <li>Google Calendar + Gmail integrations</li>
-          <li>Threat Intelligence Center</li>
-          <li>Executive briefings + insights engine</li>
-          <li>Priority support · price locked forever</li>
+          <li>Everything in Pro</li>
+          <li>Multi-operator + role-based command</li>
+          <li>Multi-site fleet (up to 10 nodes)</li>
+          <li>Shared team memory + audit trail</li>
+          <li>10,000 pooled AI credits / month</li>
         </ul>
         <a class="btn primary" href="#access">REQUEST EARLY ACCESS</a>
       </div>
@@ -615,15 +635,18 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
         <div class="pc-name">ENTERPRISE</div>
         <div class="pc-price">CUSTOM<small>annual contract</small></div>
         <ul class="pc-feats">
-          <li>Multi-operator command floors</li>
-          <li>On-prem AI cluster deployment</li>
-          <li>Multi-camera vision operations</li>
-          <li>SSO, audit trail, compliance</li>
-          <li>Dedicated success engineer</li>
+          <li>Everything in Team</li>
+          <li>Unlimited nodes + on-prem AI clusters</li>
+          <li>SSO / SAML · compliance export</li>
+          <li>Autonomous decision support at scale</li>
+          <li>Dedicated engineer + SLA</li>
         </ul>
         <a class="btn dark" href="#access">TALK TO THE FOUNDER</a>
       </div>
     </div>
+    <p class="sect-sub reveal" style="margin-top:2rem;text-align:center;">
+      Multiple monetization paths coexist — subscriptions, AI credits, a plugin marketplace, professional services, on-prem licensing, and an <b>optional token ecosystem</b>. The AI platform is the product; the token is a community &amp; access layer, never a requirement.
+    </p>
   </div>
 </section>
 
