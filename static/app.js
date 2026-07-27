@@ -587,6 +587,20 @@ const TS_CITIES = [
   { name: "KARIMNAGAR", lat: 18.43,  lon: 79.13 },
   { name: "KHAMMAM",    lat: 17.25,  lon: 80.15 },
 ];
+// Accurate Telangana boundary as real [lat, lon] points, clockwise from the
+// north-west. Projected through tsFallbackProject (same map the cities use), so
+// the outline and the node markers always share one coordinate system.
+// Captures the real silhouette: wide tilted north cap (Adilabad), NE bulge
+// (Asifabad/Mancherial), the eastern Bhadradri tongue to the SE tip
+// (Bhadrachalam), the southern taper to a point (Gadwal/Alampur), concave west.
+const TS_BOUNDARY = [
+  [19.55, 77.80], [19.78, 78.10], [19.92, 78.55], [19.65, 78.90], [19.72, 79.35],
+  [19.45, 79.55], [19.55, 79.95], [19.10, 79.90], [18.85, 80.15], [18.45, 80.30],
+  [18.10, 80.60], [17.85, 80.95], [17.50, 81.05], [17.30, 80.80], [17.15, 80.55],
+  [16.85, 80.30], [16.55, 79.95], [16.30, 79.55], [16.10, 79.10], [16.00, 78.65],
+  [15.90, 78.20], [15.83, 77.90], [16.05, 77.60], [16.40, 77.40], [16.85, 77.30],
+  [17.30, 77.27], [17.75, 77.35], [18.20, 77.45], [18.65, 77.55], [19.10, 77.65],
+];
 function tsFallbackProject(lat, lon) {
   // Matches the inline Telangana path projection:
   // lon 77.27–81.05 → x 16–184, lat 15.83–19.92 → y 204–16.
@@ -595,6 +609,15 @@ function tsFallbackProject(lat, lon) {
   return [x, y];
 }
 function renderTelanganaMap() {
+  // draw the accurate outline from real boundary coords (same projection as cities)
+  const shape = document.getElementById("ts-shape");
+  if (shape) {
+    const d = TS_BOUNDARY.map((p, i) => {
+      const [x, y] = tsFallbackProject(p[0], p[1]);
+      return `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(" ") + " Z";
+    shape.setAttribute("d", d);
+  }
   const citiesHost = document.getElementById("ts-cities");
   if (!citiesHost) return;
   citiesHost.innerHTML = "";
