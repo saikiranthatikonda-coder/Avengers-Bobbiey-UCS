@@ -3078,11 +3078,118 @@ async function refreshBilling() {
 }
 refreshBilling(); setInterval(refreshBilling, 60000);
 
-/* ═══ PHASE 6 · WEB3 COMMAND CENTER (optional module) ═══ */
-const W3_CHAINS = { "0x1": "Ethereum", "0x89": "Polygon", "0xa": "Optimism",
-  "0xa4b1": "Arbitrum", "0x2105": "Base", "0xaa36a7": "Sepolia", "0x38": "BNB Chain" };
-const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "K" : String(n);
+/* ═══════════════════════════════════════════════════════════════
+   PHASE 6 · WEB3 COMMAND CENTER — functional subsystem
+   Optional & modular: everything here is inert when the module is
+   disabled. Keys never leave the browser; the server only records the
+   address and independently verifies balances over RPC.
+   ═══════════════════════════════════════════════════════════════ */
 
+const fmtTok = n => n == null ? "—"
+  : n >= 1e9 ? (n / 1e9).toFixed(2) + "B"
+  : n >= 1e6 ? (n / 1e6).toFixed(1) + "M"
+  : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : String(Math.round(n * 100) / 100);
+const shortAddr = a => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—";
+
+/* ── EIP-6963: discover every installed wallet, not just window.ethereum ── */
+const W3Wallets = { providers: [], selected: null };
+window.addEventListener("eip6963:announceProvider", (e) => {
+  const d = e.detail;
+  if (d && d.info && !W3Wallets.providers.some(p => p.info.uuid === d.info.uuid))
+    W3Wallets.providers.push(d);
+});
+try { window.dispatchEvent(new Event("eip6963:requestProvider")); } catch (e) {}
+
+function w3Provider() {
+  if (W3Wallets.selected) return W3Wallets.selected.provider;
+  if (W3Wallets.providers.length === 1) return W3Wallets.providers[0].provider;
+  return window.ethereum || null;
+}
+
+/* ── connect / disconnect / switch network ── */
+async function w3Connect(detail) {
+  if (detail) W3Wallets.selected = detail;
+  const prov = w3Provider();
+  if (!prov) {
+    logEvent('<span class="tag">[web3]</span> no wallet detected — install MetaMask or another EIP-6963 wallet', "warn");
+    return;
+  }
+  try {
+    const accounts = await prov.request({ method: "eth_requestAccounts" });
+    const chainHex = await prov.request({ method: "eth_chainId" });
+    await fetch("/api/web3/wallet", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        address: accounts[0], chain_id: parseInt(chainHex, 16),
+        label: (W3Wallets.selected && W3Wallets.selected.info.name) || "injected",
+      }),
+    });
+    // react to the user changing account/network in the wallet itself
+    if (!prov.__bucsBound) {
+      prov.__bucsBound = true;
+      prov.on && prov.on("accountsChanged", (a) => a.length ? w3Connect() : w3Disconnect());
+      prov.on && prov.on("chainChanged", () => w3Connect());
+    }
+    const picker = $("#w3-wallet-picker"); if (picker) picker.hidden = true;
+    logEvent('<span class="tag">[web3]</span> wallet connected');
+  } catch (e) {
+    logEvent('<span class="tag">[web3]</span> wallet connection cancelled', "warn");
+  }
+  refreshWeb3();
+}
+
+async function w3Disconnect() {
+  try { await fetch("/api/web3/wallet/disconnect", { method: "POST" }); } catch (e) {}
+  W3Wallets.selected = null;
+  refreshWeb3();
+}
+
+async function w3SwitchChain(chainId) {
+  const prov = w3Provider();
+  const hex = "0x" + Number(chainId).toString(16);
+  if (prov) {
+    try {
+      await prov.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] });
+      logEvent(`<span class="tag">[web3]</span> network switched`);
+    } catch (e) {
+      logEvent('<span class="tag">[web3]</span> network switch declined by wallet', "warn");
+    }
+  }
+  // keep the server view in sync even with no wallet (read-only chain monitoring)
+  try {
+    await fetch("/api/web3/config", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ default_chain: Number(chainId) }),
+    });
+  } catch (e) {}
+  refreshWeb3();
+}
+
+/* ── portfolio sparkline (real observed balance history) ── */
+function drawPortfolio(series) {
+  const cv = document.getElementById("w3-pf-canvas"); if (!cv) return;
+  const ctx = cv.getContext("2d");
+  const W = cv.width = cv.clientWidth || 260, H = cv.height = 52;
+  ctx.clearRect(0, 0, W, H);
+  if (!series || series.length < 2) {
+    ctx.fillStyle = "rgba(126,150,179,0.6)"; ctx.font = "9px monospace";
+    ctx.fillText("collecting balance history…", 6, H / 2 + 3);
+    return;
+  }
+  const vals = series.map(p => p.native + (p.token || 0));
+  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
+  ctx.beginPath();
+  series.forEach((p, i) => {
+    const x = (i / (series.length - 1)) * (W - 4) + 2;
+    const y = H - 4 - ((vals[i] - min) / span) * (H - 10);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.strokeStyle = "#a855f7"; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.lineTo(W - 2, H - 2); ctx.lineTo(2, H - 2); ctx.closePath();
+  ctx.fillStyle = "rgba(168,85,247,0.14)"; ctx.fill();
+}
+
+/* ── main refresh ── */
 async function refreshWeb3() {
   try {
     const d = await (await fetch("/api/web3")).json();
@@ -3091,88 +3198,217 @@ async function refreshWeb3() {
     const btn = $("#btn-web3-toggle");
     if (btn) { btn.textContent = on ? "◈ WEB3 ENABLED" : "◇ ENABLE WEB3"; btn.classList.toggle("on", on); }
     const row = $("#web3-row"); if (row) row.hidden = !on;
-    // mini wallet status on the toggle card
     const mini = $("#web3-wallet-mini");
-    if (mini) mini.innerHTML = !on ? '<div class="tf-empty">enable the module, then connect a wallet</div>'
-      : (d.wallet ? `<div class="w3-kv"><span class="k">WALLET</span><span class="v">${escapeHTML(d.wallet.address.slice(0,6))}…${escapeHTML(d.wallet.address.slice(-4))}</span></div>`
-                  : '<div class="tf-empty">module on · connect a wallet in the WALLET widget below</div>');
+    if (mini) mini.innerHTML = !on
+      ? '<div class="tf-empty">enable the module, then connect a wallet</div>'
+      : (d.wallet
+        ? `<div class="w3-kv"><span class="k">WALLET</span><span class="v">${escapeHTML(shortAddr(d.wallet.address))} · ${escapeHTML(d.wallet.network || "")}</span></div>`
+        : '<div class="tf-empty">module on · connect a wallet in the WALLET widget below</div>');
     if (!on) return;
 
-    // wallet widget
+    /* ── WALLET ── */
+    const w = d.wallet;
+    const wStatus = $("#w3-wallet-status");
+    if (wStatus) wStatus.textContent = w ? "CONNECTED" : "DISCONNECTED";
     const wb = $("#w3-wallet-body");
-    const cbtn = $("#btn-wallet-connect"), dbtn = $("#btn-wallet-disconnect");
+    const cbtn = $("#btn-wallet-connect"), dbtn = $("#btn-wallet-disconnect"), rbtn = $("#btn-wallet-refresh");
     if (wb) {
-      if (d.wallet) {
+      if (w) {
+        const ex = w.explorer ? `${w.explorer}/address/${w.address}` : null;
         wb.innerHTML = `
-          <div class="w3-kv"><span class="k">ADDRESS</span><span class="v" title="${escapeHTML(d.wallet.address)}">${escapeHTML(d.wallet.address.slice(0,10))}…${escapeHTML(d.wallet.address.slice(-6))}</span></div>
-          <div class="w3-kv"><span class="k">NETWORK</span><span class="v">${escapeHTML(d.wallet.network || "unknown")}</span></div>
-          <div class="w3-kv"><span class="k">BALANCE</span><span class="v">${d.wallet.balance != null ? (+d.wallet.balance).toFixed(4) : "—"}</span></div>
-          <div class="w3-kv"><span class="k">STATUS</span><span class="v" style="color:#22c55e">● CONNECTED</span></div>`;
-        if (cbtn) cbtn.hidden = true; if (dbtn) dbtn.hidden = false;
+          <div class="w3-kv"><span class="k">ADDRESS</span><span class="v" title="${escapeHTML(w.address)}">${escapeHTML(shortAddr(w.address))}${ex ? ` <a href="${escapeHTML(ex)}" target="_blank" rel="noopener" style="color:#c084fc">↗</a>` : ""}</span></div>
+          <div class="w3-kv"><span class="k">NETWORK</span><span class="v">${escapeHTML(w.network || "—")}</span></div>
+          <div class="w3-kv"><span class="k">${escapeHTML(w.native_symbol || "NATIVE")}</span><span class="v">${w.native_balance != null ? w.native_balance.toFixed(5) : "—"}</span></div>
+          <div class="w3-kv"><span class="k">${escapeHTML(w.token_symbol || "TOKEN")}</span><span class="v">${w.token_balance != null ? w.token_balance.toFixed(3) : (d.config.has_contract ? "0" : "pre-launch")}</span></div>
+          <div class="w3-kv"><span class="k">WALLET</span><span class="v">${escapeHTML(w.label || "injected")}</span></div>`;
+        if (cbtn) cbtn.hidden = true; if (dbtn) dbtn.hidden = false; if (rbtn) rbtn.hidden = false;
       } else {
-        wb.innerHTML = window.ethereum ? '<div class="tf-empty">no wallet connected — click Connect</div>'
-          : '<div class="tf-empty">no browser wallet detected (install MetaMask) — demo data still shows below</div>';
-        if (cbtn) cbtn.hidden = false; if (dbtn) dbtn.hidden = true;
+        const n = W3Wallets.providers.length;
+        wb.innerHTML = n || window.ethereum
+          ? `<div class="tf-empty">${n ? n + " wallet(s) detected" : "wallet detected"} — click Connect</div>`
+          : '<div class="tf-empty">no browser wallet detected — install MetaMask (or any EIP-6963 wallet) to connect</div>';
+        if (cbtn) cbtn.hidden = false; if (dbtn) dbtn.hidden = true; if (rbtn) rbtn.hidden = true;
       }
     }
-    // token analytics
+
+    /* ── BLOCKCHAIN STATUS (live RPC) ── */
+    const c = d.chain || {};
+    const cn = $("#w3-chain-name"); if (cn) cn.textContent = (c.name || "—").toUpperCase();
+    const cs = $("#w3-chain-stats");
+    if (cs) cs.innerHTML = [
+      ["NETWORK", c.name || "—"],
+      ["BLOCK", c.block != null ? "#" + c.block.toLocaleString() : "—"],
+      ["GAS", c.gas_gwei != null ? c.gas_gwei + " gwei" : "—"],
+      ["RPC LATENCY", c.latency_ms != null ? c.latency_ms + " ms" : "—"],
+      ["HEALTH", (c.health || "—").toUpperCase()],
+      ["STATUS", c.online ? "● ONLINE" : "○ OFFLINE"],
+    ].map(([k, v]) => `<div class="w3-stat"><span class="lbl">${k}</span><span class="val">${escapeHTML(String(v))}</span></div>`).join("");
+    const qf = $("#w3-quality-fill");
+    if (qf) {
+      qf.style.width = (c.quality || 0) + "%";
+      qf.className = c.quality >= 70 ? "" : c.quality >= 40 ? "warn" : "bad";
+    }
+    const qt = $("#w3-quality-txt"); if (qt) qt.textContent = (c.quality || 0) + "%";
+    const cp = $("#w3-chain-picker");
+    if (cp) {
+      cp.innerHTML = (d.chains || []).map(x =>
+        `<button class="w3-chain-btn${x.chain_id === c.chain_id ? " active" : ""}" data-chain="${x.chain_id}">${escapeHTML(x.name.toUpperCase())}</button>`).join("");
+      cp.querySelectorAll(".w3-chain-btn").forEach(b =>
+        b.addEventListener("click", () => w3SwitchChain(b.dataset.chain)));
+    }
+
+    /* ── PORTFOLIO ── */
+    const an = d.analytics || {};
+    const pfc = $("#w3-pf-change");
+    if (pfc) pfc.textContent = an.points > 1 ? `${an.change_pct >= 0 ? "+" : ""}${an.change_pct}%` : `${an.points || 0} SAMPLES`;
+    drawPortfolio(an.series);
+    const hold = $("#w3-holdings");
+    if (hold) hold.innerHTML = (an.holdings || []).length
+      ? an.holdings.map(h => `<div class="w3-holding"><span class="asset">${escapeHTML(h.asset)}</span><span class="amt">${h.amount}</span><span class="kind">${escapeHTML(h.kind.toUpperCase())}</span></div>`).join("")
+      : '<div class="tf-empty">connect a wallet to load holdings</div>';
+    const act = $("#w3-activity");
+    if (act) act.innerHTML = (d.wallet_history || []).length
+      ? d.wallet_history.map(h => `<div class="w3-act"><b>${escapeHTML(shortAddr(h.address))}</b> · ${new Date(h.ts * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>`).join("")
+      : '<div class="w3-act">no wallet activity yet</div>';
+    // transactions
+    try {
+      const tx = await (await fetch("/api/web3/transactions")).json();
+      const tl = $("#w3-tx-list");
+      if (tl) tl.innerHTML = (tx.transactions || []).length
+        ? tx.transactions.map(t => `<div class="w3-tx ${t.direction}"><span class="dir">${t.direction === "in" ? "▼" : "▲"}</span><span class="hash">${escapeHTML(t.hash)}</span><span class="amt">${t.value}</span></div>`).join("")
+        : `<div class="tf-empty">${escapeHTML(tx.note || (w ? "no recent transactions" : "connect a wallet"))}</div>`;
+    } catch (e) {}
+
+    /* ── TOKEN CENTER ── */
     const t = d.token || {};
-    const ts = $("#w3-token-stats");
-    const sym = $("#w3-token-sym"); if (sym) sym.textContent = t.symbol || "BBUCS";
-    if (ts) ts.innerHTML = [
-      ["TOTAL SUPPLY", fmtTok(t.total_supply || 0)],
-      ["CIRCULATING", fmtTok(t.circulating || 0)],
-      ["TREASURY", fmtTok(t.treasury || 0)],
-      ["BURNED", fmtTok(t.burned || 0)],
+    const tn = $("#w3-token-name"); if (tn) tn.textContent = (t.name || "—").toUpperCase();
+    const tsym = $("#w3-token-sym"); if (tsym) tsym.textContent = t.symbol || "—";
+    const tm = $("#w3-token-mode");
+    if (tm) tm.textContent = t.live ? "● LIVE ON-CHAIN" : "PRE-LAUNCH · CONFIGURED";
+    const tstats = $("#w3-token-stats");
+    if (tstats) tstats.innerHTML = [
+      ["TOTAL SUPPLY", fmtTok(t.total_supply)],
+      ["CIRCULATING", `${fmtTok(t.circulating)} (${t.circulating_pct || 0}%)`],
+      ["TREASURY", fmtTok(t.treasury_tokens)],
+      ["COMMUNITY", fmtTok(t.community_tokens)],
+      ["ECOSYSTEM", fmtTok(t.ecosystem_tokens)],
+      ["DEVELOPMENT", fmtTok(t.development_tokens)],
+      ["BURNED", fmtTok(t.burned)],
       ["HOLDERS", t.holders ? fmtTok(t.holders) : "—"],
-      ["MARKET", t.market ? t.market : "pre-launch"],
     ].map(([k, v]) => `<div class="w3-stat"><span class="lbl">${k}</span><span class="val">${escapeHTML(String(v))}</span></div>`).join("");
     const alloc = $("#w3-alloc");
     if (alloc) alloc.innerHTML = (t.allocations || []).map(a => `
       <div class="w3-alloc-row"><span class="w3-alloc-name">${escapeHTML(a.label)}</span>
       <span class="w3-alloc-bar"><div style="width:${a.pct}%"></div></span>
       <span class="w3-alloc-pct">${a.pct}%</span></div>`).join("");
-    // treasury + premium
-    const tt = $("#w3-treasury-top");
-    if (tt) tt.innerHTML = `<div class="w3-kv"><span class="k">DAO TREASURY</span><span class="v">${fmtTok(t.treasury || 0)} ${escapeHTML(t.symbol || "")}</span></div>
-      <div class="w3-kv"><span class="k">YOUR POWER</span><span class="v">${(d.governance || {}).voting_power || 0}</span></div>`;
     const prem = $("#w3-premium");
-    if (prem) prem.innerHTML = (d.premium || []).map(p => `
-      <div class="w3-prem-row"><span class="nm">${escapeHTML(p.name)}</span>
-      <span class="stake">${p.stake} stake</span>
-      <span class="lock">${p.unlocked ? "🔓" : "🔒"}</span></div>`).join("");
-    // governance
+    const power = (d.governance || {}).voting_power || 0;
+    if (prem) prem.innerHTML = (t.utilities || []).map(u => {
+      const unlocked = power >= u.stake;
+      return `<div class="w3-prem-row"><span class="nm">${escapeHTML(u.name)}</span>
+        <span class="stake">${u.stake} ${escapeHTML(t.symbol || "")}</span>
+        <span class="lock">${unlocked ? "🔓" : "🔒"}</span></div>`;
+    }).join("");
+
+    /* ── TREASURY ── */
+    const tr = d.treasury || {};
+    const trTotal = $("#w3-treasury-total");
+    if (trTotal) trTotal.textContent = `${fmtTok(tr.total_tokens)} ${tr.symbol || ""}`;
+    const tt = $("#w3-treasury-top");
+    if (tt) tt.innerHTML = `
+      <div class="w3-kv"><span class="k">DAO TREASURY</span><span class="v">${fmtTok(tr.total_tokens)} ${escapeHTML(tr.symbol || "")}</span></div>
+      <div class="w3-kv"><span class="k">ON-CHAIN</span><span class="v">${tr.live_native_balance != null ? tr.live_native_balance.toFixed(4) + " " + escapeHTML(tr.native_symbol || "") : (tr.address ? "reading…" : "no address configured")}</span></div>`;
+    const rv = $("#w3-reserves");
+    if (rv) rv.innerHTML = (tr.reserves || []).map(r => `
+      <div class="w3-reserve">
+        <div class="w3-res-head"><span class="w3-res-name">${escapeHTML(r.label)}</span><span class="w3-res-amt">${fmtTok(r.tokens)} · ${r.pct}%</span></div>
+        <div class="w3-res-bar"><div style="width:${r.pct}%"></div></div>
+        <div class="w3-res-purpose">${escapeHTML(r.purpose || "")}</div>
+      </div>`).join("");
+    const mv = $("#w3-moves");
+    if (mv) mv.innerHTML = (tr.movements || []).length
+      ? tr.movements.map(m => `<div class="w3-move"><span class="${m.delta >= 0 ? "up" : "down"}">${m.delta >= 0 ? "+" : ""}${fmtTok(m.delta)}</span> ${escapeHTML(m.reserve)} — ${escapeHTML(m.note || "")}</div>`).join("")
+      : '<div class="tf-empty">no treasury movements recorded</div>';
+
+    /* ── GOVERNANCE (real voting) ── */
     const g = d.governance || {};
     const ga = $("#w3-gov-active"); if (ga) ga.textContent = g.active_count || 0;
     const gp = $("#w3-gov-power"); if (gp) gp.textContent = g.voting_power || 0;
+    const gv = $("#w3-gov-voters"); if (gv) gv.textContent = g.unique_voters || 0;
     const gl = $("#w3-gov-list");
-    if (gl) gl.innerHTML = (g.proposals || []).map(p => {
-      const total = p.for + p.against || 1;
-      return `<div class="w3-gov-item ${p.status}">
-        <div class="w3-gov-title">${escapeHTML(p.id)} · ${escapeHTML(p.title)}</div>
-        <div class="w3-gov-bar"><div style="width:${Math.round(p.for / total * 100)}%"></div></div>
-        <div class="w3-gov-meta"><span>${p.for}% for · ${p.against}% against</span><span>${p.status === "active" ? "ends " + p.ends_in_h + "h" : p.status.toUpperCase()}</span></div>
-      </div>`;
-    }).join("");
-    // marketplace
+    if (gl) {
+      gl.innerHTML = (g.proposals || []).map(p => {
+        const t2 = p.tally || {};
+        const active = p.status === "active";
+        return `<div class="w3-gov-item ${p.status}">
+          <div class="w3-gov-title">${escapeHTML(p.id)} · ${escapeHTML(p.title)}</div>
+          <div class="w3-gov-bar"><div style="width:${t2.for_pct || 0}%"></div></div>
+          <div class="w3-gov-meta"><span>${t2.for || 0} for · ${t2.against || 0} against</span>
+            <span>${active ? "ends " + p.ends_in_h + "h" : p.status.toUpperCase()}</span></div>
+          <div class="w3-gov-quorum">QUORUM ${t2.quorum_met ? "MET" : "PENDING"} · ${t2.real_votes || 0} WALLET VOTES${p.your_vote ? " · YOU VOTED " + p.your_vote.toUpperCase() : ""}</div>
+          ${active ? `<div class="w3-vote-btns">
+            <button class="w3-vote for${p.your_vote === "for" ? " cast" : ""}" data-p="${escapeHTML(p.id)}" data-c="for"${w ? "" : " disabled"}>✓ FOR</button>
+            <button class="w3-vote against${p.your_vote === "against" ? " cast" : ""}" data-p="${escapeHTML(p.id)}" data-c="against"${w ? "" : " disabled"}>✕ AGAINST</button>
+            ${w ? "" : '<span class="w3-gov-quorum">connect a wallet to vote</span>'}
+          </div>` : ""}
+        </div>`;
+      }).join("");
+      gl.querySelectorAll(".w3-vote").forEach(b => b.addEventListener("click", async () => {
+        b.disabled = true;
+        try {
+          const r = await (await fetch("/api/web3/governance/vote", {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ proposal_id: b.dataset.p, choice: b.dataset.c }) })).json();
+          if (!r.ok && r.error) logEvent(`<span class="tag">[web3]</span> ${escapeHTML(r.error)}`, "warn");
+          else logEvent(`<span class="tag">[web3]</span> vote recorded — ${escapeHTML(b.dataset.p)} ${escapeHTML(b.dataset.c)}`);
+        } catch (e) {}
+        refreshWeb3();
+      }));
+    }
+
+    /* ── MARKETPLACE ── */
+    const mk = d.marketplace || {};
+    const mi = $("#w3-market-installed"); if (mi) mi.textContent = mk.installed_count || 0;
     const ml = $("#w3-market-list");
-    if (ml) ml.innerHTML = (d.marketplace || []).map(m => `
-      <div class="w3-market-item">
-        <span><span class="nm">${escapeHTML(m.name)}</span><br><span class="type">${escapeHTML(m.type.toUpperCase())}</span></span>
-        <span><span class="price">${escapeHTML(m.price)}</span><br><span class="soon">${escapeHTML((m.status || "").toUpperCase())}</span></span>
-      </div>`).join("");
-    // community
-    const c = d.community || {};
-    const cs = $("#w3-comm-stats");
-    if (cs) cs.innerHTML = [["MEMBERS", c.members || "—"], ["CONTRIBUTORS", c.contributors || "—"]]
-      .map(([k, v]) => `<div class="w3-stat"><span class="lbl">${k}</span><span class="val">${v}</span></div>`).join("");
-    const cn = $("#w3-comm-news");
-    if (cn) cn.innerHTML = (c.announcements || []).map(a =>
-      `<div class="w3-news-item">${escapeHTML(a.text)}</div>`).join("");
+    if (ml) {
+      ml.innerHTML = (mk.listings || []).map(m => `
+        <div class="w3-market-item">
+          <span><span class="nm">${escapeHTML(m.name)}</span><br>
+            <span class="type">${escapeHTML(m.type.toUpperCase())} · ${escapeHTML(String(m.author).toUpperCase())} · ${m.installs} INSTALLS</span></span>
+          <span style="text-align:right">
+            <span class="price">${escapeHTML(m.price_label)}</span><br>
+            <button class="w3-mk-btn${m.is_installed ? " remove" : ""}" data-slug="${escapeHTML(m.slug)}" data-act="${m.is_installed ? "uninstall" : "install"}">${m.is_installed ? "REMOVE" : "INSTALL"}</button>
+          </span>
+        </div>`).join("");
+      ml.querySelectorAll(".w3-mk-btn").forEach(b => b.addEventListener("click", async () => {
+        b.disabled = true;
+        try {
+          const r = await (await fetch("/api/web3/marketplace/" + b.dataset.act, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ slug: b.dataset.slug }) })).json();
+          if (!r.ok && r.error) logEvent(`<span class="tag">[web3]</span> ${escapeHTML(r.error)}`, "warn");
+        } catch (e) {}
+        refreshWeb3();
+      }));
+    }
+
+    /* ── COMMUNITY / EVENT LOG ── */
+    const cs2 = $("#w3-comm-stats");
+    if (cs2) cs2.innerHTML = [
+      ["VOTERS", g.unique_voters || 0],
+      ["PROPOSALS", g.total_count || 0],
+      ["INSTALLS", mk.installed_count || 0],
+      ["PUBLISHED", mk.published_count || 0],
+    ].map(([k, v]) => `<div class="w3-stat"><span class="lbl">${k}</span><span class="val">${v}</span></div>`).join("");
+    const cn2 = $("#w3-comm-news");
+    if (cn2) cn2.innerHTML = (an.events || []).length
+      ? an.events.map(e => `<div class="w3-news-item">${escapeHTML(e.text)}</div>`).join("")
+      : '<div class="w3-news-item">no on-chain events yet — connect a wallet or cast a vote</div>';
   } catch (e) {}
 }
 refreshWeb3(); setInterval(refreshWeb3, 30000);
 
+/* ── controls ── */
 $("#btn-web3-toggle")?.addEventListener("click", async () => {
   const enabling = !$("#btn-web3-toggle").classList.contains("on");
   try {
@@ -3183,32 +3419,50 @@ $("#btn-web3-toggle")?.addEventListener("click", async () => {
   refreshWeb3();
 });
 
-async function connectBrowserWallet() {
-  if (!window.ethereum) {
-    logEvent('<span class="tag">[web3]</span> no browser wallet found — install MetaMask to connect', "warn");
-    return;
+$("#btn-wallet-connect")?.addEventListener("click", () => {
+  // more than one wallet installed → let the operator choose (EIP-6963)
+  if (W3Wallets.providers.length > 1) {
+    const picker = $("#w3-wallet-picker");
+    if (picker) {
+      picker.hidden = false;
+      picker.innerHTML = W3Wallets.providers.map((p, i) =>
+        `<div class="w3-wallet-opt" data-i="${i}"><img src="${escapeHTML(p.info.icon)}" alt=""/> ${escapeHTML(p.info.name)}</div>`).join("");
+      picker.querySelectorAll(".w3-wallet-opt").forEach(el =>
+        el.addEventListener("click", () => w3Connect(W3Wallets.providers[+el.dataset.i])));
+      return;
+    }
   }
-  try {
-    const accs = await window.ethereum.request({ method: "eth_requestAccounts" });
-    const address = accs[0];
-    const chainId = await window.ethereum.request({ method: "eth_chainId" });
-    let balance = null;
-    try {
-      const wei = await window.ethereum.request({ method: "eth_getBalance", params: [address, "latest"] });
-      balance = parseInt(wei, 16) / 1e18;
-    } catch (e) {}
-    await fetch("/api/web3/wallet", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ address, network: W3_CHAINS[chainId] || ("chain " + parseInt(chainId, 16)),
-                             chain_id: parseInt(chainId, 16), balance }) });
-    logEvent('<span class="tag">[web3]</span> wallet connected');
-  } catch (e) {
-    logEvent('<span class="tag">[web3]</span> wallet connection cancelled', "warn");
-  }
+  w3Connect();
+});
+$("#btn-wallet-disconnect")?.addEventListener("click", w3Disconnect);
+$("#btn-wallet-refresh")?.addEventListener("click", async () => {
+  try { await fetch("/api/web3/wallet/refresh", { method: "POST" }); } catch (e) {}
   refreshWeb3();
-}
-$("#btn-wallet-connect")?.addEventListener("click", connectBrowserWallet);
-$("#btn-wallet-disconnect")?.addEventListener("click", async () => {
-  try { await fetch("/api/web3/wallet/disconnect", { method: "POST" }); } catch (e) {}
+});
+
+$("#w3-gov-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const title = $("#w3-gov-title").value.trim(); if (!title) return;
+  try {
+    const r = await (await fetch("/api/web3/governance/propose", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title }) })).json();
+    if (r.ok) { $("#w3-gov-title").value = ""; logEvent(`<span class="tag">[web3]</span> proposal ${escapeHTML(r.proposal.id)} opened`); }
+    else if (r.error) logEvent(`<span class="tag">[web3]</span> ${escapeHTML(r.error)}`, "warn");
+  } catch (err) {}
+  refreshWeb3();
+});
+
+$("#w3-publish-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("#w3-publish-name").value.trim(); if (!name) return;
+  try {
+    const r = await (await fetch("/api/web3/marketplace/publish", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, kind: "plugin" }) })).json();
+    if (r.ok) { $("#w3-publish-name").value = ""; logEvent('<span class="tag">[web3]</span> listing published — pending review'); }
+    else if (r.error) logEvent(`<span class="tag">[web3]</span> ${escapeHTML(r.error)}`, "warn");
+  } catch (err) {}
   refreshWeb3();
 });
 

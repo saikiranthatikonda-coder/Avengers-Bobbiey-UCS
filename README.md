@@ -55,7 +55,7 @@ Bobbiey UCS turns a passive dashboard into an **active operations brain**:
 - 🔐 **Authenticated remote access** _(Phase 4)_ — the perimeter that makes `0.0.0.0` exposure safe: the loopback console is always trusted, remote access is **denied by default** until you set a password, then remote operators log in (PBKDF2 + HMAC-signed HttpOnly sessions) and scripts use **API bearer tokens** — with per-IP lockout, revocable sessions/tokens, and full audit logging. Stdlib-only crypto, no dependencies.
 - ⚖️ **Decision support** _(Phase 5)_ — the platform **proposes** actions from real conditions, **simulates** their impact from live numbers, and **executes only under human authority** — with an opt-in supervised-autonomy whitelist, fully audited.
 - 💳 **License & monetization** _(Phase 6)_ — live subscription editions (Community/Pro/Team/Enterprise), **AI-credit metering**, and feature **entitlements** in-dashboard; multiple monetization paths coexist (subscriptions, credits, marketplace, services, on-prem, optional token).
-- 🪙 **Web3 Command Center** _(Phase 6, optional & modular)_ — a toggleable blockchain layer styled into the HUD: **wallet** (MetaMask/injected), token analytics, treasury, governance, premium-access staking, marketplace and community. **Off by default; the platform runs fully without it.** Mock/demo data until any token exists — the token is access & participation, never speculation or a requirement.
+- 🪙 **Web3 Command Center** _(Phase 6, optional & modular)_ — a **working** blockchain subsystem, off by default, styled into the HUD. **Genuinely live:** chain status over real JSON-RPC (block height, gas, RPC latency, health — no API key), **real balances** read from chain via `eth_call`, EIP-6963 multi-wallet connect + network switching, **working governance** (create proposals, one-vote-per-address, persisted tallies), persisted marketplace installs, treasury reserves, and a portfolio curve built from real observed balances. Token figures are operator-configurable until a contract exists — set `token.contract` and the layer reads live ERC-20 supply/symbol/decimals with **no code change**. The platform runs fully without any of it; the token is access & participation, never speculation or a requirement.
 - 📈 **Product Evolution panel** — the public roadmap rendered live inside the product, every feature verified against the running system with auto-versioning.
 
 ---
@@ -210,7 +210,16 @@ Avengers-Bobbiey-UCS/
 ├─ auth.py              Phase 4 · authenticated remote access (login + tokens)
 ├─ decisions.py         Phase 5 · supervised decision engine
 ├─ billing.py           Phase 6 · editions, AI credits, entitlements
-├─ web3_service.py      Phase 6 · optional modular Web3 layer (mock)
+├─ web3mod/             Phase 6 · optional Web3 subsystem (modular services)
+│   ├─ config.py        operator-editable token/treasury/chain configuration
+│   ├─ blockchain.py    live JSON-RPC: block, gas, latency, health, eth_call
+│   ├─ wallet.py        connected wallet + real native / ERC-20 balances
+│   ├─ token.py         token metadata (config, or live from contract)
+│   ├─ governance.py    proposals + persisted one-per-address voting
+│   ├─ treasury.py      reserve allocation, movements, live balance
+│   ├─ marketplace.py   listings with persisted installs + publishing
+│   ├─ analytics.py     portfolio history + on-chain event log
+│   └─ service.py       façade wiring the services together
 ├─ insights.py · threats.py · agenda.py · google_sync.py · memory.py
 ├─ services.py · weather.py · connectivity.py · voice.py · tts.py · browser.py
 ├─ routines.py          scheduler

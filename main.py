@@ -16,7 +16,7 @@ from agenda import Agenda
 from audit import Audit
 from auth import SESSION_TTL, AuthManager
 from billing import Billing
-from web3_service import Web3Service
+from web3mod import Web3Service
 from agents import build_team
 from brain import Brain
 from decisions import DecisionEngine
@@ -1374,7 +1374,7 @@ async def billing_set_edition(req: EditionReq):
 
 @app.get("/api/web3")
 async def web3_endpoint():
-    return state["web3"].snapshot()
+    return await state["web3"].snapshot()
 
 
 class Web3Toggle(BaseModel):
@@ -1390,22 +1390,166 @@ async def web3_toggle(req: Web3Toggle):
     return res
 
 
+# ── wallet ───────────────────────────────────────────────────────
+
 class WalletReq(BaseModel):
     address: str
-    network: str | None = ""
     chain_id: int | str | None = None
-    balance: float | str | None = None
+    label: str | None = ""
 
 
 @app.post("/api/web3/wallet")
 async def web3_wallet(req: WalletReq):
-    return await state["web3"].connect_wallet(
-        req.address, req.network or "", req.chain_id, req.balance)
+    res = await state["web3"].connect_wallet(req.address, req.chain_id, req.label or "")
+    if res.get("ok"):
+        await _audit("web3.wallet", f"wallet connected {req.address[:10]}…")
+    return res
 
 
 @app.post("/api/web3/wallet/disconnect")
 async def web3_wallet_disconnect():
     return await state["web3"].disconnect_wallet()
+
+
+@app.post("/api/web3/wallet/refresh")
+async def web3_wallet_refresh():
+    w = await state["web3"].wallet.refresh()
+    return {"ok": w is not None, "wallet": w}
+
+
+@app.get("/api/web3/transactions")
+async def web3_transactions():
+    return await state["web3"].wallet.transactions()
+
+
+# ── blockchain ───────────────────────────────────────────────────
+
+@app.get("/api/web3/chain")
+async def web3_chain(chain_id: int | None = None):
+    return await state["web3"].chain.status(chain_id)
+
+
+@app.get("/api/web3/chains")
+async def web3_chains():
+    """Live status across the supported networks (for the network selector)."""
+    w3 = state["web3"]
+    ids = [c["chain_id"] for c in w3.config.known_chains()][:5]
+    return {"chains": await w3.chain.multi_status(ids)}
+
+
+# ── governance ───────────────────────────────────────────────────
+
+class ProposalReq(BaseModel):
+    title: str
+    body: str | None = ""
+
+
+@app.post("/api/web3/governance/propose")
+async def web3_propose(req: ProposalReq):
+    if not _commander():
+        return _locked()
+    w3 = state["web3"]
+    author = (w3.wallet.current or {}).get("address", "operator")
+    res = await w3.governance.create(req.title, req.body or "", author)
+    if res.get("ok"):
+        await _audit("web3.propose", res["proposal"]["id"] + " " + req.title[:60])
+    return res
+
+
+class VoteReq(BaseModel):
+    proposal_id: str
+    choice: str          # "for" | "against"
+
+
+@app.post("/api/web3/governance/vote")
+async def web3_vote(req: VoteReq):
+    w3 = state["web3"]
+    addr = (w3.wallet.current or {}).get("address")
+    res = await w3.governance.vote(req.proposal_id, addr, req.choice,
+                                   w3._voting_power())
+    if res.get("ok"):
+        w3.analytics.log("governance", f"voted {req.choice} on {req.proposal_id}")
+        await _audit("web3.vote", f"{req.proposal_id} → {req.choice}")
+    return res
+
+
+# ── treasury ─────────────────────────────────────────────────────
+
+class TreasuryMoveReq(BaseModel):
+    reserve: str
+    delta: float
+    note: str | None = ""
+
+
+@app.post("/api/web3/treasury/record")
+async def web3_treasury_record(req: TreasuryMoveReq):
+    if not _commander():
+        return _locked()
+    res = await state["web3"].treasury.record(req.reserve, req.delta, req.note or "")
+    await _audit("web3.treasury", f"{req.reserve} {req.delta:+,.0f}")
+    return res
+
+
+# ── marketplace ──────────────────────────────────────────────────
+
+class SlugReq(BaseModel):
+    slug: str
+
+
+@app.post("/api/web3/marketplace/install")
+async def web3_install(req: SlugReq):
+    if not _commander():
+        return _locked()
+    res = await state["web3"].marketplace.install(req.slug)
+    if res.get("ok"):
+        await _audit("web3.install", req.slug)
+    return res
+
+
+@app.post("/api/web3/marketplace/uninstall")
+async def web3_uninstall(req: SlugReq):
+    if not _commander():
+        return _locked()
+    return await state["web3"].marketplace.uninstall(req.slug)
+
+
+class PublishReq(BaseModel):
+    name: str
+    kind: str = "plugin"
+    desc: str | None = ""
+    price: float = 0
+
+
+@app.post("/api/web3/marketplace/publish")
+async def web3_publish(req: PublishReq):
+    if not _commander():
+        return _locked()
+    w3 = state["web3"]
+    author = (w3.wallet.current or {}).get("address", "operator")
+    res = await w3.marketplace.publish(req.name, req.kind, req.desc or "",
+                                       req.price, author)
+    if res.get("ok"):
+        await _audit("web3.publish", req.name[:60])
+    return res
+
+
+# ── configuration (token contract, treasury address, keys) ───────
+
+@app.get("/api/web3/config")
+async def web3_config_get():
+    return state["web3"].config.data
+
+
+@app.post("/api/web3/config")
+async def web3_config_set(patch: dict):
+    """Point the layer at a real token/treasury later — no code change needed."""
+    if not _commander():
+        return _locked()
+    w3 = state["web3"]
+    w3.config.update(patch or {})
+    w3.token._live_cache = None      # force a fresh contract read
+    await _audit("web3.config", ", ".join(list((patch or {}).keys()))[:80])
+    return {"ok": True, "config": w3.config.data}
 
 
 # ═══ PHASE 4 · MULTI-SITE FLEET ══════════════════════════════════

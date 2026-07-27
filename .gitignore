@@ -31,3 +31,7 @@ node_token.txt
 audio_pref.json
 billing.json
 web3_config.json
+governance.json
+treasury.json
+marketplace.json
+web3_analytics.json

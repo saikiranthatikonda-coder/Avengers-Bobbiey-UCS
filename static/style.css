@@ -1220,6 +1220,56 @@ body {
 .w3-news-item { font-size: 0.56rem; color: var(--text-dim); line-height: 1.4; padding-left: 0.7rem; position: relative; }
 .w3-news-item::before { content: "◆"; position: absolute; left: 0; color: #a855f7; font-size: 0.5rem; }
 
+/* ── functional Web3 subsystem widgets ── */
+.w3-wallet-picker { display: flex; flex-direction: column; gap: 0.26rem; }
+.w3-wallet-opt { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.45rem; border: 1px solid var(--panel-edge); border-radius: 4px; cursor: pointer; font-size: 0.6rem; color: var(--text); transition: border-color 0.2s, background 0.2s; }
+.w3-wallet-opt:hover { border-color: #a855f7; background: rgba(168,85,247,0.08); }
+.w3-wallet-opt img { width: 16px; height: 16px; border-radius: 3px; }
+.w3-tx-list { display: flex; flex-direction: column; gap: 0.22rem; max-height: 92px; overflow-y: auto; }
+.w3-tx { display: grid; grid-template-columns: 1.1rem 1fr auto; gap: 0.4rem; align-items: center; font-family: var(--font-mono); font-size: 0.52rem; padding: 0.16rem 0.3rem; border-left: 2px solid var(--panel-edge); background: rgba(6,18,31,0.4); border-radius: 3px; }
+.w3-tx.in { border-left-color: #22c55e; } .w3-tx.out { border-left-color: #facc15; }
+.w3-tx .dir { color: var(--text-dim); } .w3-tx .hash { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
+.w3-tx .amt { color: #c084fc; text-align: right; }
+.w3-chain-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+.w3-quality { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-display); font-size: 0.44rem; letter-spacing: 0.12em; color: var(--text-dim); }
+.w3-quality-bar { flex: 1; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--panel-edge) 55%, transparent); overflow: hidden; }
+.w3-quality-bar div { height: 100%; width: 0%; border-radius: 3px; background: #22c55e; transition: width 0.6s ease; }
+.w3-quality-bar div.warn { background: #facc15; } .w3-quality-bar div.bad { background: var(--error); }
+.w3-chain-picker { display: flex; flex-wrap: wrap; gap: 0.26rem; }
+.w3-chain-btn { font-family: var(--font-display); font-size: 0.46rem; letter-spacing: 0.1em; color: var(--text-dim); border: 1px solid var(--panel-edge); border-radius: 3px; padding: 0.18rem 0.42rem; cursor: pointer; background: transparent; transition: color 0.2s, border-color 0.2s; }
+.w3-chain-btn:hover { color: #c084fc; border-color: #a855f7; }
+.w3-chain-btn.active { color: #c084fc; border-color: #a855f7; background: rgba(168,85,247,0.1); }
+.w3-pf-chart canvas { width: 100%; height: 52px; }
+.w3-holdings { display: flex; flex-direction: column; gap: 0.24rem; }
+.w3-holding { display: flex; justify-content: space-between; align-items: center; font-size: 0.6rem; padding: 0.24rem 0.4rem; border: 1px solid var(--panel-edge); border-radius: 4px; }
+.w3-holding .asset { font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.12em; color: var(--text); }
+.w3-holding .amt { font-family: var(--font-mono); color: #c084fc; }
+.w3-holding .kind { font-family: var(--font-display); font-size: 0.4rem; letter-spacing: 0.1em; color: var(--text-dim); }
+.w3-activity { display: flex; flex-direction: column; gap: 0.2rem; max-height: 70px; overflow-y: auto; }
+.w3-act { font-family: var(--font-mono); font-size: 0.5rem; color: var(--text-dim); }
+.w3-act b { color: #c084fc; font-weight: 600; }
+.w3-reserves { display: flex; flex-direction: column; gap: 0.26rem; }
+.w3-reserve { border: 1px solid var(--panel-edge); border-radius: 4px; padding: 0.3rem 0.42rem; }
+.w3-res-head { display: flex; justify-content: space-between; align-items: baseline; }
+.w3-res-name { font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.1em; color: var(--text); }
+.w3-res-amt { font-family: var(--font-mono); font-size: 0.55rem; color: #c084fc; }
+.w3-res-bar { height: 4px; border-radius: 3px; background: color-mix(in srgb, var(--panel-edge) 55%, transparent); overflow: hidden; margin-top: 0.2rem; }
+.w3-res-bar div { height: 100%; background: linear-gradient(90deg, #a855f7, #c084fc); }
+.w3-res-purpose { font-size: 0.5rem; color: var(--text-dim); margin-top: 0.14rem; }
+.w3-moves { display: flex; flex-direction: column; gap: 0.18rem; max-height: 70px; overflow-y: auto; }
+.w3-move { font-family: var(--font-mono); font-size: 0.5rem; color: var(--text-dim); }
+.w3-move .up { color: #22c55e; } .w3-move .down { color: var(--error); }
+.w3-vote-btns { display: flex; gap: 0.3rem; margin-top: 0.26rem; }
+.w3-vote { font-family: var(--font-display); font-size: 0.44rem; letter-spacing: 0.1em; padding: 0.14rem 0.44rem; border-radius: 3px; cursor: pointer; background: transparent; border: 1px solid var(--panel-edge-bright); color: var(--text-dim); transition: all 0.2s; }
+.w3-vote.for:hover, .w3-vote.for.cast { color: #22c55e; border-color: #22c55e; background: rgba(34,197,94,0.12); }
+.w3-vote.against:hover, .w3-vote.against.cast { color: var(--error); border-color: var(--error); background: rgba(255,60,60,0.12); }
+.w3-vote:disabled { opacity: 0.4; cursor: default; }
+.w3-gov-quorum { font-family: var(--font-display); font-size: 0.4rem; letter-spacing: 0.1em; color: var(--text-dim); }
+.w3-market-item .inst { font-family: var(--font-display); font-size: 0.42rem; letter-spacing: 0.1em; color: #22c55e; }
+.w3-mk-btn { font-family: var(--font-display); font-size: 0.42rem; letter-spacing: 0.1em; padding: 0.14rem 0.4rem; border-radius: 3px; cursor: pointer; background: transparent; border: 1px solid #a855f7; color: #c084fc; transition: background 0.2s; }
+.w3-mk-btn:hover { background: rgba(168,85,247,0.15); }
+.w3-mk-btn.remove { border-color: var(--panel-edge-bright); color: var(--text-dim); }
+
 /* Phase 4 · enterprise command */
 .ent-row {
   display: grid;

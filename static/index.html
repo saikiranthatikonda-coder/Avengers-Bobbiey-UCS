@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=4.5" />
+  <link rel="stylesheet" href="/static/style.css?v=5.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -1188,61 +1188,104 @@
 
     <div class="bs-card" id="w3-wallet">
       <div class="bs-head">
-        <div class="bs-title">WALLET &amp; NETWORK</div>
-        <div class="bs-sub">EIP-1193 · METAMASK / INJECTED</div>
+        <div class="bs-title">WALLET</div>
+        <div class="bs-sub">EIP-6963 / EIP-1193 · <span id="w3-wallet-status">DISCONNECTED</span></div>
       </div>
       <div class="w3-wallet-body" id="w3-wallet-body">
         <div class="tf-empty">no wallet connected</div>
       </div>
+      <div class="w3-wallet-picker" id="w3-wallet-picker" hidden></div>
       <div class="dec-autonomy">
         <button class="cmd-btn" id="btn-wallet-connect">◈ CONNECT WALLET</button>
+        <button class="cmd-btn" id="btn-wallet-refresh" hidden title="re-read balances from chain">↻</button>
         <button class="cmd-btn" id="btn-wallet-disconnect" hidden>DISCONNECT</button>
       </div>
+      <div class="intel-divider">RECENT TRANSACTIONS</div>
+      <div class="w3-tx-list" id="w3-tx-list"><div class="tf-empty">connect a wallet</div></div>
+    </div>
+
+    <div class="bs-card" id="w3-chain">
+      <div class="bs-head">
+        <div class="bs-title">BLOCKCHAIN STATUS</div>
+        <div class="bs-sub">LIVE RPC · <span id="w3-chain-name">—</span></div>
+      </div>
+      <div class="w3-chain-stats" id="w3-chain-stats"></div>
+      <div class="w3-quality">
+        <span>CONNECTION QUALITY</span>
+        <div class="w3-quality-bar"><div id="w3-quality-fill"></div></div>
+        <span id="w3-quality-txt">—</span>
+      </div>
+      <div class="intel-divider">SWITCH NETWORK</div>
+      <div class="w3-chain-picker" id="w3-chain-picker"></div>
+    </div>
+
+    <div class="bs-card" id="w3-portfolio">
+      <div class="bs-head">
+        <div class="bs-title">PORTFOLIO</div>
+        <div class="bs-sub">HOLDINGS · HISTORY · <span id="w3-pf-change">—</span></div>
+      </div>
+      <div class="w3-pf-chart"><canvas id="w3-pf-canvas" height="52"></canvas></div>
+      <div class="intel-divider">HOLDINGS</div>
+      <div class="w3-holdings" id="w3-holdings"><div class="tf-empty">connect a wallet to load holdings</div></div>
+      <div class="intel-divider">WALLET ACTIVITY</div>
+      <div class="w3-activity" id="w3-activity"></div>
     </div>
 
     <div class="bs-card" id="w3-token">
       <div class="bs-head">
-        <div class="bs-title">TOKEN ANALYTICS</div>
-        <div class="bs-sub"><span id="w3-token-sym">BBUCS</span> · SUPPLY &amp; ALLOCATION</div>
+        <div class="bs-title">TOKEN CENTER</div>
+        <div class="bs-sub"><span id="w3-token-name">—</span> · <span id="w3-token-sym">—</span> · <span id="w3-token-mode">PRE-LAUNCH</span></div>
       </div>
       <div class="w3-token-stats" id="w3-token-stats"></div>
       <div class="intel-divider">ALLOCATION</div>
       <div class="w3-alloc" id="w3-alloc"></div>
+      <div class="intel-divider">TOKEN UTILITY · ACCESS &amp; PARTICIPATION</div>
+      <div class="w3-premium" id="w3-premium"></div>
     </div>
 
     <div class="bs-card" id="w3-treasury">
       <div class="bs-head">
-        <div class="bs-title">TREASURY &amp; PREMIUM ACCESS</div>
-        <div class="bs-sub">TOKEN-GATED CAPABILITIES</div>
+        <div class="bs-title">TREASURY</div>
+        <div class="bs-sub">RESERVES · <span id="w3-treasury-total">—</span></div>
       </div>
       <div class="w3-treasury-top" id="w3-treasury-top"></div>
-      <div class="intel-divider">STAKE TO UNLOCK</div>
-      <div class="w3-premium" id="w3-premium"></div>
+      <div class="intel-divider">RESERVE ALLOCATION</div>
+      <div class="w3-reserves" id="w3-reserves"></div>
+      <div class="intel-divider">RECENT MOVEMENTS</div>
+      <div class="w3-moves" id="w3-moves"><div class="tf-empty">no treasury movements recorded</div></div>
     </div>
 
     <div class="bs-card" id="w3-gov">
       <div class="bs-head">
         <div class="bs-title">GOVERNANCE</div>
-        <div class="bs-sub">PROPOSALS · <span id="w3-gov-active">0</span> ACTIVE · POWER <span id="w3-gov-power">0</span></div>
+        <div class="bs-sub"><span id="w3-gov-active">0</span> ACTIVE · POWER <span id="w3-gov-power">0</span> · <span id="w3-gov-voters">0</span> VOTERS</div>
       </div>
       <div class="w3-gov-list" id="w3-gov-list"></div>
+      <form class="mem-add-form" id="w3-gov-form">
+        <input type="text" id="w3-gov-title" placeholder="new proposal title…" maxlength="120" autocomplete="off"/>
+        <button type="submit" class="cmd-btn">PROPOSE</button>
+      </form>
     </div>
 
     <div class="bs-card" id="w3-market">
       <div class="bs-head">
         <div class="bs-title">MARKETPLACE</div>
-        <div class="bs-sub">AGENTS · PLUGINS · WORKFLOWS</div>
+        <div class="bs-sub">AGENTS · PLUGINS · WORKFLOWS · <span id="w3-market-installed">0</span> INSTALLED</div>
       </div>
       <div class="w3-market-list" id="w3-market-list"></div>
+      <form class="mem-add-form" id="w3-publish-form">
+        <input type="text" id="w3-publish-name" placeholder="publish your agent / plugin…" maxlength="60" autocomplete="off"/>
+        <button type="submit" class="cmd-btn">PUBLISH</button>
+      </form>
     </div>
 
     <div class="bs-card" id="w3-community">
       <div class="bs-head">
-        <div class="bs-title">COMMUNITY</div>
-        <div class="bs-sub">MEMBERS · CONTRIBUTORS · ANNOUNCEMENTS</div>
+        <div class="bs-title">COMMUNITY &amp; EVENTS</div>
+        <div class="bs-sub">PARTICIPATION · ON-CHAIN ACTIVITY</div>
       </div>
       <div class="w3-comm-stats" id="w3-comm-stats"></div>
-      <div class="intel-divider">ECOSYSTEM</div>
+      <div class="intel-divider">EVENT LOG</div>
       <div class="w3-comm-news" id="w3-comm-news"></div>
     </div>
 
@@ -1388,6 +1431,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=4.5"></script>
+  <script src="/static/app.js?v=5.0"></script>
 </body>
 </html>
