@@ -35,3 +35,6 @@ governance.json
 treasury.json
 marketplace.json
 web3_analytics.json
+
+# migration restore backups (never commit)
+.restore-backup/
