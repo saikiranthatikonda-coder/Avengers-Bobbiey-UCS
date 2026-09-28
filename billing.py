@@ -142,7 +142,7 @@ class Billing:
         self._save()
         if self.hub:
             await self.hub.broadcast({"type": "log", "level": "info",
-                                      "msg": f"license switched → {self._edition().name} edition (demo)"})
+                                      "msg": f"license switched → {self._edition()['name']} edition (demo)"})
         return {"ok": True, **self.current()}
 
     async def use_credits(self, n: int = 1) -> dict:
