@@ -1,4 +1,27 @@
 import asyncio
+import shutil
+import tempfile
+from pathlib import Path
+
+
+def resolve_claude_bin(name: str = "claude") -> str:
+    """Find the Claude CLI. An explicit path or a PATH hit wins; otherwise
+    check the native installer's location (~/.local/bin), which the installer
+    does not always add to PATH on Windows."""
+    if shutil.which(name):
+        return name
+    if Path(name).name.lower() in ("claude", "claude.exe"):
+        for cand in (Path.home() / ".local" / "bin" / "claude.exe",
+                     Path.home() / ".local" / "bin" / "claude"):
+            if cand.is_file():
+                return str(cand)
+    return name
+
+
+# The CLI loads CLAUDE.md / project settings from its working directory. The
+# server runs from the repo, whose CLAUDE.md is the *developer* manual — it must
+# never leak into operator-facing agent replies, so calls run from a neutral dir.
+BRAIN_CWD = Path(tempfile.gettempdir()) / "bobbiey-ucs-brain"
 
 
 class Brain:
@@ -10,7 +33,7 @@ class Brain:
     """
 
     def __init__(self, claude_bin: str = "claude", local_brain=None, local_llm=None) -> None:
-        self.claude_bin = claude_bin
+        self.claude_bin = resolve_claude_bin(claude_bin)
         self.local = local_brain
         self.local_llm = local_llm  # LocalLLM (OpenAI-compatible endpoint) or None
         self.mode: str = "unknown"  # "llm" | "local-llm" | "local" | "unknown"
@@ -117,17 +140,23 @@ class Brain:
         if allow_read:
             # headless mode blocks the Read tool behind a permission prompt, so
             # image analysis silently fails; bypass lets it read the one local
-            # frame we wrote (safe — our own temp file).
-            args += ["--dangerously-skip-permissions"]
+            # frame we wrote. --tools Read keeps the bypass to that one tool.
+            args += ["--tools", "Read", "--dangerously-skip-permissions"]
+        else:
+            # text replies are pure reasoning over the context we pass in; with
+            # tools on, the CLI tries (blocked) shell commands and stalls ~30s.
+            args += ["--tools", ""]
         if system:
             args += ["--system-prompt", system]
-        args.append(prompt)
+        args += ["--", prompt]   # "--" ends the variadic --tools list
         try:
+            BRAIN_CWD.mkdir(parents=True, exist_ok=True)
             proc = await asyncio.create_subprocess_exec(
                 *args,
                 stdin=asyncio.subprocess.DEVNULL,   # empty stdin → skip the CLI's 3s stdin wait
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                cwd=str(BRAIN_CWD),                 # keep dev CLAUDE.md out of agent context
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             if proc.returncode != 0:

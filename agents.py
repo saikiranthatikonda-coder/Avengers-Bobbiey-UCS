@@ -54,6 +54,18 @@ class Avenger:
         await self._emit("status", status=status, note=note,
                          task=self.current_task, confidence=self.confidence)
 
+    def _live_telemetry(self) -> str:
+        """Real host metrics for the LLM, so answers cite measured numbers
+        instead of guessing. Empty when no sample exists yet."""
+        sysmon = getattr(self.local_brain, "sysmon", None)
+        m = getattr(sysmon, "latest", None) or {}
+        if "cpu" not in m:
+            return ""
+        return (f"[LIVE TELEMETRY — measured now: CPU {m['cpu']:.0f}% · "
+                f"memory {m.get('mem', 0):.0f}% · disk {m.get('disk', 0):.0f}% · "
+                f"net ↑{m.get('net_up', 0)} ↓{m.get('net_down', 0)} KB/s. "
+                "Use only these figures; say so if asked for data not listed.]\n")
+
     async def handle(self, prompt: str) -> str:
         await self.set_status("thinking", note=prompt[:80])
         # cross-agent shared memory: prefix what OTHER agents recently learned
@@ -64,6 +76,7 @@ class Avenger:
                 ctx = self.team_memory.context_block(self.name)
             except Exception:
                 ctx = ""
+        ctx = self._live_telemetry() + ctx
         reply = await self.brain.think(ctx + prompt, system=self.system_prompt,
                                        agent=self.name, fast=True)
         self.history.append({"q": prompt, "a": reply, "ts": time.time()})
