@@ -471,7 +471,10 @@ Bobbiey UCS is an evolving system. When adding a feature:
 Test suite: `tests/` (stdlib `unittest`, no credentials). Run it with
 `.\.venv\Scripts\python.exe -m unittest discover -s tests -v`.
 Set `UCS_LIVE_AI=1` to include the live Claude CLI test (one real call).
-Add tests alongside meaningful changes.
+`tests/harness.py` `IsolatedServer` boots the real app from a temp copy of the
+code (no `.env`, no state files, Claude/LLM/TTS/voice off) on a free port.
+Use it for endpoint tests. **Never point tests at the operator's live
+server or real state files.** Add tests alongside meaningful changes.
 
 **Live dev loop.** The desktop app's browser pane runs the server from
 launch config `ucs` (`.claude/launch.json`; `preview_start ucs`), then

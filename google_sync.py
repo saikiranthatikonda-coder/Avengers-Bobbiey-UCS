@@ -4,7 +4,7 @@ Setup (one-time, ~5 min):
   1. console.cloud.google.com → create project → enable "Google Calendar API"
   2. OAuth consent screen → External → add yourself as test user
   3. Credentials → Create OAuth client ID → Desktop app → download JSON
-  4. Save as  C:\\Users\\sai\\Desktop\\jarvis\\credentials.json
+  4. Save as  credentials.json  in the project root (next to main.py)
   5. POST /api/calendar/connect (or click CONNECT GOOGLE in the dashboard)
      → browser opens → approve → token.json saved → real events flow.
 

@@ -168,16 +168,21 @@ These each cost significant time. They are not obvious.
 - **Node agent must stay Python 3.7+ compatible.** `str | None` annotations
   (PEP 604) are evaluated at runtime on Python <3.10 and crash. Fixed with
   `from __future__ import annotations`. A Mac node on conda 3.9 hit this.
-- **The project venv is Python 3.12**, while system Python may be 3.14. Some
-  deps don't support 3.14 — build the venv with 3.12.
+- **Avoid Python 3.14 for the venv.** Some deps don't support it. The old
+  machine used 3.12. The current laptop runs **3.11.9**, which works fine.
 - **Ollama via httpx needs `trust_env=False`** or the system proxy 403s
   localhost.
 - **Order matters in `lifespan`** — `fleet` must be constructed *before*
   `decisions` (which takes `fleet=`), or you get `UnboundLocalError`.
 
-### Windows / PowerShell (this dev machine)
-- **Use the real git binary:** `C:\Users\sai\AppData\Local\Programs\Git\cmd\git.exe`
-  — the `system32` git is a stub.
+### Windows / PowerShell
+- *(Old machine only)* the `system32` git was a stub, so the real binary
+  `C:\Users\sai\AppData\Local\Programs\Git\cmd\git.exe` had to be used. The
+  current laptop's `git` on PATH (Git for Windows 2.55) is fine.
+- **Claude CLI on Windows** is installed natively at `~\.local\bin\claude.exe`,
+  often not on PATH. `brain.py` auto-discovers it, runs it from a neutral cwd
+  (so the dev `CLAUDE.md` never reaches agent replies) and tool-less for
+  text. Details in `CLAUDE.md` §10.
 - **PowerShell 5.1:** no `&&`; `"$i:"` is a parse trap (use `-f` formatting);
   `New-Item` has no `-LiteralPath` (use `[System.IO.Directory]::CreateDirectory`);
   **commit messages with `|`, backticks, em-dashes or inner quotes break

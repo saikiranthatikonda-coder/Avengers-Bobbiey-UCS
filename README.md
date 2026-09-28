@@ -94,7 +94,7 @@ Copy `.env.example` → `.env` (the launcher does this for you) and set what you
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `NEWSAPI_KEY` | Live world news feed — free key at [newsapi.org](https://newsapi.org/register) | _(empty → mock feed)_ |
+| `NEWSAPI_KEY` | Live world news feed — free key at [newsapi.org](https://newsapi.org/register) | _(empty → no news; the feed stays empty, never mocked)_ |
 | `JARVIS_TTS` | Spoken responses | `1` |
 | `JARVIS_VOICE` | Wake-word listening (needs mic + extra deps) | `0` |
 | `JARVIS_WHISPER_MODEL` | STT model (`tiny.en`, `base.en`, `small`) | `small` |

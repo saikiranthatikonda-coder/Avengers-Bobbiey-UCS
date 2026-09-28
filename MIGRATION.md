@@ -5,6 +5,11 @@ configuration, functionality, UI, or the accumulated context** of how it was bui
 
 Nothing here changes the project. It only documents and packages it.
 
+> **Status (2026-09-28):** the project has been restored on the new laptop at
+> `C:\Users\Saikiran\Avengers-Bobbiey-UCS` (Python 3.11.9 venv, native Claude
+> CLI). `C:\Users\sai\...` paths below describe the **old** machine and are kept
+> for reference. Current machine facts live in `CLAUDE.md` §3.
+
 ---
 
 ## The one thing to understand first
@@ -105,7 +110,8 @@ The script is **non-destructive** — anything it would replace is copied into
 ### 4. Rebuild the virtual environment — use Python 3.12
 
 The old venv ran **Python 3.12.9** (the system Python was 3.14, which some
-dependencies do not support yet). Use 3.12 to stay faithful:
+dependencies do not support yet). Use 3.12 to stay faithful. Any 3.10+
+works; the current laptop runs 3.11.9 without issues:
 
 ```powershell
 py -3.12 -m venv .venv
@@ -126,6 +132,9 @@ If anything misbehaves, install the exact old versions instead:
 CLAUDE_BIN=C:\Users\sai\AppData\Roaming\npm\claude.cmd   # ← update this
 JARVIS_HOST=0.0.0.0                                       # ← 127.0.0.1 for local-only
 ```
+
+> Since 2026-09-28 `CLAUDE_BIN` can simply be left unset: `brain.py` finds the
+> CLI on PATH or at the native installer's `~\.local\bin\claude.exe`.
 
 Find the new Claude CLI path:
 ```powershell

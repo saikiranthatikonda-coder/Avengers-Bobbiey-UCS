@@ -107,7 +107,7 @@ tracks both.
 | Item | Status |
 |---|---|
 | Claude Code operating manual (`CLAUDE.md`) | IMPLEMENTED |
-| Automated tests | PARTIAL: `tests/test_brain.py` (provider chain, CLI args, telemetry context). Broader smoke suite planned |
+| Automated tests | IMPLEMENTED (foundation): 32 tests. `test_brain.py` (provider chain) + `test_smoke.py` (isolated real server: startup, WS, agents, orchestrator, decisions, billing, Web3-off, Google/news absent, remote-auth gate, AuthManager). Gaps: voice, vision, fleet ingestion, frontend JS execution |
 | Live dev loop (browser pane + `.claude/launch.json`) | IMPLEMENTED |
 | One-click installer, auto-update | PLANNED (`SAAS_PLAN.md`) |
 
@@ -123,7 +123,7 @@ In order. Each needs operator input only where noted.
 4. **Voice**: install optional STT deps into the existing venv, verify mic → STT → routing → TTS.
 5. **Google**: restore `credentials.json`, operator runs OAuth. *(operator action)*
 6. **News**: configure `NEWSAPI_KEY`, fix the stale "mock feed" docs. *(operator provides key)*
-7. **Automated tests**: smoke and regression suite with no external credentials.
-8. **Docs/path cleanup**: classify and fix old-machine references.
+7. ~~**Automated tests**~~ ✅ foundation shipped 2026-09-28 (found and fixed a billing crash).
+8. ~~**Docs/path cleanup**~~ ✅ done 2026-09-28. Open: `site/.netlify/netlify.toml` still points at the old machine (deploy config, needs operator decision).
 9. **Visual UX audit**: refine the HUD without losing its identity.
 10. **Next product evolution**: the unified command experience (speak → delegate → approve → act).
