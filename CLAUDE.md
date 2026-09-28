@@ -52,7 +52,7 @@ Where docs and code disagree, **the code wins**. Mention the gap to the user.
 | Branch | `main` |
 | Known HEAD | `bbc0bac` (as of 2026-09-28) |
 | Shells | PowerShell 5.1 and Git Bash both available |
-| Claude CLI | **not on PATH** on this machine |
+| Claude CLI | `C:\Users\Saikiran\.local\bin\claude.exe` (native install, authenticated, **not on PATH**, auto-discovered by `brain.resolve_claude_bin`) |
 | Ollama | **not installed / not on PATH**; nothing listening on `:11434` |
 
 **Do not upgrade Python, recreate `.venv`, or install/upgrade dependencies
@@ -123,7 +123,7 @@ Flat Python layout. Everything runs in one process from `main.py`.
 - `restore-data.ps1/.sh`: restore gitignored private data from a migration bundle (see `MIGRATION.md`).
 - `requirements.txt`: pinned core deps. Voice/wake-word deps are commented out (optional).
 
-**There is no automated test suite** (no `tests/`, no pytest/unittest usage).
+- `tests/`: stdlib `unittest` suite (no extra deps, no credentials). See §18.
 
 ---
 
@@ -170,12 +170,12 @@ needs setup. **PLANNED** = not built.
 | FastAPI backend + WebSocket hub | IMPLEMENTED | Single asyncio process, port 8765 |
 | Dashboard (`static/`) | IMPLEMENTED | Vanilla JS HUD, cache-busted with `?v=5.0` |
 | Telemetry (psutil) | IMPLEMENTED | CPU/mem/disk/net/processes every 2 s |
-| AI brain chain | IMPLEMENTED, degraded here | Claude CLI → local LLM → templates. **On this machine neither Claude CLI nor Ollama is available, so replies come from `local_brain` rule templates** |
+| AI brain chain | IMPLEMENTED | Claude CLI → local LLM → templates. **Here: Claude CLI live (`brain_mode: llm`)**. Ollama absent. Templates remain the fallback |
 | 8 agents | IMPLEMENTED | Reply quality depends on which brain is available |
 | Orchestrator + team memory | IMPLEMENTED | Phase 2 |
 | Knowledge hub, insights, briefing | IMPLEMENTED | AI answers depend on the brain |
 | Threat intelligence | IMPLEMENTED | Built from live telemetry/news/agenda signals |
-| Vision presence (camera) | PARTIAL | Browser-side frame analysis. **AI image description needs the Claude CLI** (`brain.see`), which is not installed here |
+| Vision presence (camera) | PARTIAL | Browser-side frame analysis. AI image description goes through the Claude CLI (`brain.see`, Read tool only). Not yet re-verified with a camera on this machine |
 | Voice STT / wake words | OPTIONAL, inactive | Needs `JARVIS_VOICE=1` plus `faster-whisper`, `sounddevice`, `numpy`. **Not installed in this venv.** Degrades gracefully via `ImportError` handling |
 | TTS | IMPLEMENTED | Windows System.Speech via PowerShell. Audio defaults to muted |
 | Google Calendar + Gmail | OPTIONAL, not connected here | Read-only OAuth. See §9 |
@@ -307,10 +307,22 @@ All are gitignored. Keep it that way.
   `force_local` in `model_pref.json`. Otherwise local is only auto-preferred
   once it has proven fast (last call < 4 s).
 - Vision always uses the Claude CLI (local models here are text-only).
-- **On this machine: Ollama isn't installed and the Claude CLI isn't on PATH.**
-  Don't assume either is available. Check (`Get-Command ollama`,
-  `Get-Command claude`, a request to `:11434`) before relying on them, and
-  don't install them unless asked.
+- **Claude CLI calls (`brain._llm_call`), and why they're set up this way:**
+  - `cwd` = `%TEMP%\bobbiey-ucs-brain`, **never the repo**. The CLI auto-loads
+    CLAUDE.md from its working dir, and this developer manual must never reach
+    operator-facing agent replies.
+  - Text calls pass `--tools ""` (pure reasoning over the context we send;
+    with tools on, the CLI tries blocked shell commands and stalls ~30 s).
+    Vision passes `--tools Read --dangerously-skip-permissions`.
+  - The prompt goes after `--`, because `--tools` is variadic and would
+    otherwise swallow it.
+  - `--bare` is **not** usable: it requires `ANTHROPIC_API_KEY` auth, and this
+    machine uses the CLI's own login.
+  - Agents get a `[LIVE TELEMETRY …]` line from `SystemMonitor.latest`
+    (`Avenger._live_telemetry`) so they quote measured numbers.
+- The brain is probed **once at boot**. After changing brain config, restart the server.
+- **On this machine Ollama isn't installed.** Check (`Get-Command ollama`, a
+  request to `:11434`) before relying on it, and don't install it unless asked.
 
 ---
 
@@ -341,22 +353,32 @@ unrelated user changes intact.
 **Never:** force push · destructive `git reset` · discard uncommitted work ·
 overwrite unrelated changes · delete branches without approval.
 
-**Default:** develop locally, test locally, **do not commit or push
-automatically.** Commit only when explicitly asked. Push only when
-explicitly asked.
+**Default: ship on verified success** (operator policy since 2026-09-28).
+When a requested feature or fix is implemented **and verified** (tests pass,
+app runs, UI checked in the browser when UI is involved), commit and push it
+to `main` (or its feature branch) without waiting to be asked.
 
-When the user says **"commit and push"**:
+**Do NOT push if:** tests fail · the app is broken · visual verification shows
+unresolved issues · secrets are detected · the change is incomplete · the
+operation would be destructive · there are unexpected unrelated changes · a
+credential or external approval is still needed. Report instead.
+
+"Ship it" / "commit and push" means the same pipeline, triggered explicitly:
 1. `git status`
 2. `git diff`
 3. Inspect the changed files
 4. Check for secrets (and that no gitignored/private file is staged)
 5. `git add` only the intended files (never `git add -A` blindly)
-6. Create a descriptive commit
+6. Focused commit, conventional prefix: `feat:` `fix:` `test:` `refactor:` `docs:` `chore:`
 7. Push to the intended branch
-8. Verify the push succeeded
-9. Report the commit hash and branch
+8. Verify the push (`git status -sb`, `git ls-remote origin`)
+9. Report: **SHIPPED** · Feature · Commit · Branch · GitHub push · Tests · Browser verification · Known limitations
 
-Never force push.
+Large or experimental work goes on a feature branch. Don't merge it
+automatically. Never force push. If a push fails, say so and diagnose it.
+
+No git identity is configured on this machine. Commit as the repo's
+historical author: `git -c user.name="Sai" -c user.email="saikiran.thatikonda@t-hub.co" commit ...`.
 
 ---
 
@@ -446,7 +468,18 @@ Bobbiey UCS is an evolving system. When adding a feature:
 
 ### 18. Testing
 
-There is no automated test suite. Before declaring a feature complete:
+Test suite: `tests/` (stdlib `unittest`, no credentials). Run it with
+`.\.venv\Scripts\python.exe -m unittest discover -s tests -v`.
+Set `UCS_LIVE_AI=1` to include the live Claude CLI test (one real call).
+Add tests alongside meaningful changes.
+
+**Live dev loop.** The desktop app's browser pane runs the server from
+launch config `ucs` (`.claude/launch.json`; `preview_start ucs`), then
+inspect `http://localhost:8765` with DOM/JS reads and screenshots.
+Screenshots work in the pane. Before killing anything on :8765, identify
+the owning process.
+
+Before declaring a feature complete:
 - run syntax/import checks, e.g. `.\.venv\Scripts\python.exe -m py_compile <file>.py`
   and an import of `main` for backend changes
 - run relevant tests if any have been added
@@ -492,7 +525,7 @@ For every feature request, think:
 
 **UNDERSTAND → INSPECT → PLAN → IMPLEMENT → TEST → REVIEW → COMMIT → PUSH**
 
-Only COMMIT or PUSH when explicitly instructed.
+COMMIT and PUSH automatically only after verified success (§12). Otherwise stop and report.
 
 ---
 
