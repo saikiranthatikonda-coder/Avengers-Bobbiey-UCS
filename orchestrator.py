@@ -109,7 +109,9 @@ class Orchestrator:
              f"Disk critical — {bb['disk']:.0f}% full",
              "Identifying largest reclaimable artifacts"),
             ("meeting-prep", mins is not None and 0 < mins <= 30, P_HIGH, "captain",
-             f"Prep briefing: \"{(bb.get('next_meeting') or '')[:40]}\" in {mins:.0f}m",
+             # every title is built eagerly, even for inactive rules, so this must
+             # not assume a meeting exists (mins is None with no calendar)
+             f"Prep briefing: \"{(bb.get('next_meeting') or '')[:40]}\" in {(mins or 0):.0f}m",
              "Compiling agenda context and attendee notes"),
             ("conflict", bb["conflicts"] > 0, P_NORM, "captain",
              f"Resolve {bb['conflicts']} calendar conflict(s)",
