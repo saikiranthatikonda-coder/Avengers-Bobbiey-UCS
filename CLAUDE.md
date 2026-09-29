@@ -284,9 +284,20 @@ All are gitignored. Keep it that way.
 
 - `google_sync.py` implements OAuth (Desktop flow via `run_local_server` on a
   free port 8766–8768) with **read-only** scopes:
-  `calendar.readonly` and `gmail.readonly`.
+  `calendar.readonly`, `gmail.readonly`, `tasks.readonly`. **One sign-in (G)
+  covers all three.**
 - It requires `credentials.json` (OAuth client) in the repo root and saves
   `token.json` after consent. The operator starts it with the **G** button in the dashboard.
+- **G is sign-in-once.** `connect()` reuses a valid token that already grants every
+  scope (it re-syncs, no browser). Consent only runs on first connect, when
+  `SCOPES` grows, or with `force=True`. Tokens load with their own granted
+  scopes, so an older token keeps refreshing after a scope is added.
+- Sync reads **every selected calendar** (`fetch_all_calendars`, ≤15 calendars,
+  7 days, de-duplicated by iCalUID) with join link/provider, organizer, RSVP,
+  guest count and calendar name. Also Gmail (+ account address via
+  `getProfile`) and open Tasks (`fetch_open_tasks`). A missing Tasks API/scope
+  degrades to `tasks_error`, never breaking calendar/mail.
+- Dashboard renders only `https://` join links (no other schemes).
 - `access_type="offline"` + `prompt="consent"` are mandatory (otherwise no
   `refresh_token`). Already in the code. Don't remove them.
 - **This machine currently has neither `credentials.json` nor `token.json`**
@@ -511,6 +522,17 @@ After significant architectural changes:
 - document new environment variables (names and purpose, never values)
 
 Don't update docs for trivial changes.
+
+**Public website = product status.** When a phase or major feature changes
+status, update `docs/index.html` in the same change (then copy it to
+`site/index.html`), keeping every claim true to the code. Pushing to `main`
+publishes it automatically:
+- `.github/workflows/pages.yml` → GitHub Pages (`gh-pages` branch, build-stamped
+  `<!-- build: sha · date -->`). URL: https://saikiranthatikonda-coder.github.io/Avengers-Bobbiey-UCS/
+- `.github/workflows/tests.yml` runs the suite on every push (Ubuntu, Python 3.11).
+- Netlify serves the same `docs/` once the operator links the site to the repo (`netlify.toml`).
+After pushing, verify the deploy (Actions run status via the public API, then
+the live URL's build stamp).
 
 ---
 

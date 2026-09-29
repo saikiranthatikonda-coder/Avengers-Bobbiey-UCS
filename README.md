@@ -116,11 +116,14 @@ Open the dashboard → click the **MODEL** row or the **LLM CORE** scanner tile 
 </details>
 
 <details>
-<summary><b>📅 Google Calendar</b></summary>
+<summary><b>📅 Google: Calendar + Gmail + Tasks (one sign-in)</b></summary>
 
-1. [console.cloud.google.com](https://console.cloud.google.com) → new project → enable **Google Calendar API**.
-2. Create **OAuth client credentials** (Desktop app is simplest) → download JSON → save as `credentials.json` in the project root.
-3. Click the **G** button next to AGENDA in the dashboard → approve in browser. Real events flow in, syncing every 5 min.
+1. [console.cloud.google.com](https://console.cloud.google.com) → new project → enable **Google Calendar API**, **Gmail API** and **Google Tasks API**.
+2. **OAuth consent screen** → External → add your own Google address as a **test user**.
+3. **Credentials** → Create OAuth client ID → **Desktop app** → download JSON → save as `credentials.json` in the project root.
+4. Click the **G** button next to AGENDA → approve once in the browser (read-only access). You stay signed in. Clicking **G** again just re-syncs.
+
+Every calendar you show in Google Calendar (primary, work, shared, team) syncs every 5 min with join links (Meet/Zoom/Teams), organizer, RSVP state and guest count. Recent inbox mail and open Google Tasks come through the same sign-in.
 
 _`credentials.json` and `token.json` are gitignored — they never leave your machine._
 </details>

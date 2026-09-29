@@ -5,6 +5,12 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-09-29 — Google one-sign-in upgrade + GitHub Pages
+- **feat:** one G sign-in now covers Calendar, Gmail **and Google Tasks**. Sync reads every selected calendar (not just primary) with join links (Meet/Zoom/Teams), organizer, RSVP state, guest count and calendar name. The dashboard shows JOIN buttons, RSVP/calendar tags, declined meetings dimmed, and open/overdue tasks.
+- **fix:** clicking G while signed in deleted the saved login and forced a new consent. It now just re-syncs. Tokens refresh with their own granted scopes.
+- **ci:** `.github/workflows/pages.yml` publishes `docs/` to GitHub Pages on every push (build-stamped). `.github/workflows/tests.yml` runs the suite on every push.
+- **test:** `tests/test_google.py` (8 tests, fake Google API). 57 total.
+
 ## 2026-09-29 — Voice, orchestrator fix, website, commercialization
 - **fix:** the orchestrator tick crashed on every cycle when no calendar meeting existed (`f"{None:.0f}"` in an inactive rule), so Phase 2 delegation never ran on machines without Google. 3 real-tick tests.
 - **feat (setup):** voice restored. faster-whisper 1.1.0 + sounddevice + numpy in the existing venv, `base` model. Wake-word/intent tests added.

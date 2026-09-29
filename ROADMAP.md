@@ -43,7 +43,7 @@ tracks both.
 | Vision: identity-free presence (browser frame diff) | IMPLEMENTED | ✅ with camera |
 | Vision: AI scene description | IMPLEMENTED | ⚠️ Claude CLI available. Not yet re-verified with a camera here |
 | Operator memory (description-based, not biometric) | IMPLEMENTED | ✅ |
-| Google Calendar + Gmail (read-only) | OPTIONAL | ❌ `credentials.json` / `token.json` absent |
+| Google Calendar + Gmail + Tasks (read-only, one sign-in) | OPTIONAL | ❌ awaiting operator's `credentials.json` + one G sign-in. Code: all calendars, join links, RSVP, tasks, re-sync without re-login (tested with fake API) |
 | News feed (NewsAPI) | OPTIONAL | ❌ `NEWSAPI_KEY` empty, so feed is empty (not mocked) |
 | Weather (Open-Meteo) | IMPLEMENTED | ✅ |
 
@@ -121,7 +121,7 @@ In order. Each needs operator input only where noted.
 2. ~~**Ollama / local AI**~~ ✅ done 2026-09-29 (`llama3.2:3b`).
 3. ~~**AI provider verification**~~ ✅ all three tiers verified in the live app + tests.
 4. **Voice** ✅ installed + enabled, pipeline verified. *(operator: one live spoken test)*
-5. **Google**: restore `credentials.json`, operator runs OAuth. *(operator action)*
+5. **Google** ✅ code upgraded (all calendars, meeting details, Tasks, sign-in-once). *(operator: credentials.json + one sign-in)*
 6. **News**: configure `NEWSAPI_KEY`, fix the stale "mock feed" docs. *(operator provides key)*
 7. ~~**Automated tests**~~ ✅ foundation shipped 2026-09-28 (found and fixed a billing crash).
 8. ~~**Docs/path cleanup**~~ ✅ done 2026-09-28. Open: `site/.netlify/netlify.toml` still points at the old machine (deploy config, needs operator decision).
