@@ -53,7 +53,7 @@ Where docs and code disagree, **the code wins**. Mention the gap to the user.
 | Known HEAD | `bbc0bac` (as of 2026-09-28) |
 | Shells | PowerShell 5.1 and Git Bash both available |
 | Claude CLI | `C:\Users\Saikiran\.local\bin\claude.exe` (native install, authenticated, **not on PATH**, auto-discovered by `brain.resolve_claude_bin`) |
-| Ollama | **not installed / not on PATH**; nothing listening on `:11434` |
+| Ollama | 0.34.4 at `%LOCALAPPDATA%\Programs\Ollama\ollama.exe` (winget, not on PATH), API `:11434`, model **`llama3.2:3b`** (CPU only, ~2.6 GB RAM loaded) |
 
 **Do not upgrade Python, recreate `.venv`, or install/upgrade dependencies
 unless explicitly asked.** (`PROJECT_CONTEXT.md` says "build the venv with
@@ -170,7 +170,7 @@ needs setup. **PLANNED** = not built.
 | FastAPI backend + WebSocket hub | IMPLEMENTED | Single asyncio process, port 8765 |
 | Dashboard (`static/`) | IMPLEMENTED | Vanilla JS HUD, cache-busted with `?v=5.0` |
 | Telemetry (psutil) | IMPLEMENTED | CPU/mem/disk/net/processes every 2 s |
-| AI brain chain | IMPLEMENTED | Claude CLI → local LLM → templates. **Here: Claude CLI live (`brain_mode: llm`)**. Ollama absent. Templates remain the fallback |
+| AI brain chain | IMPLEMENTED | Claude CLI → local LLM → templates. **Here: Claude CLI live (`brain_mode: llm`) + Ollama `llama3.2:3b`**. Templates remain the final fallback |
 | 8 agents | IMPLEMENTED | Reply quality depends on which brain is available |
 | Orchestrator + team memory | IMPLEMENTED | Phase 2 |
 | Knowledge hub, insights, briefing | IMPLEMENTED | AI answers depend on the brain |
@@ -233,7 +233,7 @@ PowerShell loop opens the browser once `/api/status` responds.
 **Optional services**
 - Fleet node on another machine: `join-fleet.cmd [http://<host-ip>:8765] ["Name"]`
   or `start-node.cmd <server-url> ["name"]` (needs host bound to `0.0.0.0`; see `FLEET.md`).
-- Local LLM: install/run Ollama (`ollama serve`), then pick a model in the UI. Not installed here.
+- Local LLM: Ollama is installed and runs as a tray app / `ollama serve`. UCS auto-picks the first installed model.
 - Voice: requires optional packages (don't install unless asked) + `JARVIS_VOICE=1`.
 
 macOS/Linux: `./start-jarvis.sh` (same behavior).
@@ -321,8 +321,15 @@ All are gitignored. Keep it that way.
   - Agents get a `[LIVE TELEMETRY …]` line from `SystemMonitor.latest`
     (`Avenger._live_telemetry`) so they quote measured numbers.
 - The brain is probed **once at boot**. After changing brain config, restart the server.
-- **On this machine Ollama isn't installed.** Check (`Get-Command ollama`, a
-  request to `:11434`) before relying on it, and don't install it unless asked.
+- **Routing policy: Claude first** (operator decision 2026-09-29). With the CLI
+  reachable, agent/voice replies always go to Claude. The latency fast path to
+  the local model only applies when Claude is not the brain. Ollama serves the
+  insights engine (every 90 s) and takes over if a Claude call fails. An
+  operator-forced local model (`force_local`) is still respected.
+- **Ollama here:** `llama3.2:3b`, CPU only. ~12 tok/s warm, ~19 s per insight
+  under memory load. The 90 s insights cycle keeps it resident (~2.6 GB), and
+  this laptop runs at ~90% RAM, so watch memory. Don't pull bigger models
+  without asking.
 
 ---
 

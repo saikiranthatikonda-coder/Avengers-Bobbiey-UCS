@@ -35,7 +35,7 @@ tracks both.
 | Cinematic HUD dashboard | IMPLEMENTED | ✅ |
 | 8-agent roster | IMPLEMENTED | ✅ Claude-backed replies citing live telemetry |
 | AI brain: Claude CLI → local LLM → rule templates | IMPLEMENTED | ✅ Claude CLI live (`brain_mode: llm`), templates as fallback |
-| Local AI models (Ollama / OpenAI-compatible) | OPTIONAL | ❌ not installed |
+| Local AI models (Ollama / OpenAI-compatible) | OPTIONAL | ✅ `llama3.2:3b` powers insights + Claude failover (Claude-first routing) |
 | Insights engine + executive briefing | IMPLEMENTED | ✅ (AI wording depends on brain) |
 | Threat intelligence + emergency alerts | IMPLEMENTED | ✅ |
 | TTS (System.Speech / `say` / `spd-say`) | IMPLEMENTED | ✅ (muted by default) |
@@ -118,8 +118,8 @@ tracks both.
 In order. Each needs operator input only where noted.
 
 1. ~~**Claude CLI foundation**~~ ✅ done 2026-09-28.
-2. **Ollama / local AI**: install and pick a model sized for this machine. *(operator picks the model)*
-3. **AI provider verification**: prove each tier end-to-end, fallback intact.
+2. ~~**Ollama / local AI**~~ ✅ done 2026-09-29 (`llama3.2:3b`).
+3. ~~**AI provider verification**~~ ✅ all three tiers verified in the live app + tests.
 4. **Voice**: install optional STT deps into the existing venv, verify mic → STT → routing → TTS.
 5. **Google**: restore `credentials.json`, operator runs OAuth. *(operator action)*
 6. **News**: configure `NEWSAPI_KEY`, fix the stale "mock feed" docs. *(operator provides key)*
