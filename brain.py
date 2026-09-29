@@ -79,14 +79,16 @@ class Brain:
                 return alt
             # local failed — fall through to Claude/templates below
 
-        # Fast path (voice / typed chat): prefer whichever backend is actually
-        # fast on THIS machine. A local Ollama model is only auto-preferred once
-        # it has PROVEN quick (last call < 4s); on GPU-less/loaded machines local
-        # is slower, so we stay on Claude. "/no_think" suppresses Qwen3 reasoning.
+        # Fast path (voice / typed chat) — only when Claude is NOT the active
+        # brain. Operator policy (2026-09-28): Claude first whenever reachable;
+        # latency-based switching made replies flip between Claude and a small
+        # local model depending on the last insights call. Local still covers
+        # insights and takes over if a Claude call fails (below).
+        # "/no_think" suppresses Qwen3 reasoning.
         local_fast = (self.local_llm and self.local_llm.available
                       and self.local_llm.last_latency_ms is not None
                       and self.local_llm.last_latency_ms < 4000)
-        if fast and local_fast:
+        if fast and local_fast and self.mode != "llm":
             alt = await self.local_llm.chat(prompt + " /no_think", system=system,
                                             timeout=min(timeout, 20), max_tokens=180)
             if alt:

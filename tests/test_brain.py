@@ -55,6 +55,36 @@ class FallbackChain(unittest.TestCase):
         self.assertEqual(asyncio.run(b.probe()), "offline")
 
 
+class Routing(unittest.TestCase):
+    """Claude first whenever reachable; local only for insights / failover."""
+
+    def _brain(self, mode, claude_reply="from-claude"):
+        local = mock.Mock(available=True, last_latency_ms=500)   # "proven fast"
+        local.chat = mock.AsyncMock(return_value="from-local")
+        b = Brain(claude_bin="claude", local_brain=LocalBrain(), local_llm=local)
+        b.mode = mode
+        b._llm_call = mock.AsyncMock(return_value=claude_reply)
+        return b, local
+
+    def test_fast_local_does_not_preempt_claude(self):
+        b, local = self._brain("llm")
+        self.assertEqual(asyncio.run(b.think("hi", fast=True)), "from-claude")
+        local.chat.assert_not_called()
+
+    def test_local_takes_over_when_claude_fails(self):
+        b, _ = self._brain("llm", claude_reply="[brain timeout]")
+        self.assertEqual(asyncio.run(b.think("hi", fast=True)), "from-local")
+
+    def test_fast_path_still_used_without_claude(self):
+        b, _ = self._brain("local-llm")
+        self.assertEqual(asyncio.run(b.think("hi", fast=True)), "from-local")
+
+    def test_operator_forced_local_is_respected(self):
+        b, _ = self._brain("llm")
+        b.force_local = True
+        self.assertEqual(asyncio.run(b.think("hi")), "from-local")
+
+
 class CliArgs(unittest.TestCase):
     """The CLI call must run tool-less (text) or Read-only (vision), outside the repo."""
 
