@@ -110,8 +110,8 @@ Flat Python layout. Everything runs in one process from `main.py`.
 **Other directories**
 - `static/`: the dashboard: `index.html`, `app.js`, `style.css`, `login.html`, `landing.html` (vanilla JS, no build step).
 - `web3mod/`: optional Web3 subsystem: `service.py` (façade) plus `config`, `blockchain`, `wallet`, `token`, `governance`, `treasury`, `marketplace`, `analytics`.
-- `docs/`: GitHub Pages copy of the public website (`index.html`, `screenshots/`).
-- `site/`: Netlify website (`index.html`, `.netlify/` config).
+- `docs/`: **canonical public website** (`index.html`, `screenshots/`). Root `netlify.toml` publishes it. GitHub Pages can serve it too.
+- `site/`: legacy mirror for the old `netlify deploy` CLI link (`site/.netlify/`). `site/index.html` must equal `docs/index.html` (`tests/test_site.py`). Edit `docs/`, then copy.
 
 **Documentation**: `PROJECT_CONTEXT.md`, `ARCHITECTURE.md`, `FLEET.md`,
 `SAAS_PLAN.md`, `MIGRATION.md`, `README.md`, this `CLAUDE.md`.
@@ -176,7 +176,7 @@ needs setup. **PLANNED** = not built.
 | Knowledge hub, insights, briefing | IMPLEMENTED | AI answers depend on the brain |
 | Threat intelligence | IMPLEMENTED | Built from live telemetry/news/agenda signals |
 | Vision presence (camera) | PARTIAL | Browser-side frame analysis. AI image description goes through the Claude CLI (`brain.see`, Read tool only). Not yet re-verified with a camera on this machine |
-| Voice STT / wake words | OPTIONAL, inactive | Needs `JARVIS_VOICE=1` plus `faster-whisper`, `sounddevice`, `numpy`. **Not installed in this venv.** Degrades gracefully via `ImportError` handling |
+| Voice STT / wake words | IMPLEMENTED, enabled here | `JARVIS_VOICE=1`, `JARVIS_WHISPER_MODEL=base` (multilingual, better for Indian English than `.en`). Deps installed (faster-whisper 1.1.0, sounddevice 0.5.1, numpy 2.2.0, onnxruntime 1.20.1). Verified: mic capture, model load, STT, wake-word routing, listener online in the live app. **Live spoken-command test still pending** |
 | TTS | IMPLEMENTED | Windows System.Speech via PowerShell. Audio defaults to muted |
 | Google Calendar + Gmail | OPTIONAL, not connected here | Read-only OAuth. See §9 |
 | News | OPTIONAL | Needs `NEWSAPI_KEY`. Without it the fetch is skipped and the feed is **empty, not mocked** (README's "mock feed" wording is stale) |
@@ -187,11 +187,11 @@ needs setup. **PLANNED** = not built.
 | Decision support | IMPLEMENTED | Propose → simulate → execute. Never destructive. Autonomy opt-in whitelist |
 | On-prem AI cluster | IMPLEMENTED (needs fleet nodes running Ollama) | `/api/cluster` lists Ollama endpoints on fleet nodes. `/api/cluster/route` points the brain's inference at one |
 | AIOps status | IMPLEMENTED | `/api/aiops` → `insights.aiops_status()` |
-| Billing / editions / credits | **MOCK/SIMULATED** | Demo ledger in `billing.json`. **No real payment processing** |
+| Billing / editions / credits | **MOCK/SIMULATED** | Demo ledger in `billing.json`. **No real payment processing, and credits/entitlements are display-only (nothing enforces them)**. Target design in `SAAS_PLAN.md` §3 |
 | Web3 subsystem | OPTIONAL (off by default) | `enabled: False`. When enabled: **real** JSON-RPC chain status, on-chain balances, persisted governance/marketplace/treasury |
 | Web3 token figures | MOCK/SIMULATED until configured | Demo values until `token.contract` is set, then live ERC-20 reads |
 | Token market data, on-chain staking | PLANNED | Market data needs a listing; staking needs contracts. Code refuses to invent prices |
-| Public website (`site/`, `docs/`) | IMPLEMENTED | Netlify `avengers-bobbiey.netlify.app` + GitHub Pages copy, waitlist |
+| Public website (`docs/`, mirrored to `site/`) | IMPLEMENTED | Netlify `avengers-bobbiey.netlify.app` (manual CLI deploys until linked to GitHub). GitHub Pages not enabled (404). Waitlist via Netlify Forms. **Public claims must match the code** (no "live" billing while demo) |
 | PostgreSQL / Redis / Next.js / LangGraph | PLANNED | Target stack in `ARCHITECTURE.md`. Not present |
 
 A UI element does not prove a feature works. Check the code path (and

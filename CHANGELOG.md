@@ -5,6 +5,12 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-09-29 — Voice, orchestrator fix, website, commercialization
+- **fix:** the orchestrator tick crashed on every cycle when no calendar meeting existed (`f"{None:.0f}"` in an inactive rule), so Phase 2 delegation never ran on machines without Google. 3 real-tick tests.
+- **feat (setup):** voice restored. faster-whisper 1.1.0 + sounddevice + numpy in the existing venv, `base` model. Wake-word/intent tests added.
+- **site:** `docs/` is the canonical website (newer 4-edition pricing, phases 1–5 shipped). `site/` re-synced. Root `netlify.toml` enables Git-based deploys. Removed a "live subscription" overclaim. `tests/test_site.py` guards mirror, prices and claims.
+- **docs:** `SAAS_PLAN.md` rewritten as a code-grounded commercialization plan (sellable matrix, billing gap, Web3 real vs demo, risks, path to revenue).
+
 ## 2026-09-29 — Local AI tier
 - Installed Ollama 0.34.4 + `llama3.2:3b` on the dev laptop (machine setup, no repo change).
 - **fix:** Claude-first routing. The latency fast path no longer lets a warm local model pre-empt Claude for agent/voice replies. Local keeps insights and failover. 4 routing tests added (36 total).

@@ -39,7 +39,7 @@ tracks both.
 | Insights engine + executive briefing | IMPLEMENTED | ✅ (AI wording depends on brain) |
 | Threat intelligence + emergency alerts | IMPLEMENTED | ✅ |
 | TTS (System.Speech / `say` / `spd-say`) | IMPLEMENTED | ✅ (muted by default) |
-| Voice STT + wake words | OPTIONAL | ❌ `faster-whisper`, `sounddevice`, `numpy` not installed |
+| Voice STT + wake words | IMPLEMENTED | ⚠️ enabled (`base` model). Pipeline verified with a synthesized voice. Live-mic spoken test pending |
 | Vision: identity-free presence (browser frame diff) | IMPLEMENTED | ✅ with camera |
 | Vision: AI scene description | IMPLEMENTED | ⚠️ Claude CLI available. Not yet re-verified with a camera here |
 | Operator memory (description-based, not biometric) | IMPLEMENTED | ✅ |
@@ -51,7 +51,7 @@ tracks both.
 
 | Feature | Status |
 |---|---|
-| Jarvis-led orchestrator, directives, delegation | IMPLEMENTED |
+| Jarvis-led orchestrator, directives, delegation | IMPLEMENTED (tick crashed on every cycle without a calendar, fixed 2026-09-29) |
 | Shared blackboard, priority preemption, agent consults | IMPLEMENTED |
 | Persistent cross-agent team memory | IMPLEMENTED |
 | Command recommendations, knowledge hub search | IMPLEMENTED |
@@ -92,7 +92,7 @@ tracks both.
 
 | Feature | Status |
 |---|---|
-| Editions (Community → Enterprise), AI credits, entitlements | **MOCK**: demo ledger in `billing.json`, no payments |
+| Editions (Community → Enterprise), AI credits, entitlements | **MOCK**: demo ledger in `billing.json`, no payments, nothing enforced. Real-payments design in `SAAS_PLAN.md` §3 |
 | Real payment provider (LemonSqueezy/Stripe), license keys | PLANNED |
 | Web3 module (off by default) | OPTIONAL |
 | Web3: chain status, gas, RPC health, on-chain balances | IMPLEMENTED (real JSON-RPC, when enabled) |
@@ -100,7 +100,7 @@ tracks both.
 | Web3: token supply/symbol figures | MOCK until `token.contract` is set |
 | Web3: live token market data | PLANNED (needs a listing) |
 | Web3: on-chain staking | PLANNED (needs contracts) |
-| Public site + waitlist (Netlify, GitHub Pages copy) | IMPLEMENTED |
+| Public site + waitlist | IMPLEMENTED. `docs/` canonical, root `netlify.toml`. Live Netlify still shows the older release until redeployed or linked |
 
 ## Engineering foundation
 
@@ -120,10 +120,11 @@ In order. Each needs operator input only where noted.
 1. ~~**Claude CLI foundation**~~ ✅ done 2026-09-28.
 2. ~~**Ollama / local AI**~~ ✅ done 2026-09-29 (`llama3.2:3b`).
 3. ~~**AI provider verification**~~ ✅ all three tiers verified in the live app + tests.
-4. **Voice**: install optional STT deps into the existing venv, verify mic → STT → routing → TTS.
+4. **Voice** ✅ installed + enabled, pipeline verified. *(operator: one live spoken test)*
 5. **Google**: restore `credentials.json`, operator runs OAuth. *(operator action)*
 6. **News**: configure `NEWSAPI_KEY`, fix the stale "mock feed" docs. *(operator provides key)*
 7. ~~**Automated tests**~~ ✅ foundation shipped 2026-09-28 (found and fixed a billing crash).
 8. ~~**Docs/path cleanup**~~ ✅ done 2026-09-28. Open: `site/.netlify/netlify.toml` still points at the old machine (deploy config, needs operator decision).
 9. **Visual UX audit**: refine the HUD without losing its identity.
 10. **Next product evolution**: the unified command experience (speak → delegate → approve → act).
+11. **Commercialization**: see `SAAS_PLAN.md` §7. Next build items: one-click installer + Lite defaults, Claude API-backed metered brain, license keys + entitlement seam.
