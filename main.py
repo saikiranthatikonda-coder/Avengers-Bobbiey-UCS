@@ -1171,6 +1171,12 @@ async def calendar_connect():
         if mails is not None:
             state["agenda"].set_emails(mails)
             result["emails"] = len(mails)
+        tasks = await state["gcal"].fetch_tasks()
+        if tasks is not None:
+            state["agenda"].set_tasks(tasks)
+            result["tasks"] = len(tasks)
+        result["account"] = state["gcal"].account
+        result["calendars"] = state["gcal"].calendars
     return result
 
 

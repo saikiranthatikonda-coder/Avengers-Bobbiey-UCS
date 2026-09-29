@@ -133,10 +133,15 @@ def schedule_all(team, news, sysmon, hub, agenda=None, tts=None, insights=None,
             mails = await gcal.fetch_emails()
             if mails is not None:
                 agenda.set_emails(mails)
+            tasks = await gcal.fetch_tasks()
+            if tasks is not None:
+                agenda.set_tasks(tasks)
             if events is not None or mails is not None:
                 await hub.broadcast({
                     "type": "log", "level": "info",
-                    "msg": f"google synced — {len(events or [])} events · {len(mails or [])} emails",
+                    "msg": (f"google synced — {len(events or [])} events from "
+                            f"{len(gcal.calendars)} calendars · {len(mails or [])} emails · "
+                            f"{len(tasks or [])} tasks"),
                 })
         sched.add_job(google_sync_job, IntervalTrigger(minutes=5),
                       next_run_time=now + timedelta(seconds=6),

@@ -1,17 +1,20 @@
-"""Google Calendar sync engine.
+"""Google sync engine — ONE sign-in (the G button) covers Calendar, Gmail and Tasks.
 
 Setup (one-time, ~5 min):
-  1. console.cloud.google.com → create project → enable "Google Calendar API"
+  1. console.cloud.google.com → create project → enable "Google Calendar API",
+     "Gmail API" and "Google Tasks API"
   2. OAuth consent screen → External → add yourself as test user
   3. Credentials → Create OAuth client ID → Desktop app → download JSON
   4. Save as  credentials.json  in the project root (next to main.py)
-  5. POST /api/calendar/connect (or click CONNECT GOOGLE in the dashboard)
-     → browser opens → approve → token.json saved → real events flow.
+  5. Click G in the dashboard (POST /api/calendar/connect) → browser opens →
+     approve once → token.json (with a refresh token) keeps you signed in.
+     Clicking G again just re-syncs; it only re-asks when a scope is missing.
 
-Falls back silently when credentials are absent; the Agenda keeps mock data.
+Read-only everywhere. Without credentials the Agenda stays empty (never mocked).
 """
 
 import asyncio
+import re
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -19,7 +22,98 @@ from pathlib import Path
 SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/tasks.readonly",
 ]
+
+CAL_WINDOW_DAYS = 7
+MAX_CALENDARS = 15
+MAX_EVENTS_PER_CAL = 25
+_VIDEO_URL = re.compile(
+    r"https://[\w.-]*(zoom\.us|teams\.microsoft\.com|teams\.live\.com|"
+    r"meet\.google\.com|webex\.com)/[^\s\"<>]+")
+
+
+def _provider(url: str) -> str:
+    for key, name in (("zoom.us", "Zoom"), ("teams.", "Microsoft Teams"),
+                      ("meet.google", "Google Meet"), ("webex", "Webex")):
+        if key in url:
+            return name
+    return "Video call"
+
+
+def _join_link(it: dict) -> tuple[str, str]:
+    """(url, provider) for an event's video meeting, from conferenceData,
+    hangoutLink, or a Zoom/Teams/Meet URL in the location/description."""
+    conf = it.get("conferenceData") or {}
+    for ep in conf.get("entryPoints") or []:
+        if ep.get("entryPointType") == "video" and ep.get("uri"):
+            name = ((conf.get("conferenceSolution") or {}).get("name") or "").strip()
+            return ep["uri"], name or _provider(ep["uri"])
+    if it.get("hangoutLink"):
+        return it["hangoutLink"], "Google Meet"
+    m = _VIDEO_URL.search(f"{it.get('location') or ''} {it.get('description') or ''}")
+    if m:
+        return m.group(0), _provider(m.group(0))
+    return "", ""
+
+
+def parse_event(it: dict, calendar: str = "") -> dict | None:
+    """Google Calendar event resource → agenda dict (None if unusable)."""
+    start_raw = (it.get("start") or {}).get("dateTime") or (it.get("start") or {}).get("date")
+    end_raw = (it.get("end") or {}).get("dateTime") or (it.get("end") or {}).get("date")
+    if not start_raw or it.get("status") == "cancelled":
+        return None
+    try:
+        start = datetime.fromisoformat(start_raw.replace("Z", "+00:00"))
+        if start.tzinfo:
+            start = start.astimezone().replace(tzinfo=None)
+        if end_raw:
+            end = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
+            if end.tzinfo:
+                end = end.astimezone().replace(tzinfo=None)
+            duration = max(5, int((end - start).total_seconds() // 60))
+        else:
+            duration = 30
+    except Exception:
+        return None
+    title = it.get("summary") or "(untitled)"
+    people = it.get("attendees") or []
+    me = next((a for a in people if a.get("self")), None)
+    attendees = [a.get("email", "") for a in people if not a.get("self")]
+    low = title.lower()
+    priority = "high" if (len(attendees) >= 3
+                          or any(w in low for w in HIGH_PRIORITY_WORDS)) else "normal"
+    link, provider = _join_link(it)
+    return {
+        "title": title, "start": start, "duration_min": duration,
+        "attendees": attendees[:5],
+        "attendee_count": len(attendees),
+        "location": it.get("location") or "",
+        "priority": priority,
+        "calendar": calendar,
+        "meet_link": link, "meet_provider": provider,
+        "organizer": (it.get("organizer") or {}).get("email", ""),
+        "response": (me or {}).get("responseStatus", ""),  # accepted|declined|tentative|needsAction
+        "all_day": "date" in (it.get("start") or {}),
+        "uid": it.get("iCalUID") or it.get("id") or "",
+    }
+
+
+def merge_events(per_calendar: list[tuple[str, list[dict]]]) -> list[dict]:
+    """Parse, de-duplicate (same invite on several calendars) and sort."""
+    seen, out = set(), []
+    for cal_name, items in per_calendar:
+        for it in items:
+            ev = parse_event(it, cal_name)
+            if not ev:
+                continue
+            key = (ev["uid"], ev["start"])
+            if ev["uid"] and key in seen:
+                continue
+            seen.add(key)
+            out.append(ev)
+    out.sort(key=lambda e: e["start"])
+    return out
 
 HIGH_PRIORITY_WORDS = ("investor", "board", "demo", "review", "interview",
                        "pitch", "client", "aisin", "deadline")
@@ -35,6 +129,10 @@ class GoogleCalendar:
         self.last_sync: float | None = None
         self.last_error: str | None = None
         self.event_count = 0
+        self.account: str | None = None      # signed-in Google address
+        self.calendars: list[str] = []       # calendar names included in sync
+        self.task_count = 0
+        self.tasks_error: str | None = None
 
     # ── status helpers ────────────────────────────────────────────
     def credentials_present(self) -> bool:
@@ -51,7 +149,21 @@ class GoogleCalendar:
             "last_sync": self.last_sync,
             "last_error": self.last_error,
             "event_count": self.event_count,
+            "account": self.account,
+            "calendars": self.calendars,
+            "task_count": self.task_count,
+            "tasks_error": self.tasks_error,
+            "scopes_ok": self._scopes_ok(),
         }
+
+    def _scopes_ok(self) -> bool:
+        """True when the saved token already grants every scope we use."""
+        try:
+            import json as _json
+            info = _json.loads(self.token_path.read_text(encoding="utf-8"))
+            return set(SCOPES) <= set(info.get("scopes") or [])
+        except Exception:
+            return False
 
     # ── auth ──────────────────────────────────────────────────────
     def _load_creds(self):
@@ -64,8 +176,10 @@ class GoogleCalendar:
         creds = None
         if self.token_present():
             try:
-                creds = Credentials.from_authorized_user_file(
-                    str(self.token_path), SCOPES)
+                # no scopes arg: keep what the token actually granted, so a token
+                # from before a scope was added still refreshes (Google rejects a
+                # refresh that asks for more than was consented)
+                creds = Credentials.from_authorized_user_file(str(self.token_path))
             except Exception as e:
                 # Older/web tokens may lack refresh_token → from_authorized_user_file
                 # raises. Try to build creds from whatever fields we have so a
@@ -96,10 +210,15 @@ class GoogleCalendar:
                 return None
         return creds if (creds and creds.valid) else None
 
-    async def connect(self) -> dict:
-        """Run the OAuth installed-app flow (opens a browser on this machine)."""
+    async def connect(self, force: bool = False) -> dict:
+        """Sign in once. With a valid token that already grants every scope this
+        just reports success (the caller re-syncs). A browser consent only runs
+        on first connect, when a scope was added, or with force=True."""
         if not self.credentials_present():
             return {"ok": False, "error": "credentials.json not found — see google_sync.py docstring"}
+        if not force and self._scopes_ok() and self._load_creds():
+            self.connected = True
+            return {"ok": True, "reused": True}
         # drop any stale token so re-consent issues a fresh one WITH a refresh_token
         try:
             self.token_path.unlink(missing_ok=True)
@@ -170,18 +289,11 @@ class GoogleCalendar:
             from googleapiclient.discovery import build
             svc = build("calendar", "v3", credentials=creds,
                         cache_discovery=False)
-            now = datetime.utcnow()
-            resp = svc.events().list(
-                calendarId="primary",
-                timeMin=(now - timedelta(hours=1)).isoformat() + "Z",
-                timeMax=(now + timedelta(days=7)).isoformat() + "Z",
-                singleEvents=True, orderBy="startTime", maxResults=25,
-            ).execute()
-            return resp.get("items", [])
+            return fetch_all_calendars(svc)
 
         try:
             loop = asyncio.get_running_loop()
-            items = await loop.run_in_executor(None, _fetch)
+            per_cal = await loop.run_in_executor(None, _fetch)
         except Exception as e:
             self.last_error = str(e)
             self.connected = False
@@ -190,38 +302,8 @@ class GoogleCalendar:
                                           "msg": f"calendar sync failed: {e}"})
             return None
 
-        events: list[dict] = []
-        for it in items:
-            start_raw = (it.get("start") or {}).get("dateTime") \
-                        or (it.get("start") or {}).get("date")
-            end_raw = (it.get("end") or {}).get("dateTime") \
-                      or (it.get("end") or {}).get("date")
-            if not start_raw:
-                continue
-            try:
-                start = datetime.fromisoformat(start_raw.replace("Z", "+00:00"))
-                start = start.astimezone().replace(tzinfo=None)
-                if end_raw:
-                    end = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
-                    end = end.astimezone().replace(tzinfo=None)
-                    duration = max(5, int((end - start).total_seconds() // 60))
-                else:
-                    duration = 30
-            except Exception:
-                continue
-            title = it.get("summary") or "(untitled)"
-            attendees = [a.get("email", "") for a in (it.get("attendees") or [])
-                         if not a.get("self")][:5]
-            low = title.lower()
-            priority = "high" if (len(attendees) >= 3
-                                  or any(w in low for w in HIGH_PRIORITY_WORDS)) else "normal"
-            events.append({
-                "title": title, "start": start, "duration_min": duration,
-                "attendees": attendees,
-                "location": it.get("location") or
-                            (it.get("hangoutLink") or ""),
-                "priority": priority,
-            })
+        events = merge_events(per_cal)
+        self.calendars = [name for name, _ in per_cal]
 
         self.connected = True
         self.last_sync = time.time()
@@ -239,6 +321,10 @@ class GoogleCalendar:
         def _fetch():
             from googleapiclient.discovery import build
             svc = build("gmail", "v1", credentials=creds, cache_discovery=False)
+            try:
+                self.account = svc.users().getProfile(userId="me").execute().get("emailAddress")
+            except Exception:
+                pass
             resp = svc.users().messages().list(
                 userId="me", q="in:inbox newer_than:3d",
                 maxResults=max_results).execute()
@@ -274,3 +360,79 @@ class GoogleCalendar:
                 await self.hub.broadcast({"type": "log", "level": "warn",
                                           "msg": f"gmail sync failed: {e}"})
             return None
+
+    # ── Google Tasks (same OAuth, readonly) ───────────────────────
+    async def fetch_tasks(self, max_results: int = 20) -> list[dict] | None:
+        """Open tasks across all task lists. None when not connected or when the
+        Tasks API/scope isn't available (the reason is kept in tasks_error)."""
+        creds = self._load_creds()
+        if not creds:
+            return None
+
+        def _fetch():
+            from googleapiclient.discovery import build
+            svc = build("tasks", "v1", credentials=creds, cache_discovery=False)
+            return fetch_open_tasks(svc, max_results)
+
+        try:
+            loop = asyncio.get_running_loop()
+            tasks = await loop.run_in_executor(None, _fetch)
+            self.task_count = len(tasks)
+            self.tasks_error = None
+            return tasks
+        except Exception as e:
+            msg = str(e)
+            if "insufficient" in msg.lower() or "scope" in msg.lower():
+                msg = "Tasks not granted yet — click G to approve the new permission"
+            elif "has not been used" in msg or "disabled" in msg:
+                msg = "enable the Google Tasks API in your Cloud project"
+            self.tasks_error = msg[:200]
+            return None
+
+
+def fetch_all_calendars(svc) -> list[tuple[str, list[dict]]]:
+    """Events from every calendar the user shows in Google Calendar (primary +
+    shared/work/team), for the next CAL_WINDOW_DAYS days."""
+    now = datetime.utcnow()
+    tmin = (now - timedelta(hours=1)).isoformat() + "Z"
+    tmax = (now + timedelta(days=CAL_WINDOW_DAYS)).isoformat() + "Z"
+    cals = svc.calendarList().list(minAccessRole="reader").execute().get("items", [])
+    chosen = [c for c in cals if c.get("primary") or
+              (c.get("selected") and not c.get("hidden"))][:MAX_CALENDARS]
+    if not chosen:
+        chosen = [{"id": "primary", "primary": True}]
+    out = []
+    for c in chosen:
+        try:
+            items = svc.events().list(
+                calendarId=c["id"], timeMin=tmin, timeMax=tmax,
+                singleEvents=True, orderBy="startTime",
+                maxResults=MAX_EVENTS_PER_CAL,
+            ).execute().get("items", [])
+        except Exception:
+            continue          # one unreadable shared calendar must not sink the sync
+        name = "Primary" if c.get("primary") else (
+            c.get("summaryOverride") or c.get("summary") or c["id"])
+        out.append((name, items))
+    return out
+
+
+def fetch_open_tasks(svc, max_results: int = 20) -> list[dict]:
+    """Open (not completed) tasks from every task list, soonest due first."""
+    out = []
+    for tl in svc.tasklists().list(maxResults=20).execute().get("items", []):
+        items = svc.tasks().list(tasklist=tl["id"], showCompleted=False,
+                                 maxResults=max_results).execute().get("items", [])
+        for t in items:
+            if t.get("status") == "completed" or not (t.get("title") or "").strip():
+                continue
+            due = None
+            if t.get("due"):
+                try:
+                    due = datetime.fromisoformat(t["due"].replace("Z", "+00:00")).date().isoformat()
+                except Exception:
+                    due = None
+            out.append({"title": t["title"][:140], "list": tl.get("title", ""),
+                        "due": due, "notes": (t.get("notes") or "")[:160]})
+    out.sort(key=lambda t: (t["due"] is None, t["due"] or ""))
+    return out[:max_results]

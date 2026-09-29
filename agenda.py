@@ -21,6 +21,12 @@ class CalendarEvent:
     attendees: list[str] = field(default_factory=list)
     location: str = ""
     priority: str = "normal"  # "high" | "normal"
+    calendar: str = ""                  # which Google calendar it came from
+    meet_link: str = ""                 # Meet / Zoom / Teams join URL
+    meet_provider: str = ""
+    organizer: str = ""
+    response: str = ""                  # accepted | declined | tentative | needsAction
+    attendee_count: int = 0
     notified_10: bool = False
     notified_1: bool = False
 
@@ -45,6 +51,7 @@ class Agenda:
         # sync (google_sync.py). No mock/seed data anywhere.
         self.events: list[CalendarEvent] = []
         self.emails: list[Email] = []
+        self.tasks: list[dict] = []    # open Google Tasks (same sign-in)
         self.source = "disconnected"   # "disconnected" | "google"
 
     # ── real-calendar ingestion (Google sync) ────────────────────
@@ -61,6 +68,12 @@ class Agenda:
                 attendees=r.get("attendees") or [],
                 location=r.get("location") or "",
                 priority=r.get("priority", "normal"),
+                calendar=r.get("calendar") or "",
+                meet_link=r.get("meet_link") or "",
+                meet_provider=r.get("meet_provider") or "",
+                organizer=r.get("organizer") or "",
+                response=r.get("response") or "",
+                attendee_count=r.get("attendee_count") or len(r.get("attendees") or []),
             )
             flags = old_flags.get((ev.title, ev.start.isoformat()))
             if flags:
@@ -147,6 +160,10 @@ class Agenda:
             "source": self.source,
         }
 
+    # ── real Google Tasks ingestion ───────────────────────────────
+    def set_tasks(self, raw: list[dict]) -> None:
+        self.tasks = [t for t in raw if t.get("title")][:20]
+
     # ── real-Gmail ingestion ──────────────────────────────────────
     def set_emails(self, raw: list[dict]) -> None:
         """Replace inbox with synced Gmail data, preserving notified flags so
@@ -183,6 +200,12 @@ class Agenda:
                 "attendees": e.attendees,
                 "location": e.location,
                 "priority": e.priority,
+                "calendar": e.calendar,
+                "meet_link": e.meet_link,
+                "meet_provider": e.meet_provider,
+                "organizer": e.organizer,
+                "response": e.response,
+                "attendee_count": e.attendee_count,
             })
         events.sort(key=lambda x: x["start_ts"])
         emails = sorted(self.emails, key=lambda m: m.received, reverse=True)
@@ -202,6 +225,7 @@ class Agenda:
                 and e.start > now
             ),
             "source": self.source,
+            "tasks": self.tasks[:8],
             "intel": self.intelligence(),
         }
 

@@ -832,7 +832,16 @@ function renderAgenda(events, source) {
   }
   for (const e of events) {
     const div = document.createElement("div");
-    div.className = "agenda-item" + (e.priority === "high" ? " high" : "") + (e.minutes_until <= 10 && e.minutes_until > 0 ? " imminent" : "");
+    div.className = "agenda-item" + (e.priority === "high" ? " high" : "") + (e.minutes_until <= 10 && e.minutes_until > 0 ? " imminent" : "")
+      + (e.response === "declined" ? " declined" : "");
+    const who = e.attendee_count > 0
+      ? `${e.attendee_count} guest${e.attendee_count > 1 ? "s" : ""}` + ((e.attendees || [])[0] ? ` · ${e.attendees[0]}` : "")
+      : (e.location || `${e.duration_min} min`);
+    const rsvp = { declined: "DECLINED", tentative: "MAYBE", needsAction: "RSVP?" }[e.response] || "";
+    // only http(s) join links are rendered — never javascript: or other schemes
+    const join = /^https:\/\//.test(e.meet_link || "")
+      ? `<a class="agenda-join" href="${escapeHTML(e.meet_link)}" target="_blank" rel="noopener noreferrer"
+            title="join on ${escapeHTML(e.meet_provider || "video call")}">JOIN</a>` : "";
     div.innerHTML = `
       <div class="agenda-time">
         ${fmtTime(e.start_ts)}
@@ -840,8 +849,26 @@ function renderAgenda(events, source) {
       </div>
       <div class="agenda-body">
         <div class="agenda-title">${escapeHTML(e.title)}</div>
-        <div class="agenda-meta">${escapeHTML((e.attendees || []).join(", ") || e.location || `${e.duration_min} min`)}</div>
-      </div>`;
+        <div class="agenda-meta">${e.calendar && e.calendar !== "Primary" ? `<span class="agenda-cal">${escapeHTML(e.calendar)}</span>` : ""}${rsvp ? `<span class="agenda-rsvp">${rsvp}</span>` : ""}${escapeHTML(who)}</div>
+      </div>${join}`;
+    div.querySelector(".agenda-join")?.addEventListener("click", ev => ev.stopPropagation());
+    host.appendChild(div);
+  }
+}
+function renderTasks(tasks) {
+  const host = $("#agenda-list"); if (!host || !tasks || !tasks.length) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const head = document.createElement("div");
+  head.className = "agenda-tasks-head";
+  head.textContent = `TASKS · ${tasks.length} OPEN`;
+  host.appendChild(head);
+  for (const t of tasks.slice(0, 5)) {
+    const div = document.createElement("div");
+    const overdue = t.due && t.due < today;
+    div.className = "agenda-task" + (overdue ? " overdue" : "");
+    div.innerHTML = `<span class="agenda-task-box" aria-hidden="true"></span>
+      <span class="agenda-task-title">${escapeHTML(t.title)}</span>
+      <span class="agenda-task-due">${t.due ? (overdue ? "OVERDUE " : "DUE ") + escapeHTML(t.due.slice(5)) : escapeHTML(t.list || "")}</span>`;
     host.appendChild(div);
   }
 }
@@ -868,6 +895,7 @@ async function refreshAgenda() {
   try {
     const r = await fetch("/api/agenda"); const d = await r.json();
     renderAgenda(d.events || [], d.source);
+    renderTasks(d.tasks || []);
     renderInbox(d.emails || [], d.priority_unread || 0, d.source);
     try {
       pendingActions = (d.events || []).length + (d.priority_unread || 0);
@@ -2148,7 +2176,12 @@ $("#gcal-btn")?.addEventListener("click", async () => {
     const r = await fetch("/api/calendar/connect", { method: "POST" });
     const d = await r.json();
     if (d.ok) {
-      logEvent(`<span class="tag">[calendar]</span> connected ✓ — ${d.synced ?? 0} events synced`);
+      const cals = (d.calendars || []).length;
+      logEvent(`<span class="tag">[google]</span> ${d.reused ? "already signed in — re-synced" : "connected ✓"}`
+        + `${d.account ? " as " + escapeHTML(d.account) : ""} — ${d.synced ?? 0} events from ${cals} calendar${cals === 1 ? "" : "s"}`
+        + ` · ${d.emails ?? 0} emails · ${d.tasks ?? 0} tasks`);
+      const b = $("#gcal-btn");
+      if (b && d.account) b.title = `Google: ${d.account} — click to re-sync`;
       refreshAgenda();
     } else {
       logEvent(`<span class="tag">[calendar]</span> ${escapeHTML(d.error || "connect failed")} — see google_sync.py setup steps`, "warn");

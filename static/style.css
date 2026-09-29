@@ -842,6 +842,19 @@ body {
 .agenda-body { min-width: 0; }
 .agenda-title { font-family: var(--font-display); font-size: 0.74rem; letter-spacing: 0.04em; color: var(--text); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agenda-meta { font-size: 0.6rem; color: var(--text-dim); letter-spacing: 0.05em; margin-top: 0.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agenda-item:has(.agenda-join) { grid-template-columns: 60px 1fr auto; }
+.agenda-join { align-self: center; font-size: 0.55rem; letter-spacing: 0.18em; padding: 0.22rem 0.5rem; border: 1px solid var(--success); border-radius: 3px; color: var(--success); text-decoration: none; background: color-mix(in srgb, var(--success) 8%, transparent); transition: background 0.2s, box-shadow 0.2s; }
+.agenda-join:hover, .agenda-join:focus-visible { background: color-mix(in srgb, var(--success) 22%, transparent); box-shadow: 0 0 10px color-mix(in srgb, var(--success) 40%, transparent); outline: none; }
+.agenda-cal, .agenda-rsvp { display: inline-block; font-size: 0.5rem; letter-spacing: 0.14em; padding: 0 0.3rem; margin-right: 0.35rem; border: 1px solid var(--panel-edge); border-radius: 2px; color: var(--accent); text-transform: uppercase; }
+.agenda-rsvp { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--panel-edge)); }
+.agenda-item.declined { opacity: 0.5; }
+.agenda-item.declined .agenda-title { text-decoration: line-through; }
+.agenda-tasks-head { margin-top: 0.35rem; font-size: 0.52rem; letter-spacing: 0.22em; color: var(--text-dim); }
+.agenda-task { display: grid; grid-template-columns: 10px 1fr auto; gap: 0.45rem; align-items: center; padding: 0.25rem 0.5rem; font-size: 0.62rem; border-left: 1px solid var(--panel-edge); }
+.agenda-task-box { width: 8px; height: 8px; border: 1px solid var(--accent); border-radius: 2px; }
+.agenda-task-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agenda-task-due { font-size: 0.5rem; letter-spacing: 0.14em; color: var(--text-dim); }
+.agenda-task.overdue .agenda-task-due { color: var(--warn); }
 .inbox-item { padding: 0.4rem 0.5rem; border: 1px solid var(--panel-edge); border-radius: 4px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 4%, transparent), rgba(0,0,0,0.45)); position: relative; transition: all 0.25s; }
 .inbox-item:hover { transform: translateX(2px); }
 .inbox-item.priority { border-left: 3px solid var(--stark); }
