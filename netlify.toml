@@ -1,0 +1,13 @@
+# Netlify continuous deployment for the public site (avengers-bobbiey.netlify.app).
+# docs/ is the single source of the website; GitHub Pages can serve the same
+# folder. site/index.html is a mirror kept for the legacy `netlify deploy` CLI
+# link in site/.netlify (tests/test_site.py fails if the two drift apart).
+[build]
+  publish = "docs"
+  command = ""
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
