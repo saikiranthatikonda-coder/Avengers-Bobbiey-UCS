@@ -159,12 +159,14 @@ function logEvent(html, kind = "info") {
 // ── news ─────────────────────────────────────────────
 function renderNews(items) {
   const list = $("#news-list"); list.innerHTML = "";
-  if (!items.length) { list.innerHTML = '<div class="news-empty">no feed — check NEWSAPI_KEY</div>'; return; }
+  if (!items.length) { list.innerHTML = '<div class="news-empty">no headlines yet — news sources unreachable, retrying every 10 min</div>'; return; }
   for (const it of items.slice(0, 12)) {
     const div = document.createElement("div");
     div.className = "news-item";
-    div.innerHTML = `<div>${escapeHTML(it.title)}</div><div class="src">▸ ${escapeHTML(it.source || "unknown")}</div>`;
-    if (it.url) div.onclick = () => window.open(it.url, "_blank");
+    const age = it.ts ? Math.max(0, Math.round((Date.now() - Date.parse(it.ts)) / 60000)) : null;
+    const when = age == null || isNaN(age) ? "" : age < 60 ? ` · ${age}m ago` : ` · ${Math.round(age / 60)}h ago`;
+    div.innerHTML = `<div>${escapeHTML(it.title)}</div><div class="src">▸ ${escapeHTML(it.source || "unknown")}${when}</div>`;
+    if (/^https?:\/\//.test(it.url || "")) { div.onclick = () => window.open(it.url, "_blank", "noopener"); div.title = "open article"; }
     list.appendChild(div);
   }
 }
@@ -342,6 +344,30 @@ function setVoiceState(state) {
     else                              sub.textContent = 'say "hey <agent>"';
   }
 }
+// JARVIS summon card — opened by a double clap, shows what was heard and the
+// reply, closes itself after 20 s of quiet. Function declaration object built
+// lazily so early WS messages can't hit a TDZ.
+var JarvisSummon = {
+  _t: null,
+  el(id) { return document.getElementById(id); },
+  open() {
+    const c = this.el("jarvis-summon"); if (!c) return;
+    c.hidden = false; c.classList.remove("speaking");
+    this.state("LISTENING");
+    this.el("js-heard").textContent = "Speak now — no wake word needed.";
+    this.el("js-reply").textContent = "";
+    this.touch();
+  },
+  active() { const c = this.el("jarvis-summon"); return c && !c.hidden; },
+  state(s) { const e = this.el("js-state"); if (e && this.active()) e.textContent = s; },
+  heard(t) { if (!this.active() || !t) return; this.el("js-heard").textContent = `“${t}”`; this.touch(); },
+  reply(t) { if (!this.active()) return; this.el("js-reply").textContent = t; this.state("ANSWERED"); this.touch(); },
+  speaking(on) { const c = this.el("jarvis-summon"); if (c && this.active()) { c.classList.toggle("speaking", on); if (on) this.state("SPEAKING"); this.touch(); } },
+  touch() { clearTimeout(this._t); this._t = setTimeout(() => this.close(), 20000); },
+  close() { const c = this.el("jarvis-summon"); if (c) c.hidden = true; clearTimeout(this._t); },
+};
+document.addEventListener("click", e => { if (e.target && e.target.id === "js-close") JarvisSummon.close(); });
+
 function setHeard(text, routeLabel) {
   const t = $("#heard-text"); const r = $("#heard-route");
   if (text) { t.classList.remove("empty"); t.textContent = text; }
@@ -722,22 +748,17 @@ async function refreshConnectivity() {
 
     const p = d.ping_ms ?? -1;
     // orb flank: real link latency + probe loss
-    const fv = $("#fl-vector"); if (fv) fv.textContent = p >= 0 ? String(Math.min(999, p)) : "---";
-    const fp = $("#fl-pkt"); if (fp) fp.textContent = p >= 0 ? "0%" : "100%";
+    const fv = $("#fl-vector"); if (fv) fv.textContent = fmtLatency(p);
+    // packet loss comes from the rolling probe window (d.net), not one ping
+    const loss = d.net && d.net.loss_pct != null ? d.net.loss_pct : null;
+    const fp = $("#fl-pkt"); if (fp) fp.textContent = loss != null ? `${loss}%` : (p >= 0 ? "—" : "100%");
     const pingRow = $("#conn-net");
     if (p < 0)        { $("#ping-val").textContent = "—";       pingRow.classList.add("bad");  pingRow.classList.remove("ok","warn"); }
     else if (p < 100) { $("#ping-val").textContent = `${p} ms`; pingRow.classList.add("ok");   pingRow.classList.remove("warn","bad"); }
     else if (p < 300) { $("#ping-val").textContent = `${p} ms`; pingRow.classList.add("warn"); pingRow.classList.remove("ok","bad"); }
     else              { $("#ping-val").textContent = `${p} ms`; pingRow.classList.add("bad");  pingRow.classList.remove("ok","warn"); }
 
-    // wifi link speed takes precedence in the network tool-card when present
-    const tcNet = $("#tc-net");
-    if (tcNet && wifi.connected && wifi.speed_rx_mbps) {
-      window._wifiSpeedShown = true;
-      tcNet.textContent = `${Math.round(parseFloat(wifi.speed_rx_mbps))} Mbps · ${wifi.ssid || "WIFI"}`;
-    } else {
-      window._wifiSpeedShown = false;   // fall back to live throughput from metrics
-    }
+    if (d.net) applyNetSnapshot(d.net);
   } catch (e) {}
 }
 refreshConnectivity(); setInterval(refreshConnectivity, 30000);
@@ -764,6 +785,26 @@ refreshBattery(); setInterval(refreshBattery, 30000);
 function updateLocation(text, coords) {
   if (text) $("#location-value").textContent = text;
   if (coords) $("#location-coords").textContent = coords;
+}
+// live network truth (netspeed.py): measured internet speed beats the Wi-Fi
+// PHY rate, which is only the radio link and not what the internet delivers
+function applyNetSnapshot(n) {
+  if (!n) return;
+  const fv = $("#fl-vector"); if (fv && n.latency_ms != null) fv.textContent = fmtLatency(n.latency_ms);
+  const fp = $("#fl-pkt"); if (fp && n.loss_pct != null) fp.textContent = `${n.loss_pct}%`;
+  const tc = $("#tc-net"); const sp = n.speed;
+  if (tc && sp && sp.ok) {
+    window._netSpeedShown = true;
+    tc.textContent = `${Math.round(sp.down_mbps)}↓ ${Math.round(sp.up_mbps)}↑ Mbps · ${n.latency_ms != null ? Math.round(n.latency_ms) + " ms" : ""}`;
+    tc.title = `internet speed measured ${_ago(sp.ts)} (speed.cloudflare.com) — click for details / re-test`;
+  } else if (tc && n.testing) {
+    tc.textContent = "speed test running…";
+  }
+}
+// fits inside the flank ring: ≤3 digits in ms, otherwise seconds
+function fmtLatency(p) {
+  if (p == null || p < 0) return "---";
+  return p < 1000 ? String(Math.round(p)) : (p / 1000).toFixed(1) + "s";
 }
 function fmtCoords(lat, lon) {
   return `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"} · ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? "E" : "W"}`;
@@ -982,132 +1023,149 @@ document.querySelectorAll(".quick-btn").forEach(btn => {
 
 /* ═══ TOOL MODAL ═══════════════════════════════════ */
 
+// Every figure below comes from a live endpoint. When a source has no data the
+// panel says so; nothing here is invented (PROJECT_CONTEXT §1: real data only).
+// function declarations (hoisted) — applyNetSnapshot, higher up the file, can
+// run during load; a `const` here would throw a TDZ ReferenceError (PROJECT_CONTEXT §5)
+function _ago(ts) { if (!ts) return "—"; const s = Math.max(0, Date.now() / 1000 - ts);
+  return s < 60 ? `${Math.round(s)} s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; }
+function _hm(ts) { return ts ? new Date(ts * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }) : "—"; }
+function _stat(lbl, val, cls = "") { return `<div class="mb-stat"><span class="lbl">${lbl}</span><span class="val ${cls}">${escapeHTML(String(val ?? "—"))}</span></div>`; }
+function _row(txt, meta) { return `<div class="mb-row">${txt}<div class="mb-row-meta">${meta}</div></div>`; }
+function _none(msg) { return `<div class="mb-row" style="color:var(--text-dim)">${msg}</div>`; }
+function _fmtMbps(v) { return v == null ? "—" : `${v >= 100 ? Math.round(v) : v} Mbps`; }
+
+async function gatherToolSnapshot() {
+  const j = async p => { try { const r = await fetch(p); return r.ok ? await r.json() : {}; } catch (e) { return {}; } };
+  const [status, models, aiops, threats, orch, ent, auth, fleet, conn, procs] = await Promise.all(
+    ["/api/status", "/api/models", "/api/aiops", "/api/threats", "/api/orchestrator", "/api/enterprise",
+     "/api/auth/status", "/api/fleet", "/api/connectivity", "/api/processes"].map(j));
+  return { status, models, aiops, threats, orch, ent, auth, fleet, conn, procs };
+}
+
 const TOOL_DATA = {
   "ai-diagnostics": {
-    title: "AI DIAGNOSTICS",
-    sub: "LIVE LLM & AGENT TELEMETRY",
+    title: "AI DIAGNOSTICS", sub: "LIVE BRAIN & AGENT TELEMETRY",
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3 L12 21 M3 12 L21 12"/><path d="M5 5 L19 19 M5 19 L19 5" opacity="0.45"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/></svg>`,
-    render: (state) => `
-      <div class="mb-grid">
-        <div class="mb-stat"><span class="lbl">MODEL</span><span class="val">${escapeHTML(state.brain_mode || "—")}</span></div>
-        <div class="mb-stat"><span class="lbl">SUBSYSTEMS</span><span class="val ok">8 / 8 NOMINAL</span></div>
-        <div class="mb-stat"><span class="lbl">ROUTING</span><span class="val ok">99.4%</span></div>
-        <div class="mb-stat"><span class="lbl">AVG LATENCY</span><span class="val">0.32 s</span></div>
-        <div class="mb-stat"><span class="lbl">CALLS TODAY</span><span class="val">1,247</span></div>
-        <div class="mb-stat"><span class="lbl">TOKENS USED</span><span class="val">1.2 M / 10 M</span></div>
-      </div>
-      <div class="mb-list">
-        <div class="mb-row">All 8 agents (Jarvis, Captain, Stark, Widow, Hawkeye, Hulk, Thor, Vision) responding within tolerance.
-          <div class="mb-row-meta">LAST SWEEP · ${new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",hour12:false})}</div></div>
-      </div>`,
+    render: s => {
+      const m = s.models || {}, eng = (s.aiops || {}).engine || {}, agents = (s.status || {}).agents || [];
+      const busy = agents.filter(a => a.status && a.status !== "idle").length;
+      const local = (m.local || []).map(x => `${x.name} · ${x.param_size || ""} ${x.quant || ""}`.trim()).join(", ") || "none installed";
+      return `<div class="mb-grid">
+        ${_stat("ACTIVE BRAIN", (m.active_brain || (s.status || {}).brain_mode || "—").toUpperCase(), m.active_brain ? "ok" : "warn")}
+        ${_stat("CLAUDE CLI", m.cloud_claude ? "REACHABLE" : "UNAVAILABLE", m.cloud_claude ? "ok" : "warn")}
+        ${_stat("LOCAL LLM", m.local_available ? (m.selected || "online") : "OFFLINE", m.local_available ? "ok" : "warn")}
+        ${_stat("INSIGHT LATENCY", eng.latency_ms != null ? (eng.latency_ms / 1000).toFixed(1) + " s" : "—")}
+        ${_stat("INSIGHT CONFIDENCE", eng.confidence != null ? eng.confidence + "%" : "—")}
+        ${_stat("AGENTS BUSY", `${busy} / ${agents.length}`)}
+      </div><div class="mb-list">
+        ${_row(`Local models: ${escapeHTML(local)}`, `ENDPOINT · ${escapeHTML(m.endpoint || "—")}`)}
+        ${_row(`Insights engine: ${escapeHTML(eng.source || "—")} ${eng.model ? "· " + escapeHTML(eng.model) : ""}`, `LAST RUN · ${_ago(eng.last_run)}`)}
+        ${agents.map(a => _row(`${escapeHTML(a.codename || a.name)} — ${escapeHTML(a.status || "idle")}`, `${escapeHTML((a.current_task || "—").slice(0, 60))} · CONF ${a.confidence ?? "—"}%`)).join("")}
+      </div>`;
+    },
   },
   "satellite-feed": {
-    title: "SATELLITE FEED",
-    sub: "ORBITAL UPLINK · GEO + LEO",
+    title: "FLEET UPLINK", sub: "COMMAND FLEET · LIVE NODE REPORTS",
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M 5 19 L 19 5"/><path d="M 4 14 A 10 10 0 0 0 14 4"/><circle cx="6" cy="18" r="2" fill="currentColor"/><path d="M 11 11 L 14 14"/></svg>`,
-    render: () => `
-      <div class="mb-grid">
-        <div class="mb-stat"><span class="lbl">ACTIVE SATS</span><span class="val">14</span></div>
-        <div class="mb-stat"><span class="lbl">COVERAGE</span><span class="val ok">87%</span></div>
-        <div class="mb-stat"><span class="lbl">UPLINK</span><span class="val">12.3 Mbps</span></div>
-        <div class="mb-stat"><span class="lbl">DOWNLINK</span><span class="val">48.6 Mbps</span></div>
-        <div class="mb-stat"><span class="lbl">STRONGEST</span><span class="val">GEO · INDIAN OCEAN</span></div>
-        <div class="mb-stat"><span class="lbl">NEXT PASS</span><span class="val warn">HST · 12 min</span></div>
-      </div>
-      <div class="mb-list">
-        <div class="mb-row">Acquired handshake with GSAT-30 · signal 96% strength
-          <div class="mb-row-meta">UTC · ${new Date().toUTCString().slice(17, 22)}</div></div>
-        <div class="mb-row">Resync with Starlink mesh · 4 new satellites in window
-          <div class="mb-row-meta">UTC · -4 min</div></div>
-      </div>`,
+    render: s => {
+      const f = s.fleet || {}, agg = f.aggregate || {}, nodes = f.nodes || [];
+      return `<div class="mb-grid">
+        ${_stat("NODES ONLINE", `${agg.online ?? 0} / ${agg.nodes ?? nodes.length}`, agg.online ? "ok" : "warn")}
+        ${_stat("TOTAL CORES", agg.cpu_cores ?? "—")}
+        ${_stat("TOTAL RAM", agg.mem_total_gb != null ? agg.mem_total_gb + " GB" : "—")}
+        ${_stat("AVG CPU", agg.avg_cpu != null ? agg.avg_cpu + "%" : "—")}
+        ${_stat("REPORTS", f.reports_total ?? "—")}
+        ${_stat("SITE", (f.site || {}).name || "local")}
+      </div><div class="mb-list">
+        ${nodes.length ? nodes.map(n => _row(`<strong>${escapeHTML(n.name || n.node_id)}</strong> · ${escapeHTML(n.platform || "")} · CPU ${n.cpu ?? "—"}% · MEM ${n.mem ?? "—"}%`,
+          `${escapeHTML(n.status || "online").toUpperCase()} · LAST REPORT ${_ago(n.ts)} · UP ${n.uptime_min != null ? Math.round(n.uptime_min / 60) + " h" : "—"}`)).join("")
+          : _none("No fleet nodes reporting yet. Add one from the COMMAND FLEET panel.")}
+      </div>`;
+    },
   },
   "threat-scanner": {
-    title: "THREAT SCANNER",
-    sub: "ACTIVE PERIMETER MONITORING",
+    title: "THREAT SCANNER", sub: "LIVE RISK ENGINE · 6-DOMAIN",
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M 12 2 L 20 5 V 12 Q 20 18 12 22 Q 4 18 4 12 V 5 Z"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>`,
-    render: () => `
-      <div class="mb-grid">
-        <div class="mb-stat"><span class="lbl">ACTIVE THREATS</span><span class="val ok">0</span></div>
-        <div class="mb-stat"><span class="lbl">RESOLVED 24H</span><span class="val">7</span></div>
-        <div class="mb-stat"><span class="lbl">FIREWALL BLOCKS</span><span class="val">142</span></div>
-        <div class="mb-stat"><span class="lbl">INTRUSIONS</span><span class="val ok">0</span></div>
-        <div class="mb-stat"><span class="lbl">VULNERABILITIES</span><span class="val warn">2 LOW</span></div>
-        <div class="mb-stat"><span class="lbl">LAST FULL SCAN</span><span class="val">2 H AGO</span></div>
-      </div>
-      <div class="mb-list">
-        <div class="mb-row">Perimeter integrity: GREEN. Encryption layer (AES-256) holding.<div class="mb-row-meta">SHIELD · ACTIVE</div></div>
-        <div class="mb-row">2 low-priority CVEs queued for the next maintenance window.<div class="mb-row-meta">CVE-2025-7XXX · CVE-2025-8XXX</div></div>
-      </div>`,
+    render: s => {
+      const t = s.threats || {}, soc = t.soc || {}, open = (t.events || []).filter(e => e.stage !== "resolved");
+      const lvl = (t.level || "—").toUpperCase(), cls = t.level === "secure" ? "ok" : "warn";
+      return `<div class="mb-grid">
+        ${_stat("RISK SCORE", t.risk_score != null ? `${t.risk_score} / 100` : "—", cls)}
+        ${_stat("LEVEL", lvl, cls)}
+        ${_stat("OPEN INCIDENTS", open.length, open.length ? "warn" : "ok")}
+        ${_stat("EVENTS ANALYZED", soc.analyzed ?? "—")}
+        ${_stat("ALERTS", soc.alerts ?? "—", soc.alerts ? "warn" : "ok")}
+        ${_stat("ACKNOWLEDGED", t.acked ?? 0)}
+      </div><div class="mb-list">
+        ${open.length ? open.slice(0, 6).map(e => _row(`${escapeHTML(e.title)}`, `${escapeHTML((e.severity || "").toUpperCase())} · ${escapeHTML((e.category || "").toUpperCase())} · ${escapeHTML(e.stage || "")} · ${_hm(e.ts)}`)).join("")
+          : _none("No open incidents. Signals are drawn from live telemetry, news and agenda.")}
+      </div>`;
+    },
   },
   "mission-files": {
-    title: "MISSION FILES",
-    sub: "OPERATIONS ARCHIVE",
+    title: "MISSION BOARD", sub: "ORCHESTRATOR DIRECTIVES · LIVE",
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M 3 8 V 19 H 21 V 8 H 13 L 11 6 H 3 Z"/><line x1="3" y1="12" x2="21" y2="12"/></svg>`,
-    render: () => `
-      <div class="mb-list">
-        <div class="mb-row"><strong>Project Helios v4 — Core Specs</strong><div class="mb-row-meta">MODIFIED · 2 H AGO · classification: stark-1</div></div>
-        <div class="mb-row"><strong>Stark Defense Grid — Phase II</strong><div class="mb-row-meta">MODIFIED · YESTERDAY · classification: stark-1</div></div>
-        <div class="mb-row"><strong>Neural Net Upgrade — Architecture</strong><div class="mb-row-meta">MODIFIED · 4 DAYS AGO · classification: stark-2</div></div>
-        <div class="mb-row"><strong>Hyderabad Lab — Operations Brief</strong><div class="mb-row-meta">MODIFIED · 1 WEEK AGO · classification: stark-3</div></div>
-        <div class="mb-row"><strong>AISIN Joint Venture — Terms</strong><div class="mb-row-meta">MODIFIED · 2 WEEKS AGO · classification: stark-2</div></div>
-      </div>`,
+    render: s => {
+      const o = s.orch || {}, act = (o.directives || []).filter(d => d.status === "active"), done = o.recent_done || [];
+      const pl = o.priority_labels || {};
+      return `<div class="mb-grid">
+        ${_stat("ACTIVE", act.length, act.length ? "" : "ok")}
+        ${_stat("DELEGATIONS", o.delegations_total ?? 0)}
+        ${_stat("PREEMPTIONS", o.preemptions_total ?? 0)}
+        ${_stat("CONSULTS", o.collabs_total ?? 0)}
+        ${_stat("CYCLES", o.cycles ?? 0)}
+        ${_stat("COORDINATOR", (o.coordinator || "—").toUpperCase())}
+      </div><div class="mb-list">
+        ${act.map(d => _row(`<strong>${escapeHTML(d.title)}</strong>`, `ACTIVE · ${escapeHTML((d.agent || "").toUpperCase())}${d.consult ? " + " + escapeHTML(d.consult.toUpperCase()) : ""} · ${escapeHTML(pl[d.priority] || "P" + d.priority)} · SINCE ${_hm(d.ts)}`)).join("")}
+        ${done.slice(0, 5).map(d => _row(escapeHTML(d.title), `${escapeHTML((d.status || "done").toUpperCase())} · ${escapeHTML((d.agent || "").toUpperCase())} · ${_hm(d.done_ts || d.ts)}`)).join("")}
+        ${!act.length && !done.length ? _none("No directives yet. The orchestrator raises them from live conditions every 20 s.") : ""}
+      </div>`;
+    },
   },
   "security-logs": {
-    title: "SECURITY LOGS",
-    sub: "EVENT AUDIT TRAIL · LAST 24H",
+    title: "SECURITY LOGS", sub: "APPEND-ONLY AUDIT TRAIL",
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="1"/><path d="M 8 11 V 7 A 4 4 0 0 1 16 7 V 11"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></svg>`,
-    render: () => `
-      <div class="mb-grid">
-        <div class="mb-stat"><span class="lbl">EVENTS</span><span class="val">1,247</span></div>
-        <div class="mb-stat"><span class="lbl">ALERTS</span><span class="val ok">0</span></div>
-      </div>
-      <div class="mb-list">
-        <div class="mb-row">14:32 — Admin login · 127.0.0.1 · success<div class="mb-row-meta">SESSION · 0x4F12</div></div>
-        <div class="mb-row">13:50 — Firewall rule updated · port 8765 allowed loopback<div class="mb-row-meta">RULE · WL-7</div></div>
-        <div class="mb-row">11:15 — Encrypted backup completed · 2.3 GB<div class="mb-row-meta">VAULT · A-7</div></div>
-        <div class="mb-row">09:40 — Security sweep run · 0 anomalies<div class="mb-row-meta">SWEEP · 4f12</div></div>
-        <div class="mb-row">08:00 — Daily integrity check · pass<div class="mb-row-meta">HASH · OK</div></div>
-      </div>`,
+    render: s => {
+      const au = (s.ent || {}).audit || {}, a = s.auth || {}, rec = au.recent || [];
+      return `<div class="mb-grid">
+        ${_stat("AUDIT ENTRIES", au.entries_total ?? 0)}
+        ${_stat("ROLE", ((s.ent || {}).role || "—").toUpperCase())}
+        ${_stat("OPERATOR", (s.ent || {}).operator || "—")}
+        ${_stat("REMOTE ACCESS", a.password_set ? "PASSWORD SET" : "DISABLED", a.password_set ? "" : "ok")}
+        ${_stat("BINDING", a.binding || "—", a.binding === "127.0.0.1" ? "ok" : "warn")}
+        ${_stat("COMMAND PIN", (s.ent || {}).pin_required ? "REQUIRED" : "OFF")}
+      </div><div class="mb-list">
+        ${rec.length ? rec.slice(0, 8).map(e => _row(`${_hm(e.ts)} — ${escapeHTML(e.action)} · ${escapeHTML((e.detail || "").slice(0, 80))}`, `${escapeHTML(e.operator || "")} · ${escapeHTML((e.role || "").toUpperCase())}`)).join("")
+          : _none("No audit entries yet.")}
+      </div>`;
+    },
   },
   "network-activity": {
-    title: "NETWORK ACTIVITY",
-    sub: "LIVE TRAFFIC ANALYSIS",
+    title: "NETWORK ACTIVITY", sub: "LIVE LINK · MEASURED INTERNET SPEED",
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M 7.5 7.5 L 10.5 10.5 M 16.5 7.5 L 13.5 10.5 M 7.5 16.5 L 10.5 13.5 M 16.5 16.5 L 13.5 13.5"/></svg>`,
-    render: (state) => `
-      <div class="mb-grid">
-        <div class="mb-stat"><span class="lbl">WAN SSID</span><span class="val">${escapeHTML(state.wifi_ssid || "—")}</span></div>
-        <div class="mb-stat"><span class="lbl">LINK SPEED</span><span class="val">${escapeHTML(state.wifi_speed || "—")}</span></div>
-        <div class="mb-stat"><span class="lbl">SIGNAL</span><span class="val ok">${escapeHTML(state.wifi_signal || "—")}</span></div>
-        <div class="mb-stat"><span class="lbl">PING</span><span class="val">${escapeHTML(state.ping || "—")} ms</span></div>
-        <div class="mb-stat"><span class="lbl">CONNECTIONS</span><span class="val">1,247</span></div>
-        <div class="mb-stat"><span class="lbl">TOP APP</span><span class="val">chrome.exe · 32%</span></div>
+    render: s => {
+      const c = s.conn || {}, w = c.wifi || {}, net = c.net || {}, sp = net.speed || null, link = c.link || {};
+      const top = ((s.procs || {}).top_cpu || [])[0];
+      const secure = w.auth && !/open/i.test(w.auth);
+      const spd = sp && sp.ok ? `${_fmtMbps(sp.down_mbps)} ↓ · ${_fmtMbps(sp.up_mbps)} ↑` : net.testing ? "testing…" : sp ? "test failed" : "not run yet";
+      return `<div class="mb-grid">
+        ${_stat("INTERNET SPEED", spd, sp && sp.ok ? "ok" : "")}
+        ${_stat("LATENCY", net.latency_ms != null ? `${net.latency_ms} ms` : "—", net.latency_ms != null && net.latency_ms < 60 ? "ok" : "warn")}
+        ${_stat("JITTER · LOSS", `${net.jitter_ms ?? "—"} ms · ${net.loss_pct ?? "—"}%`, net.loss_pct ? "warn" : "ok")}
+        ${_stat("LINK", link.type ? `${String(link.type).toUpperCase()} · ${link.name || ""}` : "—")}
+        ${_stat("WI-FI RATE (PHY)", w.speed_rx_mbps ? `${w.speed_rx_mbps} Mbps` : "—")}
+        ${_stat("SIGNAL", w.signal || "—")}
+      </div><div class="mb-list">
+        ${_row(`SSID ${escapeHTML(w.ssid || "—")} · channel ${escapeHTML(w.channel || "—")} · security <b style="color:var(${secure ? "--success" : "--warn"})">${escapeHTML(w.auth || "unknown")}</b>`, secure ? "ENCRYPTED LINK" : "UNENCRYPTED WI-FI · USE A VPN ON THIS NETWORK")}
+        ${sp && sp.ok ? _row(`Speed test · ${escapeHTML(sp.server)} · ${Math.round(sp.bytes_used / 1e6)} MB used`, `MEASURED ${_ago(sp.ts)}`) : ""}
+        ${top ? _row(`Busiest process: ${escapeHTML(top.name)} · CPU ${top.cpu}% · ${Math.round(top.mem_mb)} MB`, "LIVE PROCESS SWEEP") : ""}
+        ${_row(`Bluetooth: ${((c.bluetooth || {}).count ?? 0)} paired device(s)`, "ADAPTER")}
       </div>
-      <div class="mb-list">
-        <div class="mb-row">Encryption: WPA2 · channel ${escapeHTML(state.wifi_channel || "—")}<div class="mb-row-meta">SECURE</div></div>
-      </div>`,
+      <button class="cmd-btn" id="speedtest-btn" ${net.testing ? "disabled" : ""}>${net.testing ? "SPEED TEST RUNNING…" : "RUN SPEED TEST NOW (~33 MB)"}</button>`;
+    },
   },
 };
-
-async function gatherNetworkSnapshot() {
-  let wifi = {}, ping = "—";
-  try {
-    const r = await fetch("/api/connectivity"); const d = await r.json();
-    wifi = d.wifi || {}; ping = d.ping_ms ?? "—";
-  } catch (e) {}
-  let brainMode = "—";
-  try {
-    const r = await fetch("/api/status"); const d = await r.json();
-    brainMode = (d.brain_mode || "—").toUpperCase();
-  } catch (e) {}
-  return {
-    brain_mode: brainMode,
-    wifi_ssid: wifi.ssid || "—",
-    wifi_speed: wifi.speed_rx_mbps ? `${wifi.speed_rx_mbps} Mbps` : "—",
-    wifi_signal: wifi.signal || "—",
-    wifi_channel: wifi.channel || "—",
-    ping: String(ping),
-  };
-}
 
 async function openToolModal(toolKey) {
   const def = TOOL_DATA[toolKey]; if (!def) return;
@@ -1118,9 +1176,14 @@ async function openToolModal(toolKey) {
   $("#modal-body").innerHTML = '<div style="color:var(--text-dim);font-style:italic">acquiring live data…</div>';
   modal.hidden = false;
 
-  const state = await gatherNetworkSnapshot();
+  const state = await gatherToolSnapshot();
   try {
     $("#modal-body").innerHTML = def.render(state);
+    $("#speedtest-btn")?.addEventListener("click", async (ev) => {
+      ev.target.disabled = true; ev.target.textContent = "SPEED TEST RUNNING…";
+      try { await fetch("/api/network/speedtest", { method: "POST" }); } catch (e) {}
+      openToolModal(toolKey);           // re-render with the measured result
+    });
   } catch (e) {
     $("#modal-body").innerHTML = `<div style="color:var(--error)">render error: ${escapeHTML(e.message)}</div>`;
   }
@@ -1140,16 +1203,37 @@ $("#modal-close")?.addEventListener("click", closeToolModal);
 $("#modal-backdrop")?.addEventListener("click", closeToolModal);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeToolModal(); });
 
-// keep AI tool-card stat in sync with live brain mode
+// header tool-cards: one live figure each (all from real endpoints)
 async function refreshToolCardStats() {
-  try {
-    const r = await fetch("/api/status"); const d = await r.json();
-    const ai = $("#tc-ai");
-    if (ai) ai.textContent = `BRAIN · ${(d.brain_mode || "?").toUpperCase()} · 8/8`;
-  } catch (e) {}
+  const s = await gatherToolSnapshot();
+  const set = (id, txt) => { const el = $(id); if (el && txt) el.textContent = txt; };
+  const agents = (s.status || {}).agents || [];
+  const brain = ((s.models || {}).active_brain || (s.status || {}).brain_mode || "—").toUpperCase();
+  set("#tc-ai", `BRAIN · ${brain} · ${agents.filter(a => a.status !== "idle").length}/${agents.length} BUSY`);
+  const agg = (s.fleet || {}).aggregate || {};
+  set("#tc-fleet", `${agg.online ?? 0}/${agg.nodes ?? 0} NODES · ${agg.cpu_cores ?? "—"} CORES`);
+  const t = s.threats || {};
+  const open = (t.events || []).filter(e => e.stage !== "resolved").length;
+  set("#tc-threat", `RISK ${t.risk_score ?? "—"} · ${open} OPEN`);
+  const o = s.orch || {};
+  set("#tc-missions", `${o.active ?? 0} ACTIVE · ${(o.recent_done || []).length} DONE`);
+  const au = (s.ent || {}).audit || {};
+  set("#tc-sec", `${au.entries_total ?? 0} AUDIT · ${(s.auth || {}).password_set ? "REMOTE ON" : "LOCAL ONLY"}`);
+  // globe readouts: real fleet + mission counts and the IP-geolocated latitude
+  set("#og-sats", String(agg.online ?? 0));
+  set("#og-nodes", String(o.active ?? 0));
+  const g = window._geo;
+  if (g && g.lat != null) set("#og-coord", `${Math.abs(g.lat).toFixed(1)}°${g.lat >= 0 ? "N" : "S"}`);
+  // orb flank: real Wi-Fi channel + link security (was hardcoded SEC-7 / AES-256)
+  const w = (s.conn || {}).wifi || {};
+  set("#fl-chan", w.channel ? `CH ${w.channel}` : ((s.conn || {}).link || {}).type ? String(s.conn.link.type).toUpperCase() : "—");
+  const enc = $("#fl-enc");
+  if (enc) { enc.textContent = w.auth ? String(w.auth).toUpperCase().slice(0, 12) : "WIRED";
+             enc.classList.toggle("ok", !!w.auth && !/open/i.test(w.auth));
+             enc.classList.toggle("warn", !!w.auth && /open/i.test(w.auth)); }
 }
 refreshToolCardStats();
-setInterval(refreshToolCardStats, 60000);
+setInterval(refreshToolCardStats, 20000);
 
 // ── operator camera ──────────────────────────────────
 const camRoot   = $("#operator-cam");
@@ -1627,7 +1711,7 @@ function updateAiopsTele(msg) {
   const av = $("#anomaly-val");  if (av) av.textContent = anom;
   const ab = $("#anomaly-bar");  if (ab) ab.style.width = anom + "%";
   // orb flank: CORE INTEGRITY = real stability (100 - anomaly index)
-  const fc = $("#fl-core"); if (fc) fc.textContent = (100 - anom).toFixed(1) + "%";
+  const fc = $("#fl-core"); if (fc) fc.textContent = Math.round(100 - anom) + "%";
   // feed predictive analytics + mission readiness
   metricHist.cpu.push(msg.cpu); metricHist.mem.push(msg.mem);
   if (metricHist.cpu.length > 120) { metricHist.cpu.shift(); metricHist.mem.shift(); }
@@ -1780,7 +1864,8 @@ function updateRisk(score, level) {
   if (sh) { sh.className.baseVal = "threat-shield " + level; }
   // orb flank: SHIELD state mirrors the live risk level
   const fs = $("#fl-shield");
-  if (fs) fs.textContent = level === "secure" ? "ACTIVE" : level === "elevated" ? "ELEVATED" : "BREACH";
+  // "HIGH RISK" (not "BREACH"): high risk is usually resource pressure, not an intrusion
+  if (fs) fs.textContent = level === "secure" ? "ACTIVE" : level === "elevated" ? "ELEVATED" : "HIGH RISK";
 }
 
 async function seedThreats() {
@@ -2750,7 +2835,7 @@ async function pollServiceGrid() {
     if (sr.status === "fulfilled") {
       const s = sr.value;
       setSvc("#svc-claude", s.brain_mode === "llm", s.brain_mode === "llm" ? "ONLINE" : "OFFLINE");
-      setSvc("#svc-news", (s.news_count || 0) > 0, (s.news_count || 0) > 0 ? `${s.news_count} ITEMS` : "NO KEY");
+      setSvc("#svc-news", (s.news_count || 0) > 0, (s.news_count || 0) > 0 ? `${s.news_count} · ${s.news_source === "newsapi" ? "NEWSAPI" : "OPEN FEEDS"}` : "NO FEED");
     }
     if (cr.status === "fulfilled") {
       const c = cr.value;
@@ -2817,7 +2902,7 @@ function initExtraInteractions() {
     "svc-claude": ["CLAUDE CLI", "The cloud brain — powers agent replies, insights, and webcam vision. Set CLAUDE_BIN in .env."],
     "svc-ollama": ["OLLAMA · LOCAL AI", "On-device models for fully offline replies. Run `ollama serve` + `ollama pull`, then pick a model in the AI MODEL MANAGER."],
     "svc-gcal": ["GOOGLE CALENDAR + GMAIL", "Real events & mail (readonly). Click the G button by AGENDA to connect via OAuth."],
-    "svc-news": ["NEWS FEED", "Live world headlines. Free key at newsapi.org → NEWSAPI_KEY in .env."],
+    "svc-news": ["NEWS FEED", "Live headlines from open feeds (BBC World, The Hindu, Al Jazeera, The Hacker News, Hacker News) every 10 min, no key needed. Optional NEWSAPI_KEY in .env switches to NewsAPI."],
     "svc-weather": ["WEATHER", "Live Hyderabad weather via Open-Meteo (no key needed)."],
   };
   Object.entries(svcInfo).forEach(([id, [t, desc]]) => {
@@ -2888,6 +2973,9 @@ function handle(msg) {
   switch (msg.type) {
     case "snapshot":
       renderAgents(msg.agents); break;
+    case "net":
+      applyNetSnapshot(msg);
+      break;
     case "metrics":
       $("#m-cpu").textContent = msg.cpu.toFixed(0);
       $("#m-mem").textContent = msg.mem.toFixed(0);
@@ -2899,7 +2987,7 @@ function handle(msg) {
       try {
         const tot = Math.round(msg.net_up + msg.net_down);
         const tc = $("#tc-net");
-        if (tc && !window._wifiSpeedShown)
+        if (tc && !window._netSpeedShown)
           tc.textContent = `${tot} KB/s · ${Math.round(msg.net_down)}↓ ${Math.round(msg.net_up)}↑`;
       } catch (e) {}
       pushChart(cpuChart, msg.cpu); pushChart(memChart, msg.mem);
@@ -2925,6 +3013,7 @@ function handle(msg) {
         else animateAiGauge(false);
       }
       if (msg.event === "reply") logEvent(`<span class="tag">[${msg.agent}]</span> ${escapeHTML(msg.a || msg.q)}`);
+      if (msg.event === "reply" && msg.agent === "jarvis") JarvisSummon.reply(msg.a || "");
       if (msg.event === "tick")  logEvent(`<span class="tag">[${msg.agent}]</span> ${escapeHTML(msg.msg)}`);
       if (msg.event === "alert") logEvent(`<span class="tag">[${msg.agent}]</span> ${escapeHTML(msg.msg)}`, "warn");
       if (msg.event === "pulled-news") logEvent(`<span class="tag">[${msg.agent}]</span> intel pulled · ${msg.count} items`);
@@ -2947,6 +3036,11 @@ function handle(msg) {
       if (msg.event === "routed")     { setHeard(null, `→ ${(msg.agent || "").toUpperCase()}`); logEvent(`<span class="tag">[voice]</span> → ${escapeHTML(msg.agent)} · ${escapeHTML(msg.command)}`); }
       if (msg.event === "speak")      { setVoiceState("speaking"); setPill("#sp-voice", "SPEAKING", "ok"); logEvent(`<span class="tag">[voice]</span> ◉ ${escapeHTML(msg.text || "")}`); }
       if (msg.event === "idle")       { setVoiceState("idle"); setPill("#sp-voice", "READY", "ok"); }
+      if (msg.event === "unrouted")   setHeard(msg.text, "no wake word — start with “Hey Jarvis…” or double-clap");
+      if (msg.event === "summon")     { JarvisSummon.open(); logEvent(`<span class="tag">[voice]</span> 👏👏 double clap — JARVIS summoned`); }
+      if (msg.event === "heard")      JarvisSummon.heard(msg.text);
+      if (msg.event === "processing") JarvisSummon.state("THINKING");
+      if (msg.event === "speak")      JarvisSummon.speaking(true);
       { // mirror into the voice-ref engine status block
         const ve = $("#vr-engine");
         const map = { ready: ["READY", "ok"], listening: ["LISTENING", "ok"],

@@ -183,6 +183,8 @@ body {
 @media (max-width: 1100px) { .hud-center-banner { display: none; } }
 
 .hud-meta { display: flex; gap: 0.7rem; align-items: center; justify-content: flex-end; flex-shrink: 0; }
+.site-link { font: inherit; letter-spacing: inherit; color: var(--accent); text-decoration: none; padding: 0 0.3rem; border-bottom: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); white-space: nowrap; transition: background 0.2s, box-shadow 0.2s; }
+.site-link:hover, .site-link:focus-visible { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent); outline: none; }
 
 .header-weather {
   display: inline-flex; align-items: center; gap: 0.35rem;
@@ -222,7 +224,7 @@ body {
   padding: 0.7rem 1rem 0.4rem;
 }
 @media (max-width: 1100px) { .tools-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 640px)  { .tools-bar { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px)  { .tools-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .tool-card {
   position: relative;
@@ -484,6 +486,8 @@ body {
 .flank-val.ok { fill: var(--success); }
 .flank-bigval { font-family: var(--font-display); font-size: 17px; font-weight: 900; fill: currentColor; filter: drop-shadow(0 0 5px currentColor); }
 .flank-bigval .unit { font-size: 8px; fill: var(--text-dim); }
+/* values drawn INSIDE a gauge ring: sized so 3–4 glyphs clear the ring stroke */
+.flank-bigval.in-ring { font-size: 12.5px; letter-spacing: -0.02em; filter: drop-shadow(0 0 3px currentColor); }
 .flank-divider { stroke: color-mix(in srgb, var(--accent) 30%, transparent); stroke-width: 0.5; stroke-dasharray: 3 3; }
 .flank-arc-fill { animation: arc-glow 3.2s ease-in-out infinite; }
 @keyframes arc-glow { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
@@ -2138,3 +2142,36 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--accent), var(--panel-edge)); border-radius: 3px; }
 ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.35); }
+
+/* ── narrow screens: nothing may force the layout wider than the viewport ── */
+@media (max-width: 640px) {
+  .hud-header { grid-template-columns: minmax(0, 1fr); padding: 0.7rem 0.8rem; }
+  .hud-meta { flex-wrap: wrap; justify-content: flex-start; flex-shrink: 1; min-width: 0; row-gap: 0.4rem; }
+  .intel-ticker, .ticker-track { min-width: 0; }
+  .tools-bar { padding: 0.5rem 0.6rem 0.3rem; }
+  .tool-card, .tc-meta, .tc-label, .tc-stat { min-width: 0; }
+  .tc-label, .tc-stat { overflow: hidden; text-overflow: ellipsis; }
+  .panel-title { white-space: normal; }
+}
+@media (max-width: 640px) { .bottom-strip { grid-template-columns: minmax(0, 1fr); } .bs-card, .bs-head { min-width: 0; } .bs-sub { white-space: normal; overflow-wrap: anywhere; } }
+@media (max-width: 900px) { .map-row { grid-template-columns: minmax(0, 1fr); } .map-stage { min-width: 0; max-width: 100%; } }
+
+/* ── reduced motion: honour the OS setting (a11y + lighter on weak laptops) ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ── JARVIS summon card (double clap) ─────────────────────────── */
+.jarvis-summon { position: fixed; right: 1.4rem; bottom: 1.4rem; z-index: 60; width: min(420px, calc(100vw - 2rem)); display: grid; grid-template-columns: 54px 1fr; gap: 0.8rem; align-items: start; padding: 0.9rem 1rem; border: 1px solid #00d9ff; border-radius: 8px; background: linear-gradient(135deg, rgba(0, 30, 48, 0.94), rgba(2, 6, 13, 0.96)); box-shadow: 0 0 28px rgba(0, 217, 255, 0.35), inset 0 0 18px rgba(0, 217, 255, 0.08); animation: js-in 0.35s ease-out; }
+.jarvis-summon[hidden] { display: none; }
+@keyframes js-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
+.js-orb { width: 54px; height: 54px; border-radius: 50%; border: 1px solid #00d9ff; display: grid; place-items: center; box-shadow: 0 0 16px rgba(0, 217, 255, 0.5); }
+.js-orb span { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle, #9ff3ff, #00d9ff 60%, transparent 70%); animation: js-pulse 1.4s ease-in-out infinite; }
+.jarvis-summon.speaking .js-orb span { animation-duration: 0.5s; }
+@keyframes js-pulse { 50% { transform: scale(0.72); opacity: 0.7; } }
+.js-head { display: flex; align-items: center; gap: 0.6rem; font-family: var(--font-display); font-size: 0.8rem; font-weight: 900; letter-spacing: 0.24em; color: #00d9ff; }
+.js-state { font-size: 0.56rem; letter-spacing: 0.2em; padding: 0.1rem 0.4rem; border: 1px solid currentColor; border-radius: 3px; color: var(--success); }
+.js-close { margin-left: auto; background: none; border: 0; color: var(--text-dim); font-size: 1.1rem; cursor: pointer; line-height: 1; min-width: 24px; min-height: 24px; }
+.js-close:hover, .js-close:focus-visible { color: #00d9ff; outline: none; }
+.js-heard { margin-top: 0.45rem; font-size: 0.72rem; color: var(--text-dim); font-style: italic; }
+.js-reply { margin-top: 0.35rem; font-size: 0.8rem; line-height: 1.45; color: var(--text); }
