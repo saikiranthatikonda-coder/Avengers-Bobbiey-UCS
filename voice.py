@@ -13,6 +13,7 @@ Accuracy upgrades over v1:
 import asyncio
 import os
 import re
+import time
 from collections import deque
 from difflib import SequenceMatcher
 
@@ -67,7 +68,13 @@ FUZZY_NAMES: dict[str, str] = {
 # Whisper's `initial_prompt` biases the language model. We seed it with every
 # wake phrase plus a few Indian-English context words so Whisper picks the
 # right tokens even when the audio is mushy or the accent is Indian English.
-INITIAL_PROMPT = (
+# Short vocabulary hint. A long, oddly-phrased prompt makes Whisper
+# hallucinate its words into silence/noise, so keep it to names + commands.
+HOTWORDS = ("Jarvis Stark Tony Captain Cap Steve Widow Natasha Hawkeye Clint "
+            "Hulk Banner Bruce Thor Vision CPU memory disk network threat "
+            "calendar meetings inbox weather news briefing")
+
+INITIAL_PROMPT_LEGACY = (
     "Indian English speaker at Stark Industries Hyderabad. "
     "Hey Jarvis, hey Stark, hey Tony, Iron Man, "
     "hey Captain, hey Cap, hey Steve, Captain America, "
@@ -80,6 +87,50 @@ INITIAL_PROMPT = (
     "open WorldMonitor, brief me, what is the time, kindly check, "
     "do the needful, please proceed, fire it up."
 )
+INITIAL_PROMPT = "Hey Jarvis. Hey Stark, what's the CPU load? Hey Cap, open threat intelligence."
+
+
+class ClapDetector:
+    """Double-clap detector on 50 ms int16 blocks.
+
+    A clap is an impulsive transient: a block whose peak is far above both an
+    absolute floor and the room's noise floor, with a SUDDEN ONSET (the block
+    before was quiet) and a FAST DECAY (the next block's RMS falls below
+    `decay` of the clap block's). Speech fails at least one: plosives keep
+    sustained energy, and the end of a loud sentence has no sudden onset.
+    Two claps 0.2–0.9 s apart = summon. Tunable via JARVIS_CLAP_PEAK."""
+
+    def __init__(self, peak_floor: float | None = None, gap=(0.2, 0.9), decay=0.35,
+                 onset=0.3) -> None:
+        self.peak_floor = float(peak_floor or os.getenv("JARVIS_CLAP_PEAK", "7000"))
+        self.gap = gap
+        self.decay = decay
+        self.onset = onset
+        self._pending = None          # (t, rms) of a spike awaiting its decay check
+        self._last_clap: float | None = None
+        self._prev_rms = 0.0
+        self.last_peak = 0.0
+
+    def feed(self, peak: float, rms: float, noise_rms: float, now: float) -> bool:
+        """Returns True when a double clap completes on this block."""
+        fired = False
+        if self._pending is not None:
+            t0, r0 = self._pending
+            self._pending = None
+            if rms < r0 * self.decay:                          # sharp decay → clap
+                if (self._last_clap is not None
+                        and self.gap[0] <= t0 - self._last_clap <= self.gap[1]):
+                    fired = True
+                    self._last_clap = None
+                else:
+                    self._last_clap = t0
+        if (peak >= self.peak_floor and peak >= noise_rms * 25
+                and self._prev_rms < rms * self.onset                # sudden onset
+                and (self._last_clap is None or now - self._last_clap > 0.12)):
+            self._pending = (now, rms)
+            self.last_peak = peak
+        self._prev_rms = rms
+        return fired
 
 
 class VoiceLoop:
@@ -90,6 +141,12 @@ class VoiceLoop:
         self.services = services or {}   # agenda / threats / insights handles
         self.muted = False
         self.convo: list[tuple[str, str]] = []   # rolling (question, answer) memory
+        # conversation mode: after a clap summon or an answer, the next
+        # utterance goes to this agent without needing a wake word
+        self.follow_agent: str | None = None
+        self.follow_until = 0.0
+        self.noise_rms = 60.0                    # adaptive room noise floor
+        self.clap = ClapDetector() if os.getenv("JARVIS_CLAP", "1") != "0" else None
 
     async def run(self) -> None:
         try:
@@ -110,6 +167,7 @@ class VoiceLoop:
         # noticeably better than with the English-only models because the
         # multilingual training set contains much more accent diversity.
         model_name = os.getenv("JARVIS_WHISPER_MODEL", "small")
+        self.model_name = model_name
         await self.hub.broadcast({
             "type": "log", "level": "info",
             "msg": f"loading whisper {model_name} (first run downloads model — ~500 MB for 'small')…",
@@ -126,14 +184,19 @@ class VoiceLoop:
 
         await self.hub.broadcast({
             "type": "log", "level": "info",
-            "msg": "voice listener online — say 'Hey Stark', 'Hey Cap', 'Hey Widow', etc.",
+            "msg": ("voice listener online — say 'Hey Jarvis', 'Hey Stark', 'Hey Cap'…"
+                    + (" · double-clap to summon JARVIS" if self.clap else "")),
         })
         await self.hub.broadcast({"type": "voice", "event": "ready"})
 
         sample_rate = 16000
         chunk_samples = int(sample_rate * 0.05)  # 50 ms
-        threshold = float(os.getenv("JARVIS_VOICE_THRESHOLD", "300"))
-        end_silence_chunks = 14    # 0.7 s trailing silence ends an utterance (snappier)
+        # JARVIS_VOICE_THRESHOLD pins a fixed trigger level; otherwise it adapts
+        # to the room: 4.5× the learned noise floor, never below 120 (a fixed
+        # 300 missed soft speech and clipped the "hey" on a quiet laptop mic)
+        fixed_thr = os.getenv("JARVIS_VOICE_THRESHOLD")
+        fixed_thr = float(fixed_thr) if fixed_thr and fixed_thr.strip() else None
+        end_silence_chunks = 20    # 1.0 s trailing silence ends an utterance
         max_utterance_chunks = 220 # 11 s cap per utterance
         min_utterance_chunks = 8   # 0.4 s floor (reject blips)
         preroll_chunks = 6         # 300 ms pre-roll captured before speech onset
@@ -165,7 +228,18 @@ class VoiceLoop:
                         continue
 
                     samples = pkt[:, 0]
-                    rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
+                    f32 = samples.astype(np.float32)
+                    rms = float(np.sqrt(np.mean(f32 ** 2)))
+                    peak = float(np.max(np.abs(f32)))
+                    if not in_speech:     # learn the room while nobody talks
+                        self.noise_rms = 0.97 * self.noise_rms + 0.03 * min(rms, self.noise_rms * 3)
+                    threshold = fixed_thr or max(120.0, self.noise_rms * 4.5)
+
+                    if self.clap and self.clap.feed(peak, rms, self.noise_rms, time.time()):
+                        buffer, in_speech, silence_count = [], False, 0
+                        preroll.clear()
+                        await self._summon()
+                        continue
 
                     if in_speech:
                         buffer.append(samples)
@@ -216,6 +290,16 @@ class VoiceLoop:
             await self.hub.broadcast({"type": "voice", "event": "idle"})
             return
         audio = np.concatenate(buffer).astype("float32") / 32768.0
+        # auto-gain: laptop array mics often deliver quiet speech that Whisper's
+        # VAD drops; normalise to ~0.9 peak (gain capped at 20x so pure noise
+        # isn't blown up into words)
+        peak = float(np.max(np.abs(audio))) if audio.size else 0.0
+        level = {"peak": round(peak * 32768), "gain": 1.0}
+        if 0 < peak < 0.9:
+            g = min(20.0, 0.9 / peak)
+            audio = audio * g
+            level["gain"] = round(g, 1)
+        self.last_level = level
         await self.hub.broadcast({"type": "voice", "event": "processing"})
 
         loop = asyncio.get_running_loop()
@@ -233,14 +317,18 @@ class VoiceLoop:
             await self.hub.broadcast({"type": "voice", "event": "idle"})
             return
 
-        await self.hub.broadcast({"type": "voice", "event": "heard", "text": text})
+        await self.hub.broadcast({"type": "voice", "event": "heard", "text": text,
+                                  "level": getattr(self, "last_level", None)})
 
         agent_key, command = self._match_agent(text)
+        if not agent_key and self.follow_agent and time.time() < self.follow_until:
+            agent_key, command = self.follow_agent, text.strip()   # conversation mode
         if not agent_key:
             await self.hub.broadcast({
                 "type": "log", "level": "info",
                 "msg": f"no wake-phrase in: \"{text}\"",
             })
+            await self.hub.broadcast({"type": "voice", "event": "unrouted", "text": text})
             await self.hub.broadcast({"type": "voice", "event": "idle"})
             return
 
@@ -284,6 +372,7 @@ class VoiceLoop:
             prompt = f"(recent conversation: {ctx}) New request: {command}"
         reply = await agent.handle(prompt)
         self.convo = (self.convo + [(command, reply)])[-6:]
+        self._open_followup(agent_key)
 
     # ── voice tool-calling: real data, instant answers ───────────
     async def _try_intent(self, agent, command: str) -> bool:
@@ -294,6 +383,7 @@ class VoiceLoop:
         async def respond(text: str) -> None:
             await agent._emit("reply", q=command[:140], a=text[:400])
             self.convo = (self.convo + [(command, text)])[-6:]
+            self._open_followup(agent.name)
             if agent.speaker:
                 try:
                     await agent.speaker.say(text)
@@ -370,23 +460,45 @@ class VoiceLoop:
 
         return False
 
+    def _open_followup(self, agent_key: str, seconds: float = 12.0) -> None:
+        self.follow_agent = agent_key
+        self.follow_until = time.time() + seconds
+
+    async def _summon(self) -> None:
+        """Double clap → JARVIS pops up on the dashboard and answers."""
+        await self.hub.broadcast({"type": "voice", "event": "summon", "agent": "jarvis",
+                                  "peak": round(self.clap.last_peak) if self.clap else None})
+        self._open_followup("jarvis", 15.0)
+        jarvis = self.team.get("jarvis")
+        greeting = "Yes, sir? I'm listening."
+        if jarvis is not None:
+            await jarvis._emit("reply", q="(double clap)", a=greeting)
+            if jarvis.speaker:
+                try:
+                    await jarvis.speaker.say(greeting)
+                except Exception:
+                    pass
+
     @staticmethod
     def _transcribe(stt, audio) -> str:
-        # Speed-optimised decode: greedy search, single temperature, no fallback.
-        # Lossy vs beam=5 in absolute accuracy, but on Indian-accented English
-        # the bigger gain comes from using the multilingual `small` model with
-        # an Indian-context initial_prompt — this combo is ~4-5× faster than
-        # the prior beam=5,best_of=5,temperature=[0,0.2,0.4] setup.
-        segments, _info = stt.transcribe(
-            audio, language="en",
-            beam_size=1, best_of=1,
+        # Accuracy-first decode (operator request, 2026-09-30): beam search 5
+        # with a short hint + hotwords; temperature fallback rescues low-
+        # confidence segments. On the Core Ultra 9 CPU a 2-4 s command decodes
+        # in ~1-2 s with `small`.
+        kw = dict(
+            language="en",
+            beam_size=5, best_of=5,
             vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 200},
+            vad_parameters={"min_silence_duration_ms": 300},
             initial_prompt=INITIAL_PROMPT,
             condition_on_previous_text=False,
-            no_speech_threshold=0.5,
-            temperature=0.0,
+            no_speech_threshold=0.55,
+            temperature=[0.0, 0.2, 0.4],
         )
+        try:
+            segments, _info = stt.transcribe(audio, hotwords=HOTWORDS, **kw)
+        except TypeError:          # older faster-whisper without `hotwords`
+            segments, _info = stt.transcribe(audio, **kw)
         return " ".join(s.text for s in segments).strip()
 
     @staticmethod

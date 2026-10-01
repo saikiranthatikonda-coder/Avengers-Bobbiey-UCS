@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from knowledge import KnowledgeHub
 from llm_local import LocalLLM
 from local_brain import LocalBrain
 from memory import OperatorMemory
+from netspeed import NetMonitor
 from orchestrator import Orchestrator
 from productivity import Productivity
 from roadmap import Roadmap
@@ -209,6 +211,27 @@ async def lifespan(app: FastAPI):
 
     state["roadmap"] = Roadmap(state)
 
+    # real internet measurements: latency/loss every 15 s, throughput on a slow
+    # schedule (JARVIS_SPEEDTEST_MIN minutes, 0 = manual only) — see netspeed.py
+    net = NetMonitor()
+    state["net"] = net
+
+    async def net_loop():
+        speed_every = max(0.0, float(os.getenv("JARVIS_SPEEDTEST_MIN", "60"))) * 60
+        next_speed = time.time() + 90 if speed_every else float("inf")
+        while True:
+            try:
+                snap = await net.probe()
+                if time.time() >= next_speed:
+                    await net.speed_test()
+                    snap = net.snapshot()
+                    next_speed = time.time() + speed_every
+                await hub.broadcast({"type": "net", **snap})
+            except Exception:
+                pass
+            await asyncio.sleep(15)
+
+    net_task = asyncio.create_task(net_loop())
     sysmon_task = asyncio.create_task(sysmon.run())
     voice_task = asyncio.create_task(voice.run()) if voice else None
     scheduler.start()
@@ -222,6 +245,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         sysmon_task.cancel()
+        net_task.cancel()
         if voice_task:
             voice_task.cancel()
         scheduler.shutdown(wait=False)
@@ -514,6 +538,7 @@ async def status():
         "agents": [a.snapshot() for a in state["team"].values()],
         "metrics": state["sysmon"].latest,
         "news_count": len(state["news"].recent),
+        "news_source": state["news"].source,
         "tts_enabled": state["tts"].enabled,
         "brain_mode": state["brain"].mode,
     }
@@ -538,7 +563,27 @@ async def agenda():
 
 @app.get("/api/connectivity")
 async def connectivity_endpoint():
-    return await connectivity.gather()
+    d = await connectivity.gather()
+    net = state.get("net")
+    if net is not None:
+        d["net"] = net.snapshot()
+        if net.last_latency_ms is not None:      # true RTT beats the HTTPS timing
+            d["ping_ms"] = int(round(net.last_latency_ms))
+    return d
+
+
+@app.get("/api/network")
+async def network_endpoint():
+    return state["net"].snapshot()
+
+
+@app.post("/api/network/speedtest")
+async def network_speedtest():
+    """Run a real throughput test now (~33 MB of traffic). Audited."""
+    await _audit("network.speedtest", "manual speed test")
+    res = await state["net"].speed_test()
+    await state["hub"].broadcast({"type": "net", **state["net"].snapshot()})
+    return res
 
 
 def _scan_processes() -> list[dict]:

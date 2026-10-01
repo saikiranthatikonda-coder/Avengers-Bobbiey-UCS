@@ -65,7 +65,7 @@ def schedule_all(team, news, sysmon, hub, agenda=None, tts=None, insights=None,
             await team["hawkeye"]._emit("alert", msg=msg, level="warn")
             await hub.broadcast({"type": "log", "level": "warn", "msg": msg})
 
-    sched.add_job(pull_news, IntervalTrigger(minutes=15),
+    sched.add_job(pull_news, IntervalTrigger(minutes=10),
                   next_run_time=now + timedelta(seconds=8))
     sched.add_job(hawkeye_anomaly_alert, IntervalTrigger(seconds=30))
 

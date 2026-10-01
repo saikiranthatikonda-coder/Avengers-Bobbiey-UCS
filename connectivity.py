@@ -6,9 +6,7 @@ simply reports unavailable rather than crashing, so the dashboard runs on any OS
 
 import asyncio
 import platform
-import time
 
-import httpx
 
 OS = platform.system()   # "Windows" | "Darwin" | "Linux"
 
@@ -141,14 +139,15 @@ def active_link() -> dict | None:
 
 
 # ── Ping ──────────────────────────────────────────────────────────
-async def ping_ms(url: str = "https://www.google.com/generate_204") -> int:
-    t = time.time()
-    try:
-        async with httpx.AsyncClient(timeout=5, trust_env=False) as c:
-            await c.head(url)
-        return int((time.time() - t) * 1000)
-    except Exception:
-        return -1
+async def ping_ms() -> int:
+    """Link latency as a TCP-handshake round trip (one network RTT). Timing a
+    full HTTPS request also bills DNS + TLS + HTTP and read ~1 s here."""
+    from netspeed import PROBE_TARGETS, tcp_rtt_ms
+    for host, port in PROBE_TARGETS:
+        r = await tcp_rtt_ms(host, port)
+        if r is not None:
+            return int(round(r))
+    return -1
 
 
 async def gather() -> dict:

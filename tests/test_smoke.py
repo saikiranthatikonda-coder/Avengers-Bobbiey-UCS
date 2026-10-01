@@ -145,8 +145,9 @@ class Integrations(unittest.TestCase):
         self.assertFalse(c["credentials_present"])
         self.assertEqual(SERVER.get("/api/agenda")["source"], "disconnected")
 
-    def test_no_newsapi_key_means_no_news(self):
-        self.assertEqual(SERVER.get("/api/status")["news_count"], 0)
+    def test_without_newsapi_key_news_comes_from_open_feeds(self):
+        # no key → keyless open feeds (or nothing yet); never NewsAPI, never mocked
+        self.assertIn(SERVER.get("/api/status")["news_source"], ("none", "open"))
 
 
 class Security(unittest.TestCase):

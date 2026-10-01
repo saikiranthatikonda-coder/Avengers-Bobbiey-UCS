@@ -57,6 +57,7 @@ class IsolatedServer:
             "JARVIS_TTS": "0",
             "JARVIS_VOICE": "0",
             "JARVIS_HOST": "127.0.0.1",
+            "JARVIS_SPEEDTEST_MIN": "0",                 # never burn bandwidth in tests
             "PYTHONIOENCODING": "utf-8",
         })
         return env

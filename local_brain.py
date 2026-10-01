@@ -68,6 +68,9 @@ class LocalBrain:
             "thor":    self._thor,
             "vision":  self._vision,
         }.get(agent, self._jarvis)
+        # telemetry-quoting agents must not read 0% before the first sample
+        if agent in ("stark", "hulk", "hawkeye") and "cpu" not in self._m():
+            return "Telemetry warming up — first readings in a moment, sir."
         try:
             return fn(prompt)
         except Exception as e:
@@ -89,9 +92,11 @@ class LocalBrain:
                 f"{_greeting()}. Brain core offline — running on local routines. "
                 f"You said: \"{prompt[:90]}\". I'll log it for review."
             )
+        measured = "cpu" in m          # no sample yet at boot → don't quote 0%
         return random.choice([
             f"{_greeting()}. All eight Avengers active and synchronized.",
-            f"Systems nominal, sir. CPU {cpu:.0f}%, memory {mem:.0f}%.",
+            (f"Systems nominal, sir. CPU {cpu:.0f}%, memory {mem:.0f}%." if measured
+             else "Telemetry warming up, sir. First readings in a moment."),
             f"Standing by. Nothing requires your attention at this moment.",
             f"{_greeting()}. Diagnostics green across the board.",
         ])

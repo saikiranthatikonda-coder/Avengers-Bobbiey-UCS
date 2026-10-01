@@ -48,14 +48,29 @@ class NewsService:
         self.api_key = api_key
         self.hub = hub
         self.recent: list[dict] = []
+        self.source = "none"          # "newsapi" | "open" | "none"
 
     async def fetch_top(self, country: str = "us", page_size: int = 12) -> list[dict]:
+        """NewsAPI when NEWSAPI_KEY is set; otherwise (or if it fails) the
+        keyless open feeds in open_news.py. Real headlines only, never mocked."""
         if not self.api_key:
-            await self.hub.broadcast({
-                "type": "log", "level": "warn",
-                "msg": "news fetch skipped — NEWSAPI_KEY not set in .env",
-            })
-            return []
+            return await self.fetch_open()
+        items = await self._fetch_newsapi(country, page_size)
+        return items or await self.fetch_open()
+
+    async def fetch_open(self) -> list[dict]:
+        from open_news import fetch_open_news
+        articles, failed = await fetch_open_news()
+        self.source = "open"
+        if articles:
+            self.recent = articles
+            await self.hub.broadcast({"type": "news", "items": articles, "source": "open"})
+        if failed:
+            await self.hub.broadcast({"type": "log", "level": "warn",
+                                      "msg": f"news: {', '.join(failed)} unreachable"})
+        return articles
+
+    async def _fetch_newsapi(self, country: str, page_size: int) -> list[dict]:
         url = "https://newsapi.org/v2/top-headlines"
         params = {"country": country, "pageSize": page_size, "apiKey": self.api_key}
         try:
@@ -74,7 +89,8 @@ class NewsService:
                 if a.get("title") and a.get("title") != "[Removed]"
             ]
             self.recent = articles
-            await self.hub.broadcast({"type": "news", "items": articles})
+            self.source = "newsapi"
+            await self.hub.broadcast({"type": "news", "items": articles, "source": "newsapi"})
             return articles
         except Exception as e:
             await self.hub.broadcast({
