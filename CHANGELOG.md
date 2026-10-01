@@ -5,6 +5,16 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-01 — Truthful command center, real network, open news, voice + clap
+- **fix (honesty):** the six header tool cards, their pop-up panels and the orb flanks showed **hardcoded fake data** ("14 SATS · 87% COV", "Project Helios" mission files, invented security logs, "1,247 calls / 1.2M tokens", "AES-256", "SEC-7", "14 SAT · 6 NODE"). All are now bound to live endpoints: AI diagnostics, **Fleet Uplink**, threat engine, **Mission Board** (orchestrator directives), audit trail, network. SHIELD says HIGH RISK, not "BREACH".
+- **feat:** `netspeed.py` real network truth. Latency is a TCP round trip (was a full HTTPS timing pinned at "999"), rolling packet loss, and a real internet speed test (Cloudflare, adaptive payload, every 60 min + on-demand button). The NETWORK tile shows measured Mbps instead of the Wi-Fi PHY rate.
+- **feat:** `open_news.py` keyless news. BBC World, The Hindu, Al Jazeera, The Hacker News RSS + Hacker News API, merged/deduped/interleaved, every 10 min, with article age. NewsAPI is now optional.
+- **feat:** double-clap summons JARVIS (pop-up card, spoken "Yes, sir? I'm listening.", 15 s no-wake-word window).
+- **fix (voice):** adaptive trigger level (a fixed 300 RMS clipped quiet speech), auto-gain before Whisper, beam-5 decoding with a short hint + hotwords (the long prompt invited hallucinations), 1.0 s end-of-speech, 12 s conversation mode after answers, and the dashboard now shows transcripts that had no wake word.
+- **fix (UI):** orb ring values no longer overlap the rings. Phone layout no longer forces 587 px (map row, bottom strip, tile grid, card subtitles). `prefers-reduced-motion` support. Website link in the header banner.
+- **fix:** agents no longer announce "CPU 0%, memory 0%" before the first telemetry sample.
+- **test:** `tests/test_realtime.py` (clap detector, conversation mode, network loss/RTT, RSS parsing, news fallback). 69 tests.
+
 ## 2026-09-29 — Google one-sign-in upgrade + GitHub Pages
 - **feat:** one G sign-in now covers Calendar, Gmail **and Google Tasks**. Sync reads every selected calendar (not just primary) with join links (Meet/Zoom/Teams), organizer, RSVP state, guest count and calendar name. The dashboard shows JOIN buttons, RSVP/calendar tags, declined meetings dimmed, and open/overdue tasks.
 - **fix:** clicking G while signed in deleted the saved login and forced a new consent. It now just re-syncs. Tokens refresh with their own granted scopes.

@@ -176,10 +176,11 @@ needs setup. **PLANNED** = not built.
 | Knowledge hub, insights, briefing | IMPLEMENTED | AI answers depend on the brain |
 | Threat intelligence | IMPLEMENTED | Built from live telemetry/news/agenda signals |
 | Vision presence (camera) | PARTIAL | Browser-side frame analysis. AI image description goes through the Claude CLI (`brain.see`, Read tool only). Not yet re-verified with a camera on this machine |
-| Voice STT / wake words | IMPLEMENTED, enabled here | `JARVIS_VOICE=1`, `JARVIS_WHISPER_MODEL=base` (multilingual, better for Indian English than `.en`). Deps installed (faster-whisper 1.1.0, sounddevice 0.5.1, numpy 2.2.0, onnxruntime 1.20.1). Verified: mic capture, model load, STT, wake-word routing, listener online in the live app. **Live spoken-command test still pending** |
+| Voice STT / wake words + double-clap summon | IMPLEMENTED, enabled here | `JARVIS_VOICE=1`, `JARVIS_WHISPER_MODEL=base` (multilingual, better for Indian English than `.en`). Deps installed (faster-whisper 1.1.0, sounddevice 0.5.1, numpy 2.2.0, onnxruntime 1.20.1). Verified: mic capture, model load, STT, wake-word routing, listener online in the live app. **Live spoken-command test still pending** |
 | TTS | IMPLEMENTED | Windows System.Speech via PowerShell. Audio defaults to muted |
 | Google Calendar + Gmail | OPTIONAL, not connected here | Read-only OAuth. See §9 |
-| News | OPTIONAL | Needs `NEWSAPI_KEY`. Without it the fetch is skipped and the feed is **empty, not mocked** (README's "mock feed" wording is stale) |
+| News | IMPLEMENTED | Keyless open feeds (`open_news.py`: BBC World, The Hindu, Al Jazeera, The Hacker News RSS + Hacker News API) every 10 min. `NEWSAPI_KEY` optional (falls back to open feeds on failure) |
+| Network truth (`netspeed.py`) | IMPLEMENTED | TCP-RTT latency + rolling packet loss every 15 s. Real speed test vs speed.cloudflare.com (adaptive 5–25 MB, `JARVIS_SPEEDTEST_MIN`, default 60) |
 | Weather | IMPLEMENTED | Open-Meteo, no key |
 | Fleet (multi-node) | IMPLEMENTED | Nodes push to `/api/fleet/report` with a token or pairing code. Host registers itself |
 | Auth perimeter | IMPLEMENTED | Loopback trusted. Remote denied until a password is set. Sessions + API tokens + lockout |
@@ -443,6 +444,25 @@ code.** The most important:
   canvas). Inspect the DOM/JS state and API responses instead.
 - **Firewall rules need an elevated shell.** Office Wi-Fi often isolates
   clients. A phone hotspot is the reliable fleet workaround.
+
+---
+
+### 14b. Dashboard truth rules (learned 2026-09-30)
+
+- The six header tool cards and orb flanks were **hardcoded** ("14 SATS", "Project
+  Helios" files, "AES-256", "1,247 calls"). They are now bound to live endpoints
+  (`gatherToolSnapshot` / `refreshToolCardStats` in `app.js`). **Any new tile or
+  readout must name its endpoint.** If there's no data source, show "—" or an honest
+  empty state.
+- Wi-Fi PHY rate ≠ internet speed. Internet speed only comes from the speed test.
+- Values drawn inside a flank ring use `.flank-bigval.in-ring` (12.5 px). Keep ≤3–4
+  glyphs (`fmtLatency` switches to seconds ≥1000 ms).
+- New helpers that may run during load must be **function declarations** (hoisted),
+  not `const` arrows (the TDZ trap, §14).
+- Phone width: test with a 375 px iframe and hide-each-section bisection
+  (emulated phones zoom out and hide the culprit). Grids need `minmax(0,1fr)`.
+- Speaker→mic loopback tests don't work here: the Intel Smart Sound mic's echo
+  cancellation removes system playback. Real claps/voice need the operator.
 
 ---
 

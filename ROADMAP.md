@@ -39,12 +39,15 @@ tracks both.
 | Insights engine + executive briefing | IMPLEMENTED | ✅ (AI wording depends on brain) |
 | Threat intelligence + emergency alerts | IMPLEMENTED | ✅ |
 | TTS (System.Speech / `say` / `spd-say`) | IMPLEMENTED | ✅ (muted by default) |
-| Voice STT + wake words | IMPLEMENTED | ⚠️ enabled (`base` model). Pipeline verified with a synthesized voice. Live-mic spoken test pending |
+| Voice STT + wake words | IMPLEMENTED | ⚠️ `base` + beam 5, adaptive trigger, auto-gain, 12 s conversation mode. 5/5 on synthesized commands (normal + quiet). Live spoken test pending |
+| Double-clap → JARVIS pop-up + spoken reply | IMPLEMENTED | ⚠️ detector unit-tested. Live clap test pending (mic echo-cancels speaker playback) |
 | Vision: identity-free presence (browser frame diff) | IMPLEMENTED | ✅ with camera |
 | Vision: AI scene description | IMPLEMENTED | ⚠️ Claude CLI available. Not yet re-verified with a camera here |
 | Operator memory (description-based, not biometric) | IMPLEMENTED | ✅ |
 | Google Calendar + Gmail + Tasks (read-only, one sign-in) | OPTIONAL | ❌ awaiting operator's `credentials.json` + one G sign-in. Code: all calendars, join links, RSVP, tasks, re-sync without re-login (tested with fake API) |
-| News feed (NewsAPI) | OPTIONAL | ❌ `NEWSAPI_KEY` empty, so feed is empty (not mocked) |
+| News feed | IMPLEMENTED | ✅ keyless open feeds (BBC, The Hindu, Al Jazeera, The Hacker News, HN) every 10 min. NewsAPI optional |
+| Internet speed / latency / loss | IMPLEMENTED | ✅ measured (~500↓ / 40–240↑ Mbps, ~13 ms on T-Hub Wi-Fi) |
+| Header tiles + orb readouts | IMPLEMENTED | ✅ all bound to live data (were hardcoded until 2026-09-30) |
 | Weather (Open-Meteo) | IMPLEMENTED | ✅ |
 
 ## Phase 2 — Multi-Agent Intelligence
@@ -122,9 +125,9 @@ In order. Each needs operator input only where noted.
 3. ~~**AI provider verification**~~ ✅ all three tiers verified in the live app + tests.
 4. **Voice** ✅ installed + enabled, pipeline verified. *(operator: one live spoken test)*
 5. **Google** ✅ code upgraded (all calendars, meeting details, Tasks, sign-in-once). *(operator: credentials.json + one sign-in)*
-6. **News**: configure `NEWSAPI_KEY`, fix the stale "mock feed" docs. *(operator provides key)*
+6. ~~**News**~~ ✅ keyless open feeds, 2026-09-30.
 7. ~~**Automated tests**~~ ✅ foundation shipped 2026-09-28 (found and fixed a billing crash).
 8. ~~**Docs/path cleanup**~~ ✅ done 2026-09-28. Open: `site/.netlify/netlify.toml` still points at the old machine (deploy config, needs operator decision).
-9. **Visual UX audit**: refine the HUD without losing its identity.
+9. **Visual UX audit** 🔨 done: fake tiles → live, ring overlap, phone width (587→370 px), reduced motion. Open: 60% of text < 9 px (legibility pass), 43 targets < 24 px.
 10. **Next product evolution**: the unified command experience (speak → delegate → approve → act).
 11. **Commercialization**: see `SAAS_PLAN.md` §7. Next build items: one-click installer + Lite defaults, Claude API-backed metered brain, license keys + entitlement seam.
