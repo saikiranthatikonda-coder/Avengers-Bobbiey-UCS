@@ -43,6 +43,14 @@ class Clap(unittest.TestCase):
         self.assertEqual(_feed(d, blocks), [])
 
 
+try:
+    import numpy  # noqa: F401  (optional voice dependency)
+    HAVE_NUMPY = True
+except ImportError:
+    HAVE_NUMPY = False
+
+
+@unittest.skipUnless(HAVE_NUMPY, "numpy (optional voice dependency) not installed")
 class ConversationMode(unittest.TestCase):
     def _loop(self):
         hub = mock.Mock(broadcast=mock.AsyncMock())

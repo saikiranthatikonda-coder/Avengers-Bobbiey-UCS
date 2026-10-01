@@ -18,6 +18,8 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        # numpy: the voice loop's audio path is tested too (the rest of the
+        # optional voice stack — whisper, sounddevice — isn't needed for tests)
+        run: pip install -r requirements.txt numpy==2.2.0
       - name: Run tests
         run: python -m unittest discover -s tests -v
