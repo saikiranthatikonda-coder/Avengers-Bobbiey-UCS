@@ -50,6 +50,24 @@ tracks both.
 | Header tiles + orb readouts | IMPLEMENTED | ✅ all bound to live data (were hardcoded until 2026-09-30) |
 | Weather (Open-Meteo) | IMPLEMENTED | ✅ |
 
+## Foundation — Real-Time Interaction & Action Engine (2026-10-05)
+
+| Capability | Status |
+|---|---|
+| One command pipeline for voice / text / UI / clap (`realtime.py`) | IMPLEMENTED |
+| Live stage events + streamed replies on the dashboard (LIVE COMMANDS) | IMPLEMENTED |
+| Fast-path intents, no LLM (0–2 ms) | IMPLEMENTED |
+| Streaming Claude / Ollama + sentence-level TTS (first audio ~2.5 s) | IMPLEMENTED |
+| Instant acks for long tasks (e.g. speed test) with progress | IMPLEMENTED |
+| Cancel / interrupt: "stop", UI ■ / Esc, double clap while speaking | IMPLEMENTED (clap barge-in live test pending) |
+| Shared conversational context across voice + text | IMPLEMENTED |
+| Delegation + handoff events (JARVIS → specialist) | IMPLEMENTED (keyword routing) |
+| Windows-native actions (apps, folders, media/volume, lock) | IMPLEMENTED (allow-list, audited) |
+| Latency metrics (p50/p95 per path, first token, first audio) | IMPLEMENTED (`/api/engine`) |
+| LLM-chosen tool use / multi-step plans across agents | PLANNED |
+| Orchestrator directives & decisions routed through the engine | PLANNED |
+| Voice barge-in by speech (not just clap) | PLANNED (needs echo-cancelled mic stream) |
+
 ## Phase 2 — Multi-Agent Intelligence
 
 | Feature | Status |

@@ -5,6 +5,15 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-05 — Real-Time Interaction & Action Engine (foundational)
+- **feat:** `realtime.py` is one pipeline for voice, typed, UI, API and clap commands: received → instant ack → fast-path or delegated agent → streamed reasoning → sentence-by-sentence speech → done/failed/cancelled, broadcast live with timings. `/api/command` (non-blocking), `/api/command/cancel`, `/api/engine` (p50/p95 latency). `/api/ask` keeps its contract and now runs on the engine.
+- **feat:** `intents.py` fast path, no LLM, 0–2 ms: time/date, CPU/memory/disk/battery, internet speed/latency (+ "run a speed test" with instant ack and progress), weather, news, threats, calendar, inbox, memory, vision, missions, dashboard sections, named websites, and **Windows actions** (`win_actions.py` allow-list: apps, folders, volume/media keys, lock), all audited.
+- **feat:** streaming brain. Claude `stream-json` (first token ~1.9 s; stops reading at message end, cutting ~2 s from every call incl. existing ones: 5 s → 3 s) and Ollama SSE. Skips MCP connector start-up (`--strict-mcp-config`).
+- **feat:** persistent Windows speaker (~1.4 s vs 2.8 s per utterance), `cancel()` barge-in in ~10 ms, real playback-start metric. New operator commands supersede old speech.
+- **feat:** interruption. "stop / cancel / never mind" (no wake word needed while busy), dashboard ■ STOP / Esc / per-command ×, double clap while JARVIS speaks. Cancelling kills the CLI subprocess.
+- **feat:** delegation + handoff events (JARVIS → Captain/Stark/Hulk/Widow/Hawkeye/Thor/Vision), shared conversation context across voice and text, LIVE COMMANDS console with stage chips, streaming text, timings and cancel; the summon card streams replies.
+- **test:** `tests/test_engine.py` (22) + engine smoke tests. 94 total.
+
 ## 2026-10-01 — Truthful command center, real network, open news, voice + clap
 - **fix (honesty):** the six header tool cards, their pop-up panels and the orb flanks showed **hardcoded fake data** ("14 SATS · 87% COV", "Project Helios" mission files, invented security logs, "1,247 calls / 1.2M tokens", "AES-256", "SEC-7", "14 SAT · 6 NODE"). All are now bound to live endpoints: AI diagnostics, **Fleet Uplink**, threat engine, **Mission Board** (orchestrator directives), audit trail, network. SHIELD says HIGH RISK, not "BREACH".
 - **feat:** `netspeed.py` real network truth. Latency is a TCP round trip (was a full HTTPS timing pinned at "999"), rolling packet loss, and a real internet speed test (Cloudflare, adaptive payload, every 60 min + on-demand button). The NETWORK tile shows measured Mbps instead of the Wi-Fi PHY rate.

@@ -200,6 +200,27 @@ ideally the running endpoint) before calling something implemented.
 
 ---
 
+### 6b. Real-Time Engine rules (foundational, 2026-10-05)
+
+`realtime.py` is THE command pipeline (see `ARCHITECTURE.md`, "Real-Time Interaction").
+- **New user-facing capability = an intent or a route, not a new endpoint.**
+  Deterministic answers/actions go in `intents.HANDLERS` (order matters: specific
+  before broad, "open X" app/site before dashboard sections). Free-form requests
+  reach agents via `intents.ROUTES`. Subsystems that need to speak or act call
+  `state["engine"].submit(text, source="agent")` (background, never interrupts speech).
+- **Never block the loop, always be cancellable.** Long work = `slow=True` + `run(progress)`
+  (instant spoken ack, progress events). Don't swallow `asyncio.CancelledError`.
+- **Windows actions only via `win_actions.py`'s allow-list.** The LLM never executes
+  actions; only intents do, and the engine audits every one. Destructive or
+  consequential actions need a confirmation step (none are allow-listed today).
+- **Stream, then speak by sentence** (`SentenceChunker`: first sentence ≥4 chars goes
+  out immediately). New operator commands supersede old speech; background ones don't.
+- **Measure.** Every command records `ack/route/first_token/first_speech/total` ms.
+  `first_speech_ms` is the real playback start reported by the TTS worker. Check
+  `/api/engine` p50s after latency-affecting changes.
+- Legacy paths stay as fallbacks: `Avenger.handle()`, `/api/ask`'s blocking contract,
+  voice without an engine. Don't remove them.
+
 ### 7. Local Startup (verified from launcher scripts)
 
 **Start the main application (Windows):**
