@@ -218,6 +218,21 @@ ideally the running endpoint) before calling something implemented.
 - **Measure.** Every command records `ack/route/first_token/first_speech/total` ms.
   `first_speech_ms` is the real playback start reported by the TTS worker. Check
   `/api/engine` p50s after latency-affecting changes.
+- **Conversation Mode** (default ON, persisted in `audio_pref.json`, header switch,
+  `/api/conversation`, or say "conversation mode off/on"): one agent (JARVIS, no
+  delegation), spoken-style replies, and `tts.say()` drops the default `channel="ambient"`
+  (every legacy/background caller), so only `channel="conversation"` speech plays.
+  Measured: ambient speech had the mic muted ~62% of the time. **New code that
+  answers the operator must pass `channel="conversation"`.**
+- **Voice in Conversation Mode:** "Jarvis" anywhere starts a turn; free flow for 20 s
+  after each reply; unaddressed speech is ignored (shared office: other people's chatter
+  arrives at peaks ~250–650). Whisper segments failing `_confident()` (no-speech > 0.6,
+  avg_logprob < −1, compression > 2.4) are dropped. Capture never waits on STT
+  (`_stt_worker` queue, stale phrases dropped). Barge-in by speech requires 0.3 s above
+  `max(900, 3.5 × learned echo)`. `/api/voice/diagnostics` lists every utterance with
+  peak, gain, decode time and outcome. **Read it before tuning voice.**
+- Field data 2026-10-05: operator speech peaks were 320–2,500 / 32,767 (auto-gain at
+  its 20× cap). A low Windows mic input level is the first suspect for mishearing.
 - Legacy paths stay as fallbacks: `Avenger.handle()`, `/api/ask`'s blocking contract,
   voice without an engine. Don't remove them.
 

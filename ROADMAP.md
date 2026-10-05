@@ -66,7 +66,9 @@ tracks both.
 | Latency metrics (p50/p95 per path, first token, first audio) | IMPLEMENTED (`/api/engine`) |
 | LLM-chosen tool use / multi-step plans across agents | PLANNED |
 | Orchestrator directives & decisions routed through the engine | PLANNED |
-| Voice barge-in by speech (not just clap) | PLANNED (needs echo-cancelled mic stream) |
+| Conversation Mode: one agent, quiet background, name-to-start, engaged follow-ups | IMPLEMENTED (default on) |
+| Voice barge-in by speech | IMPLEMENTED (loud-speech gate over learned echo; live tuning pending) |
+| Hallucination / chatter rejection, per-utterance diagnostics, live mic meter | IMPLEMENTED |
 
 ## Phase 2 — Multi-Agent Intelligence
 

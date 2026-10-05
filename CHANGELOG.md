@@ -5,6 +5,13 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-05 — Conversation Mode + voice that hears the operator
+- **fix (root cause):** background agent speech (13 utterances / 2 min) kept the mic muted **62% of the time**, discarding the operator's words. **Conversation Mode** (default on, header switch, `/api/conversation`, or by voice) voices only replies to the operator (`tts.say(channel="conversation")`), keeps ambient speech on screen, talks to one agent (JARVIS), and replies in plain spoken style. Markdown is never read aloud.
+- **fix:** Whisper hallucinations and other people's chatter. Low-confidence segments are dropped (no-speech / logprob / repetition), temperature re-decodes removed (one decode took 14 s), phantom phrases ("Thank you.") ignored. In Conversation Mode "Jarvis" anywhere starts a turn, follow-ups need no name for 20 s, and unaddressed speech is ignored.
+- **fix:** the mic loop no longer waits on transcription (worker queue; stale phrases dropped), which removed stalls and bursty late replies.
+- **feat:** barge-in by speaking over JARVIS (loud-speech gate above his learned echo), live mic meter, `/api/voice/diagnostics` (every utterance: text, peak, gain, decode ms, outcome).
+- **test:** 10 new (conversation mode, routing, confidence, phantoms, source hygiene). 104 total.
+
 ## 2026-10-05 — Real-Time Interaction & Action Engine (foundational)
 - **feat:** `realtime.py` is one pipeline for voice, typed, UI, API and clap commands: received → instant ack → fast-path or delegated agent → streamed reasoning → sentence-by-sentence speech → done/failed/cancelled, broadcast live with timings. `/api/command` (non-blocking), `/api/command/cancel`, `/api/engine` (p50/p95 latency). `/api/ask` keeps its contract and now runs on the engine.
 - **feat:** `intents.py` fast path, no LLM, 0–2 ms: time/date, CPU/memory/disk/battery, internet speed/latency (+ "run a speed test" with instant ack and progress), weather, news, threats, calendar, inbox, memory, vision, missions, dashboard sections, named websites, and **Windows actions** (`win_actions.py` allow-list: apps, folders, volume/media keys, lock), all audited.

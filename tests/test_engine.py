@@ -29,7 +29,7 @@ class FakeTTS:
     def __init__(self):
         self.said, self.cancelled = [], 0
 
-    async def say(self, t, on_start=None):
+    async def say(self, t, on_start=None, channel="ambient"):
         self.said.append(t)
         if on_start:
             on_start()
@@ -243,7 +243,7 @@ class VoiceOnEngine(unittest.TestCase):
         hub = FakeHub()
         engine = mock.Mock(submit=mock.AsyncMock(), summon=mock.AsyncMock(),
                            active={"x": 1} if active else {},
-                           state={"tts": mock.Mock(speaking=speaking)})
+                           state={"tts": mock.Mock(speaking=speaking, conversation_mode=False)})  # wake-word mode
         v = VoiceLoop(hub=hub, brain=None, team={k: mock.Mock() for k in ("jarvis", "stark")})
         v.engine = engine
         return v, engine, np.zeros(800, dtype=np.int16)
@@ -293,6 +293,103 @@ class IntentRouting(unittest.TestCase):
         for t in ("stop", "never mind", "cancel.", "shut up"):
             self.assertTrue(intents.is_cancel(t), t)
         self.assertFalse(intents.is_cancel("stop the music in five minutes please"))
+
+
+class ConversationModeTests(unittest.TestCase):
+    def test_tts_drops_ambient_but_voices_conversation(self):
+        from tts import TTSPlayer
+        t = TTSPlayer(); t.enabled, t.muted, t.volume, t.conversation_mode = True, False, 100, True
+        t.q = mock.Mock(qsize=lambda: 0)
+        async def go():
+            await t.say("Network pipes are flowing.")                     # ambient (legacy default)
+            t.loop = asyncio.get_running_loop()
+            t.q.put.side_effect = lambda item: item[1].set_result(True)
+            await t.say("Yes, sir.", channel="conversation")
+        run(go())
+        self.assertEqual(t.ambient_dropped, 1)
+        self.assertEqual(t.q.put.call_count, 1)
+        self.assertEqual(t.q.put.call_args.args[0][3], "conversation")
+
+    def test_engine_keeps_one_agent_and_spoken_style(self):
+        async def go():
+            e, hub, tts, team, _ = make_engine()
+            tts.conversation_mode = True
+            cmd = await e.submit("write a script to automate my backups", source="voice", wait=True)
+            return cmd, team
+        cmd, team = run(go())
+        self.assertEqual(cmd.handled_by, "jarvis")                         # no hand-off in conversation
+        self.assertIn("speaking aloud", team["jarvis"].prompts[-1])
+
+    def test_markdown_is_never_spoken(self):
+        from realtime import speakable
+        self.assertEqual(speakable("**Status.** CPU 15% · Memory 93%"), "Status. CPU 15%, Memory 93%")
+        self.assertNotIn("*", speakable("- **bold** item" + chr(10) + "## Heading"))
+
+    def test_phantom_transcripts_are_ignored(self):
+        from voice import is_phantom
+        self.assertTrue(is_phantom("Thank you.", 1.2))
+        self.assertTrue(is_phantom("you", 0.6))
+        self.assertFalse(is_phantom("thank you jarvis, now check the disk", 2.0))
+        self.assertFalse(is_phantom("Thank you.", 3.5))                     # long + deliberate
+
+
+@unittest.skipUnless(__import__("importlib").util.find_spec("numpy"), "numpy (optional voice dep) not installed")
+class ConversationVoice(unittest.TestCase):
+    def _loop(self):
+        import numpy as np
+        from voice import VoiceLoop
+        engine = mock.Mock(submit=mock.AsyncMock(), summon=mock.AsyncMock(), active={},
+                           state={"tts": mock.Mock(speaking=False, conversation_mode=True)})
+        v = VoiceLoop(hub=FakeHub(), brain=None, team={k: mock.Mock() for k in ("jarvis", "stark")})
+        v.engine = engine
+        return v, engine, np
+
+    def _hear(self, v, np, text, n=10):
+        with mock.patch("voice.VoiceLoop._transcribe", return_value=text):
+            run(v._finish([np.zeros(800, dtype=np.int16)] * n, None, np, 8))
+
+    def test_unaddressed_chatter_is_ignored(self):
+        v, engine, np = self._loop()
+        self._hear(v, np, "it's going to be ok, honey")
+        engine.submit.assert_not_awaited()
+        self.assertTrue(v.diag[-1]["outcome"].startswith("ignored (not addressed"))
+
+    def test_name_anywhere_starts_and_is_stripped(self):
+        v, engine, np = self._loop()
+        self._hear(v, np, "Jarvis, what's the weather like")
+        self.assertEqual(engine.submit.await_args.args[0], "what's the weather like")
+        self.assertEqual(engine.submit.await_args.kwargs["agent"], "jarvis")
+
+    def test_engaged_conversation_needs_no_name(self):
+        v, engine, np = self._loop()
+        v._open_followup("jarvis", 20)                       # JARVIS just answered
+        self._hear(v, np, "and how much memory is free")
+        self.assertEqual(engine.submit.await_args.args[0], "and how much memory is free")
+        self.assertEqual(v.diag[-1]["outcome"], "→ jarvis (engaged)")
+
+    def test_low_confidence_segments_are_dropped(self):
+        from voice import VoiceLoop
+        seg = lambda **k: mock.Mock(text=k.get("text", "x"), no_speech_prob=k.get("ns", 0.1),
+                                    avg_logprob=k.get("lp", -0.3), compression_ratio=k.get("cr", 1.4))
+        self.assertTrue(VoiceLoop._confident(seg()))
+        self.assertFalse(VoiceLoop._confident(seg(ns=0.8)))          # probably silence
+        self.assertFalse(VoiceLoop._confident(seg(lp=-1.4)))         # guessing
+        self.assertFalse(VoiceLoop._confident(seg(cr=2.9)))          # "it's going to be ok" x3
+
+    def test_phantom_is_not_sent(self):
+        v, engine, np = self._loop()
+        self._hear(v, np, "Thank you.")
+        engine.submit.assert_not_awaited()
+        self.assertTrue(v.diag[-1]["outcome"].startswith("ignored"))
+
+
+class SourceHygiene(unittest.TestCase):
+    def test_no_control_characters_in_source(self):
+        # regression: escaped regex word boundaries once landed as raw backspaces
+        root = Path(__file__).resolve().parent.parent
+        for f in list(root.glob("*.py")) + list((root / "static").glob("*.js")):
+            bad = [c for c in f.read_text(encoding="utf-8") if ord(c) < 32 and c not in (chr(9), chr(10), chr(13))]
+            self.assertFalse(bad, f"control characters in {f.name}")
 
 
 if __name__ == "__main__":
