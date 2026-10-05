@@ -9,6 +9,7 @@ Configure via .env:
     LOCAL_LLM_KEY=                  # optional bearer token
 """
 
+import asyncio
 import json
 import os
 import time
@@ -141,6 +142,56 @@ class LocalLLM:
             "last_completion_tokens": self.last_tokens,
             "calls_total": self.calls_total,
         }
+
+    async def chat_stream(self, prompt: str, system: str | None = None, on_delta=None,
+                          timeout: float = 60.0, max_tokens: int = 300) -> str | None:
+        """Streaming chat over the OpenAI-compatible SSE API. Calls
+        on_delta(text) per chunk; returns the full reply, or None on failure
+        (callers fall back exactly as with chat())."""
+        if not self.model:
+            return None
+        import json as _json
+        messages: list[dict] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        t0 = time.time(); parts: list[str] = []
+        try:
+            async with httpx.AsyncClient(timeout=timeout, trust_env=False) as c:
+                async with c.stream("POST", f"{self.base_url}/chat/completions",
+                                    headers=self._headers(),
+                                    json={"model": self.model, "messages": messages,
+                                          "max_tokens": max_tokens, "temperature": 0.4,
+                                          "stream": True}) as r:
+                    r.raise_for_status()
+                    async for line in r.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            chunk = (_json.loads(data).get("choices") or [{}])[0].get("delta", {}).get("content")
+                        except Exception:
+                            continue
+                        if chunk:
+                            parts.append(chunk)
+                            if on_delta:
+                                await on_delta(chunk)
+            self.last_latency_ms = int((time.time() - t0) * 1000)
+            self.calls_total += 1
+            out = "".join(parts)
+            if "<think>" in out:
+                import re as _re
+                out = _re.sub(r"<think>.*?</think>", "", out, flags=_re.DOTALL)
+            return out.strip() or None
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            if self.hub:
+                await self.hub.broadcast({"type": "log", "level": "warn",
+                                          "msg": f"local LLM stream failed: {e}"})
+            return None
 
     async def chat(self, prompt: str, system: str | None = None,
                    timeout: float = 60.0, max_tokens: int = 300) -> str | None:

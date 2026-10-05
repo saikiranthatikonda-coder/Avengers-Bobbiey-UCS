@@ -136,8 +136,7 @@ class Brain:
                 return reply
         return reply
 
-    async def _llm_call(self, prompt: str, system: str | None, timeout: float,
-                        allow_read: bool = False) -> str:
+    def _cli_args(self, prompt: str, system: str | None, allow_read: bool) -> list[str]:
         args: list[str] = [self.claude_bin, "-p"]
         if allow_read:
             # headless mode blocks the Read tool behind a permission prompt, so
@@ -148,9 +147,27 @@ class Brain:
             # text replies are pure reasoning over the context we pass in; with
             # tools on, the CLI tries (blocked) shell commands and stalls ~30s.
             args += ["--tools", ""]
+        # stream-json: tokens arrive as they're generated (first token ~1.8 s vs
+        # a 4.8 s full run) and we can stop reading at message end — the CLI
+        # spends ~2 s on post-turn housekeeping after the answer is complete.
+        # --strict-mcp-config: skip the operator's claude.ai MCP connectors,
+        # which the CLI otherwise starts on every call (~0.3 s, no use here).
+        args += ["--output-format", "stream-json", "--include-partial-messages",
+                 "--verbose", "--strict-mcp-config"]
         if system:
             args += ["--system-prompt", system]
         args += ["--", prompt]   # "--" ends the variadic --tools list
+        return args
+
+    async def _claude_stream(self, prompt: str, system: str | None, timeout: float,
+                             allow_read: bool = False, on_delta=None) -> str:
+        """Run the CLI with stream-json. Calls on_delta(text) per token chunk.
+        Text-only calls return at message_stop (the answer is complete there);
+        tool calls (vision Read) wait for the final `result` event. Returns the
+        same strings as before, including "[brain …]" error markers."""
+        import json as _json
+        args = self._cli_args(prompt, system, allow_read)
+        proc = None
         try:
             BRAIN_CWD.mkdir(parents=True, exist_ok=True)
             proc = await asyncio.create_subprocess_exec(
@@ -159,15 +176,90 @@ class Brain:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(BRAIN_CWD),                 # keep dev CLAUDE.md out of agent context
+                limit=1 << 20,                      # stream-json lines can be long
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            if proc.returncode != 0:
-                msg = (stderr.decode(errors="ignore").strip().splitlines() or [""])[-1]
-                return f"[brain error: {msg[:200]}]"
-            return stdout.decode(errors="ignore").strip() or "[brain returned empty]"
+            text, final, done = [], None, False
+
+            async def _read():
+                nonlocal final, done
+                async for raw in proc.stdout:
+                    try:
+                        ev = _json.loads(raw)
+                    except Exception:
+                        continue
+                    kind = ev.get("type")
+                    if kind == "stream_event":
+                        e = ev.get("event") or {}
+                        d = e.get("delta") or {}
+                        if d.get("type") == "text_delta" and d.get("text"):
+                            text.append(d["text"])
+                            if on_delta:
+                                await on_delta(d["text"])
+                        elif e.get("type") == "message_stop" and not allow_read and text:
+                            done = True
+                            return
+                    elif kind == "result":
+                        if ev.get("is_error"):
+                            final = f"[brain error: {str(ev.get('result') or ev.get('subtype'))[:200]}]"
+                        else:
+                            final = ev.get("result")
+                        done = True
+                        return
+
+            await asyncio.wait_for(_read(), timeout=timeout)
+            if final is None and not done:
+                await proc.wait()
+                if proc.returncode not in (0, None):
+                    err = (await proc.stderr.read()).decode(errors="ignore").strip().splitlines()
+                    return f"[brain error: {(err or [''])[-1][:200]}]"
+            out = (final if isinstance(final, str) and final.strip() else "".join(text)).strip()
+            return out or "[brain returned empty]"
         except FileNotFoundError:
             return "[brain offline: claude CLI not found]"
         except asyncio.TimeoutError:
             return "[brain timeout]"
+        except asyncio.CancelledError:
+            raise                                   # cancellation is the caller's decision
         except Exception as e:
             return f"[brain error: {e}]"
+        finally:
+            if proc is not None and proc.returncode is None:
+                try:
+                    proc.kill()                     # stop the post-answer housekeeping
+                except ProcessLookupError:
+                    pass
+
+    async def _llm_call(self, prompt: str, system: str | None, timeout: float,
+                        allow_read: bool = False) -> str:
+        return await self._claude_stream(prompt, system, timeout, allow_read=allow_read)
+
+    # ── streaming entry point (real-time engine) ──────────────────
+    async def stream(self, prompt: str, system: str | None = None, agent: str = "jarvis",
+                     on_delta=None, timeout: float = 90.0) -> tuple[str, str]:
+        """Like think(), but pushes text as it is generated. Returns (reply,
+        path) with path in {"claude", "local-llm", "template"}. Same provider
+        policy as think(): operator-forced local first, then Claude, then the
+        local LLM, then rule templates — so nothing ever goes silent."""
+        async def _emit_all(txt):
+            if on_delta and txt:
+                await on_delta(txt)
+
+        llm = self.local_llm
+        local_ok = bool(llm and llm.available)
+        if self.force_local and local_ok:
+            r = await llm.chat_stream(prompt, system=system, on_delta=on_delta, timeout=timeout)
+            if r:
+                return r, "local-llm"
+        if self.mode == "llm":
+            r = await self._claude_stream(prompt, system, timeout, on_delta=on_delta)
+            if not r.startswith("[brain"):
+                return r, "claude"
+        if local_ok:
+            r = await llm.chat_stream(prompt, system=system, on_delta=on_delta, timeout=timeout)
+            if r:
+                return r, "local-llm"
+        if self.local:
+            r = self.local.for_agent(agent, prompt)
+            await _emit_all(r)
+            return r, "template"
+        return "[brain offline]", "offline"
