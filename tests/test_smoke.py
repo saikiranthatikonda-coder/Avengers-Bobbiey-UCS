@@ -90,6 +90,33 @@ class Agents(unittest.TestCase):
         self.assertEqual(set(r["available"]), AGENTS)
 
 
+class RealtimeEngine(unittest.TestCase):
+    def test_ask_goes_through_engine_and_keeps_its_shape(self):
+        r = SERVER.post("/api/ask", {"agent": "jarvis", "prompt": "what time is it"})
+        self.assertEqual(r["agent"], "jarvis")
+        self.assertIn("It's", r["reply"])
+        self.assertEqual(r["path"], "fast")                       # no LLM for the time
+        self.assertIn("total_ms", r["marks"])
+
+    def test_command_is_non_blocking_and_reported(self):
+        import time
+        r = SERVER.post("/api/command", {"text": "what's the date today", "speak": False})
+        self.assertTrue(r["ok"]) and self.assertTrue(r["id"])
+        for _ in range(40):
+            snap = SERVER.get("/api/engine")
+            done = [c for c in snap["recent"] if c["id"] == r["id"]]
+            if done:
+                break
+            time.sleep(0.1)
+        self.assertEqual(done[0]["stage"], "done")
+        self.assertEqual(done[0]["path"], "fast")
+        self.assertIn("fast", snap["latency"])
+
+    def test_unknown_agent_rejected_and_cancel_is_safe(self):
+        self.assertFalse(SERVER.post("/api/command", {"text": "hi", "agent": "nobody"})["ok"])
+        self.assertTrue(SERVER.post("/api/command/cancel", {})["ok"])
+
+
 class Orchestration(unittest.TestCase):
     def test_orchestrator_snapshot(self):
         o = SERVER.get("/api/orchestrator")
