@@ -2175,3 +2175,31 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 .js-close:hover, .js-close:focus-visible { color: #00d9ff; outline: none; }
 .js-heard { margin-top: 0.45rem; font-size: 0.72rem; color: var(--text-dim); font-style: italic; }
 .js-reply { margin-top: 0.35rem; font-size: 0.8rem; line-height: 1.45; color: var(--text); }
+
+/* ── real-time engine · live command console ─────────────────── */
+.cmd-console { margin-top: 0.55rem; border: 1px solid var(--panel-edge); border-radius: 6px; background: rgba(0, 0, 0, 0.42); padding: 0.45rem 0.6rem; }
+.cmd-head { display: flex; align-items: center; gap: 0.6rem; }
+.cmd-title { font-family: var(--font-display); font-size: 0.58rem; font-weight: 900; letter-spacing: 0.22em; color: var(--accent); }
+.cmd-lat { font-size: 0.56rem; letter-spacing: 0.08em; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.cmd-stop { margin-left: auto; font-size: 0.56rem; letter-spacing: 0.16em; padding: 0.2rem 0.5rem; min-height: 24px; border: 1px solid var(--error, #ff5577); color: var(--error, #ff5577); background: transparent; border-radius: 3px; cursor: pointer; }
+.cmd-stop:hover, .cmd-stop:focus-visible { background: color-mix(in srgb, var(--error, #ff5577) 18%, transparent); outline: none; }
+.cmd-list { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.35rem; max-height: 210px; overflow-y: auto; }
+.cmd-empty { font-size: 0.62rem; color: var(--text-dim); font-style: italic; }
+.cmd-row { border-left: 2px solid var(--panel-edge); padding: 0.25rem 0.45rem; animation: js-in 0.25s ease-out; }
+.cmd-row.live { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.cmd-row.done { border-left-color: var(--success); }
+.cmd-row.failed, .cmd-row.cancelled { border-left-color: var(--warn); opacity: 0.75; }
+.cmd-q { display: flex; gap: 0.4rem; align-items: baseline; font-size: 0.68rem; color: var(--text); min-width: 0; }
+.cmd-src { font-size: 0.5rem; letter-spacing: 0.14em; color: var(--text-dim); flex-shrink: 0; }
+.cmd-q-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cmd-x { margin-left: auto; background: none; border: 0; color: var(--text-dim); cursor: pointer; font-size: 0.8rem; min-width: 24px; min-height: 20px; }
+.cmd-x:hover, .cmd-x:focus-visible { color: var(--warn); outline: none; }
+.cmd-stages { display: flex; flex-wrap: wrap; gap: 0.2rem; margin-top: 0.2rem; }
+.cmd-chip { font-size: 0.48rem; letter-spacing: 0.12em; padding: 0 0.3rem; border: 1px solid var(--panel-edge); border-radius: 2px; color: var(--text-dim); }
+.cmd-chip.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--panel-edge)); }
+.cmd-chip.hand { color: var(--stark, #ff6b00); border-color: currentColor; }
+.cmd-chip.ok { color: var(--success); border-color: currentColor; }
+.cmd-chip.bad { color: var(--warn); border-color: currentColor; }
+.cmd-a { margin-top: 0.2rem; font-size: 0.66rem; line-height: 1.4; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmd-row.live .cmd-a::after { content: "▍"; color: var(--accent); animation: js-pulse 1s steps(2) infinite; }
+.cmd-t { margin-top: 0.15rem; font-size: 0.5rem; letter-spacing: 0.1em; color: var(--text-dim); }

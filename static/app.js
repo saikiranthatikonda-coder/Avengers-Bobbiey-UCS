@@ -344,6 +344,94 @@ function setVoiceState(state) {
     else                              sub.textContent = 'say "hey <agent>"';
   }
 }
+// ═══ REAL-TIME ENGINE · live command console ═══════════════════
+// Renders {"type":"cmd"} events from realtime.py: one row per command with
+// stage chips, the streamed reply, timings and a cancel control. `var` +
+// method object so WS events that land during load can't hit a TDZ.
+var CommandConsole = {
+  rows: new Map(), order: [],
+  SRC: { voice: "🎙 VOICE", text: "⌨ TEXT", ui: "◉ UI", clap: "👏 CLAP", api: "⇄ API", agent: "◆ AGENT" },
+  on(m) {
+    if (m.stage === "interrupt") { this.flash("interrupted"); return; }
+    if (!m.id) return;
+    let r = this.rows.get(m.id);
+    if (!r) {
+      if (!m.text && m.stage === "received" && m.source !== "clap" && m.source !== "voice") return;
+      r = { id: m.id, text: m.text || "(summoned)", source: m.source, agent: m.agent, stages: new Set(), reply: "", marks: {}, final: null };
+      this.rows.set(m.id, r); this.order.unshift(m.id);
+      while (this.order.length > 6) this.rows.delete(this.order.pop());
+    }
+    if (m.agent) r.agent = m.agent;
+    r.stages.add(m.stage);
+    if (m.stage === "handoff") r.handoff = `${m.from} → ${m.to}`;
+    if (m.stage === "routed") r.route = m.route === "fast" ? `FAST · ${m.intent || ""}` : "AGENT";
+    if (m.stage === "acting" || m.stage === "progress") r.detail = m.detail || r.detail;
+    if (m.stage === "delta") r.reply += m.text || "";
+    if (["done", "failed", "cancelled"].includes(m.stage)) {
+      r.final = m.stage; r.marks = m.marks || {}; r.path = m.path;
+      if (m.reply) r.reply = m.reply;
+      if (m.error && m.stage !== "cancelled") r.reply = (r.reply ? r.reply + "\n" : "") + "⚠ " + m.error;
+    }
+    if (typeof JarvisSummon !== "undefined") JarvisSummon.fromCmd(m, r);
+    this.render();
+  },
+  chips(r) {
+    const has = s => r.stages.has(s);
+    const c = (on, label, cls = "") => `<span class="cmd-chip ${on ? "on " + cls : ""}">${label}</span>`;
+    return [c(has("ack"), "ACK"), c(has("routed"), r.route || "ROUTE"),
+      r.handoff ? c(true, escapeHTML(r.handoff.toUpperCase()), "hand") : "",
+      c(has("thinking") || has("acting"), has("acting") ? "ACT" : "THINK"),
+      c(has("delta") || !!r.reply, "RESPOND"),
+      r.final ? c(true, r.final.toUpperCase(), r.final === "done" ? "ok" : "bad") : ""].join("");
+  },
+  timing(r) {
+    const k = r.marks || {}; const f = v => v == null ? null : v < 1000 ? `${Math.round(v)} ms` : `${(v / 1000).toFixed(1)} s`;
+    return [k.ack_ms != null ? `ack ${f(k.ack_ms)}` : "", k.first_token_ms != null ? `1st token ${f(k.first_token_ms)}` : "",
+      k.first_speech_ms != null ? `1st voice ${f(k.first_speech_ms)}` : "", k.total_ms != null ? `total ${f(k.total_ms)}` : "",
+      r.path ? r.path.toUpperCase() : ""].filter(Boolean).join(" · ");
+  },
+  render() {
+    const host = document.getElementById("cmd-list"); if (!host) return;
+    if (!this.order.length) return;
+    host.innerHTML = this.order.map(id => {
+      const r = this.rows.get(id); const live = !r.final;
+      return `<div class="cmd-row ${live ? "live" : r.final}" data-id="${r.id}">
+        <div class="cmd-q"><span class="cmd-src">${this.SRC[r.source] || r.source}</span>
+          <span class="cmd-q-txt" title="${escapeHTML(r.text)}">${escapeHTML(r.text)}</span>
+          ${r.agent ? `<span class="cmd-src">${escapeHTML(String(r.agent).toUpperCase())}</span>` : ""}
+          ${live ? `<button class="cmd-x" data-cancel="${r.id}" aria-label="cancel command">×</button>` : ""}</div>
+        <div class="cmd-stages">${this.chips(r)}</div>
+        ${r.reply || r.detail ? `<div class="cmd-a">${escapeHTML(r.reply || r.detail || "")}</div>` : ""}
+        ${r.final ? `<div class="cmd-t">${this.timing(r)}</div>` : ""}
+      </div>`;
+    }).join("");
+    const stop = document.getElementById("cmd-stop-all");
+    if (stop) stop.hidden = ![...this.rows.values()].some(r => !r.final);
+  },
+  flash(what) { const t = document.getElementById("cmd-lat"); if (t) { t.textContent = `■ ${what.toUpperCase()}`; setTimeout(() => this.refreshLatency(), 2500); } },
+  async refreshLatency() {
+    try {
+      const d = await (await fetch("/api/engine")).json(); const L = d.latency || {};
+      const f = v => v == null ? "—" : v < 1000 ? `${Math.round(v)}ms` : `${(v / 1000).toFixed(1)}s`;
+      const parts = ["fast", "claude", "local-llm", "template"].filter(p => L[p]).map(p => `${p.toUpperCase()} ${f(L[p].p50_ms)}`);
+      if (d.first_speech_p50_ms != null) parts.push(`1ST VOICE ${f(d.first_speech_p50_ms)}`);
+      const el = document.getElementById("cmd-lat");
+      if (el) el.textContent = parts.length ? "p50 · " + parts.join(" · ") : `${d.totals?.commands || 0} commands · no timings yet`;
+    } catch (e) {}
+  },
+  async cancel(id) { try { await fetch("/api/command/cancel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) }); } catch (e) {} },
+};
+document.addEventListener("click", e => {
+  const id = e.target && e.target.dataset && e.target.dataset.cancel;
+  if (id) CommandConsole.cancel(id);
+  if (e.target && e.target.id === "cmd-stop-all") CommandConsole.cancel(null);
+});
+document.addEventListener("keydown", e => {
+  const modalOpen = document.getElementById("tool-modal") && !document.getElementById("tool-modal").hidden;
+  if (e.key === "Escape" && !modalOpen && [...CommandConsole.rows.values()].some(r => !r.final)) CommandConsole.cancel(null);
+});
+setTimeout(() => CommandConsole.refreshLatency(), 3000); setInterval(() => CommandConsole.refreshLatency(), 15000);
+
 // JARVIS summon card — opened by a double clap, shows what was heard and the
 // reply, closes itself after 20 s of quiet. Function declaration object built
 // lazily so early WS messages can't hit a TDZ.
@@ -364,6 +452,17 @@ var JarvisSummon = {
   reply(t) { if (!this.active()) return; this.el("js-reply").textContent = t; this.state("ANSWERED"); this.touch(); },
   speaking(on) { const c = this.el("jarvis-summon"); if (c && this.active()) { c.classList.toggle("speaking", on); if (on) this.state("SPEAKING"); this.touch(); } },
   touch() { clearTimeout(this._t); this._t = setTimeout(() => this.close(), 20000); },
+  // live pipeline → card: show routing/handoff, stream the reply as it arrives
+  fromCmd(m, r) {
+    if (!this.active() || !(r.source === "voice" || r.source === "clap")) return;
+    if (m.stage === "routed" && m.route === "agent") this.state(`→ ${String(m.agent || "").toUpperCase()}`);
+    if (m.stage === "handoff") this.state(`HANDOFF → ${String(m.to || "").toUpperCase()}`);
+    if (m.stage === "thinking") this.state("THINKING");
+    if (m.stage === "acting") this.state("ACTING");
+    if (m.stage === "delta") { this.el("js-reply").textContent = r.reply; this.state("RESPONDING"); this.touch(); }
+    if (m.stage === "done" && r.text && r.text !== "(summoned)") { this.el("js-heard").textContent = `“${r.text}”`; this.reply(r.reply); }
+    if (m.stage === "cancelled") this.state("STOPPED");
+  },
   close() { const c = this.el("jarvis-summon"); if (c) c.hidden = true; clearTimeout(this._t); },
 };
 document.addEventListener("click", e => { if (e.target && e.target.id === "js-close") JarvisSummon.close(); });
@@ -2576,7 +2675,7 @@ document.querySelectorAll(".vr-row[data-cmd]").forEach(b => {
   b.addEventListener("click", () => {
     const inp = $("#ask-input"); if (!inp) return;
     inp.value = b.dataset.cmd; inp.focus();
-    $("#ask-form").requestSubmit();
+    $("#ask-form").requestSubmit();   // same engine pipeline as typing / voice
   });
 });
 async function checkMic() {
@@ -2976,6 +3075,11 @@ function handle(msg) {
     case "net":
       applyNetSnapshot(msg);
       break;
+    case "cmd":
+      CommandConsole.on(msg);
+      if (msg.stage === "interrupt") { JarvisSummon.state("INTERRUPTED"); logEvent(`<span class="tag">[engine]</span> ■ interrupted — ${escapeHTML(msg.reason || "")}`); }
+      if (msg.stage === "handoff") logEvent(`<span class="tag">[engine]</span> handoff ${escapeHTML(msg.from)} → ${escapeHTML(msg.to)}`);
+      break;
     case "metrics":
       $("#m-cpu").textContent = msg.cpu.toFixed(0);
       $("#m-mem").textContent = msg.mem.toFixed(0);
@@ -3145,14 +3249,15 @@ $("#ask-form").addEventListener("submit", async (e) => {
   const agent = m ? m[1] : null;
   const prompt = m ? m[2] : text;
   try {
-    const r = await fetch("/api/ask", {
+    // real-time engine: returns at once; ack, streaming reply and timings
+    // arrive over /ws ("cmd" events) and render in LIVE COMMANDS
+    const r = await fetch("/api/command", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ prompt, agent }),
+      body: JSON.stringify({ text: prompt, agent, source: "text" }),
     });
     const data = await r.json();
-    if (data.error) logEvent(`<span class="tag">[err]</span> ${escapeHTML(data.error)}`, "error");
-    else            logEvent(`<span class="tag">[${data.agent}]</span> ${escapeHTML(data.reply)}`);
-  } catch (err) { logEvent("ask failed: " + escapeHTML(err.message), "error"); }
+    if (!data.ok) logEvent(`<span class="tag">[err]</span> ${escapeHTML(data.error || "command rejected")}`, "error");
+  } catch (err) { logEvent("command failed: " + escapeHTML(err.message), "error"); }
 });
 
 // ── news refresh button ──────────────────────────────
