@@ -147,6 +147,7 @@ class VoiceLoop:
         self.follow_until = 0.0
         self.noise_rms = 60.0                    # adaptive room noise floor
         self.clap = ClapDetector() if os.getenv("JARVIS_CLAP", "1") != "0" else None
+        self.engine = None                       # realtime.Engine, set by main.py
 
     async def run(self) -> None:
         try:
@@ -221,6 +222,15 @@ class VoiceLoop:
                 while True:
                     pkt = await q.get()
                     if self.muted:
+                        # mic is muted while BUCS speaks (no self-triggering), but
+                        # the clap detector keeps listening: double clap = barge-in
+                        if self.clap and self.engine is not None:
+                            f32 = pkt[:, 0].astype(np.float32)
+                            if self.clap.feed(float(np.max(np.abs(f32))),
+                                              float(np.sqrt(np.mean(f32 ** 2))),
+                                              self.noise_rms, time.time()):
+                                await self.engine.cancel(reason="double clap (barge-in)")
+                                self.muted = False
                         buffer = []
                         preroll.clear()
                         in_speech = False
@@ -320,6 +330,13 @@ class VoiceLoop:
         await self.hub.broadcast({"type": "voice", "event": "heard", "text": text,
                                   "level": getattr(self, "last_level", None)})
 
+        # "stop" / "cancel" / "never mind" need no wake word while BUCS is busy
+        if self.engine is not None:
+            from intents import is_cancel
+            if is_cancel(text) and (self.engine.active or getattr(self.engine.state.get("tts"), "speaking", False)):
+                await self.engine.submit(text, source="voice")
+                return
+
         agent_key, command = self._match_agent(text)
         if not agent_key and self.follow_agent and time.time() < self.follow_until:
             agent_key, command = self.follow_agent, text.strip()   # conversation mode
@@ -348,6 +365,21 @@ class VoiceLoop:
         except Exception:
             pass
 
+        # ── real-time engine: one pipeline for voice/text/UI ─────────
+        if self.engine is not None:
+            if not command:                                    # bare "Hey Jarvis"
+                await self.engine.summon(agent_key, source="voice")
+                self._open_followup(agent_key, 15.0)
+                return
+            # JARVIS is the coordinator: "Hey Jarvis …" lets the engine delegate
+            # to the right specialist; "Hey Stark …" addresses Stark directly
+            explicit = None if agent_key == "jarvis" else agent_key
+            await self.engine.submit(
+                command, source="voice", agent=explicit,
+                on_done=lambda c, k=agent_key: self._open_followup(c.handled_by or k))
+            return
+
+        # ── legacy path (engine unavailable) ──────────────────────────
         if not command:
             command = "Sir is summoning you. Greet briefly and ask what he needs."
 
@@ -469,6 +501,9 @@ class VoiceLoop:
         await self.hub.broadcast({"type": "voice", "event": "summon", "agent": "jarvis",
                                   "peak": round(self.clap.last_peak) if self.clap else None})
         self._open_followup("jarvis", 15.0)
+        if self.engine is not None:
+            await self.engine.summon("jarvis", source="clap")
+            return
         jarvis = self.team.get("jarvis")
         greeting = "Yes, sir? I'm listening."
         if jarvis is not None:

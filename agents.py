@@ -103,6 +103,43 @@ class Avenger:
         await self.set_status("idle")
         return reply
 
+    async def handle_stream(self, prompt: str, on_delta=None) -> tuple[str, str]:
+        """Streaming twin of handle() for the real-time engine: same context,
+        history, team memory and confidence bookkeeping, but tokens are pushed
+        to on_delta as they arrive and nothing is spoken here — the engine
+        speaks sentence-by-sentence. Returns (reply, path)."""
+        await self.set_status("thinking", note=prompt[:80])
+        ctx = ""
+        if self.team_memory is not None:
+            try:
+                ctx = self.team_memory.context_block(self.name)
+            except Exception:
+                ctx = ""
+        ctx = self._live_telemetry() + ctx
+        try:
+            if hasattr(self.brain, "stream"):
+                reply, path = await self.brain.stream(ctx + prompt, system=self.system_prompt,
+                                                      agent=self.name, on_delta=on_delta)
+            else:                                   # older brain: no streaming → one chunk
+                reply, path = await self.brain.think(ctx + prompt, system=self.system_prompt,
+                                                     agent=self.name, fast=True), "claude"
+                if on_delta and reply:
+                    await on_delta(reply)
+        finally:
+            await self.set_status("idle")
+        self.history.append({"q": prompt, "a": reply, "ts": time.time()})
+        self.actions_completed += 1
+        if (self.team_memory is not None and reply and len(reply) > 40
+                and not reply.lstrip().startswith("[")):
+            try:
+                await self.team_memory.write(self.name, "reply", f"{prompt[:70]} → {reply[:130]}")
+            except Exception:
+                pass
+        self.confidence = (max(40, self.confidence - 8) if reply.lstrip().startswith("[")
+                           else min(99, self.confidence + 2))
+        await self._emit("reply", q=prompt[:140], a=reply[:400])
+        return reply, path
+
     async def tick(self) -> None:
         """Autonomous periodic activity. Generates a quick report using the
         local brain (no LLM call) and pushes it to the dashboard. If the agent

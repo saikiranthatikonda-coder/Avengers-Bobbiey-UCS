@@ -30,6 +30,7 @@ from llm_local import LocalLLM
 from local_brain import LocalBrain
 from memory import OperatorMemory
 from netspeed import NetMonitor
+from realtime import Engine
 from orchestrator import Orchestrator
 from productivity import Productivity
 from roadmap import Roadmap
@@ -84,6 +85,7 @@ async def lifespan(app: FastAPI):
     tts = TTSPlayer(hub=hub)
     if os.getenv("JARVIS_TTS", "1") != "0":
         if tts.start():
+            tts.warm()                    # persistent speaker ready before first reply
             await hub.broadcast({"type": "log", "level": "info",
                                   "msg": "TTS subsystem online — agents will speak"})
         else:
@@ -210,6 +212,14 @@ async def lifespan(app: FastAPI):
     state["web3"] = Web3Service(hub=hub)
 
     state["roadmap"] = Roadmap(state)
+
+    # Real-time interaction & action engine — the one command pipeline for
+    # voice, text, UI and clap (realtime.py). Everything above plugs into it
+    # through `state`, so later phases inherit it automatically.
+    engine = Engine(state)
+    state["engine"] = engine
+    if voice is not None:
+        voice.engine = engine
 
     # real internet measurements: latency/loss every 15 s, throughput on a slow
     # schedule (JARVIS_SPEEDTEST_MIN minutes, 0 = manual only) — see netspeed.py
@@ -478,10 +488,53 @@ async def ask(req: Ask):
             await tts.say(reply)
         return {"reply": reply, "agent": target.name, "browser": result}
 
-    # ── normal agent flow ─────────────────────────────────────────
+    # ── normal agent flow (via the real-time engine) ───────────────
     await _audit("agent.ask", f"@{target.name}: {req.prompt[:80]}")
-    reply = await target.handle(req.prompt)
-    return {"reply": reply, "agent": target.name, "codename": target.codename}
+    engine = state.get("engine")
+    if engine is None:                       # engine unavailable → legacy path
+        reply = await target.handle(req.prompt)
+        return {"reply": reply, "agent": target.name, "codename": target.codename}
+    cmd = await engine.submit(req.prompt, source="api", agent=target.name if req.agent else None,
+                              wait=True, speak=bool(state["tts"].enabled))
+    who = team.get(cmd.handled_by) or target
+    return {"reply": cmd.reply, "agent": who.name, "codename": who.codename,
+            "id": cmd.id, "path": cmd.path, "intent": cmd.intent, "marks": cmd.marks,
+            **({"error": cmd.error} if cmd.error and cmd.error != "cancelled" else {})}
+
+
+# ═══ REAL-TIME ENGINE · one pipeline for voice / text / UI / clap ═══
+
+class CommandReq(BaseModel):
+    text: str
+    agent: str | None = None
+    source: str = "text"
+    speak: bool | None = None
+
+
+@app.post("/api/command")
+async def command(req: CommandReq):
+    """Non-blocking: returns the command id at once; progress, streamed reply
+    and timings arrive over /ws as {"type": "cmd", ...}."""
+    if req.agent and req.agent.lower() not in state["team"]:
+        return {"ok": False, "error": f"Unknown agent: {req.agent}", "available": list(state["team"].keys())}
+    src = req.source if req.source in ("text", "ui", "api") else "text"
+    cmd = await state["engine"].submit(req.text, source=src, agent=req.agent, speak=req.speak)
+    return {"ok": True, "id": cmd.id}
+
+
+class CancelReq(BaseModel):
+    id: str | None = None
+
+
+@app.post("/api/command/cancel")
+async def command_cancel(req: CancelReq):
+    n = await state["engine"].cancel(req.id, reason="ui")
+    return {"ok": True, "stopped": n}
+
+
+@app.get("/api/engine")
+async def engine_status():
+    return state["engine"].snapshot()
 
 
 class BrowserReq(BaseModel):
