@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=6.0" />
+  <link rel="stylesheet" href="/static/style.css?v=6.2" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -52,6 +52,8 @@
         <button class="theme-btn" data-theme="stark" title="STARK · red/gold">◆</button>
         <button class="theme-btn" data-theme="stealth" title="STEALTH · mono">○</button>
       </div>
+      <button class="conv-btn" id="conv-toggle" aria-pressed="true"
+              title="Conversation Mode — ON: one agent (JARVIS); say 'Jarvis…' once, then just talk; background agent voices stay silent (text only). OFF: wake words for every agent and all voices. Click to switch.">CONVERSATION · ON</button>
       <div class="audio-ctl" id="audio-ctl" title="Dashboard audio">
         <button class="audio-btn" id="audio-mute" aria-label="Mute dashboard audio">🔊</button>
         <input type="range" class="audio-vol" id="audio-vol" min="0" max="100" value="100" aria-label="Volume"/>
@@ -395,6 +397,11 @@
         <div class="heard-label">LAST HEARD</div>
         <div class="heard-text" id="heard-text">— awaiting voice input —</div>
         <div class="heard-route" id="heard-route"></div>
+        <div class="mic-meter" id="mic-meter" title="Live microphone level. Speak until the bar passes the trigger line; aim for GOOD.">
+          <span class="mm-label">MIC</span>
+          <span class="mm-track"><span class="mm-fill" id="mm-fill"></span><span class="mm-trig" id="mm-trig"></span></span>
+          <span class="mm-state" id="mm-state">—</span>
+        </div>
       </div>
 
       <!-- REAL-TIME ENGINE · live command pipeline (realtime.py) -->
@@ -1454,6 +1461,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=6.0"></script>
+  <script src="/static/app.js?v=6.2"></script>
 </body>
 </html>

@@ -2203,3 +2203,17 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 .cmd-a { margin-top: 0.2rem; font-size: 0.66rem; line-height: 1.4; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
 .cmd-row.live .cmd-a::after { content: "▍"; color: var(--accent); animation: js-pulse 1s steps(2) infinite; }
 .cmd-t { margin-top: 0.15rem; font-size: 0.5rem; letter-spacing: 0.1em; color: var(--text-dim); }
+
+/* ── Conversation Mode toggle ───────────────────────────────────── */
+.conv-btn { font-family: var(--font-display); font-size: 0.56rem; font-weight: 700; letter-spacing: 0.16em; white-space: nowrap; padding: 0.32rem 0.6rem; min-height: 26px; border-radius: 4px; cursor: pointer; border: 1px solid var(--panel-edge); background: transparent; color: var(--text-dim); transition: all 0.2s; }
+.conv-btn[aria-pressed="true"] { color: #00d9ff; border-color: #00d9ff; background: rgba(0, 217, 255, 0.10); box-shadow: 0 0 10px rgba(0, 217, 255, 0.35); }
+.conv-btn:hover, .conv-btn:focus-visible { outline: none; border-color: #00d9ff; color: #00d9ff; }
+
+/* ── live mic meter (voice.py broadcasts {"type":"mic"} at 4 Hz) ── */
+.mic-meter { display: flex; align-items: center; gap: 0.45rem; margin-top: 0.35rem; }
+.mm-label { font-size: 0.5rem; letter-spacing: 0.18em; color: var(--text-dim); }
+.mm-track { position: relative; flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.mm-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--warn), var(--success)); transition: width 0.18s; }
+.mm-trig { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--accent); left: 0; }
+.mm-state { font-size: 0.5rem; letter-spacing: 0.14em; min-width: 6.5em; text-align: right; color: var(--text-dim); }
+.mm-state.good { color: var(--success); } .mm-state.quiet { color: var(--warn); }

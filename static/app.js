@@ -432,6 +432,26 @@ document.addEventListener("keydown", e => {
 });
 setTimeout(() => CommandConsole.refreshLatency(), 3000); setInterval(() => CommandConsole.refreshLatency(), 15000);
 
+// ═══ CONVERSATION MODE · one agent, no wake word, quiet background ═══
+var ConversationMode = {
+  set(on) {
+    const b = document.getElementById("conv-toggle"); if (!b) return;
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.textContent = on ? "CONVERSATION · ON" : "CONVERSATION · OFF";
+    const sub = document.getElementById("voice-sublabel");
+    if (sub) sub.textContent = on ? 'say "jarvis…", then just talk' : 'say "hey <agent>"';
+  },
+  async load() { try { this.set((await (await fetch("/api/conversation")).json()).on); } catch (e) {} },
+  async toggle() {
+    const b = document.getElementById("conv-toggle"); const on = b.getAttribute("aria-pressed") !== "true";
+    this.set(on);
+    try { this.set((await (await fetch("/api/conversation", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on }) })).json()).on); } catch (e) {}
+    logEvent(`<span class="tag">[voice]</span> conversation mode ${on ? "ON — just talk to JARVIS; background voices muted (still shown here)" : "OFF — wake words + all agent voices"}`);
+  },
+};
+document.addEventListener("click", e => { if (e.target && e.target.id === "conv-toggle") ConversationMode.toggle(); });
+setTimeout(() => ConversationMode.load(), 500);
+
 // JARVIS summon card — opened by a double clap, shows what was heard and the
 // reply, closes itself after 20 s of quiet. Function declaration object built
 // lazily so early WS messages can't hit a TDZ.
@@ -3075,6 +3095,22 @@ function handle(msg) {
     case "net":
       applyNetSnapshot(msg);
       break;
+    case "conversation":
+      ConversationMode.set(!!msg.on);
+      break;
+    case "mic": {
+      // log scale so quiet speech is visible: 100 → 0 %, 32767 → 100 %
+      const pct = v => Math.max(0, Math.min(100, (Math.log10(Math.max(v, 100)) - 2) / (Math.log10(32767) - 2) * 100));
+      const f = document.getElementById("mm-fill"), t = document.getElementById("mm-trig"), st = document.getElementById("mm-state");
+      if (f) f.style.width = pct(msg.peak) + "%";
+      if (t) t.style.left = pct(msg.trigger) + "%";
+      if (st) {
+        // judge only actual speech (rms over the trigger); room noise just reads as listening
+        const s = msg.rms < msg.trigger ? ["listening", ""] : msg.peak < 3000 ? ["QUIET · closer", "quiet"] : ["GOOD", "good"];
+        st.textContent = s[0]; st.className = "mm-state " + s[1];
+      }
+      break;
+    }
     case "cmd":
       CommandConsole.on(msg);
       if (msg.stage === "interrupt") { JarvisSummon.state("INTERRUPTED"); logEvent(`<span class="tag">[engine]</span> ■ interrupted — ${escapeHTML(msg.reason || "")}`); }
