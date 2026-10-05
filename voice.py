@@ -15,6 +15,17 @@ import os
 import re
 import time
 from collections import deque
+
+# Whisper's well-known phantom outputs on noise/silence (trained on subtitles).
+# Ignored when they are the WHOLE utterance — never filtered inside a sentence.
+PHANTOMS = {"thank you", "thanks", "thank you very much", "thanks for watching", "you",
+            "bye", "okay", "ok", "so", "uh", "um", "hmm", "mm", "oh", "ah", "yeah",
+            "subtitles by the amaraorg community", "please subscribe", "the end", "i", "a"}
+
+
+def is_phantom(text: str, seconds: float) -> bool:
+    norm = re.sub(r"[^a-z ]", "", (text or "").lower()).strip()
+    return (not norm) or (norm in PHANTOMS and seconds < 2.5)
 from difflib import SequenceMatcher
 
 
@@ -148,6 +159,9 @@ class VoiceLoop:
         self.noise_rms = 60.0                    # adaptive room noise floor
         self.clap = ClapDetector() if os.getenv("JARVIS_CLAP", "1") != "0" else None
         self.engine = None                       # realtime.Engine, set by main.py
+        self.diag: deque = deque(maxlen=30)      # per-utterance diagnostics (/api/voice/diagnostics)
+        self.echo_rms = 0.0                      # learned level of our own voice in the mic
+        self.barge_ins = 0
 
     async def run(self) -> None:
         try:
@@ -163,6 +177,11 @@ class VoiceLoop:
             return
 
         asyncio.create_task(self._hub_listener())
+        # transcription runs in its own worker so capture NEVER pauses: before
+        # this, the mic loop waited on Whisper (1-14 s) — readings stalled,
+        # audio backed up and phrases were processed late, in bursts
+        self._utt_q: asyncio.Queue = asyncio.Queue()
+        asyncio.create_task(self._stt_worker())
 
         # Default to `small` (multilingual). Indian-accented English transcribes
         # noticeably better than with the English-only models because the
@@ -215,6 +234,7 @@ class VoiceLoop:
             with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16",
                                 blocksize=chunk_samples, callback=cb):
                 buffer: list = []
+                barge = 0
                 preroll: deque = deque(maxlen=preroll_chunks)
                 in_speech = False
                 silence_count = 0
@@ -223,19 +243,39 @@ class VoiceLoop:
                     pkt = await q.get()
                     if self.muted:
                         # mic is muted while BUCS speaks (no self-triggering), but
-                        # the clap detector keeps listening: double clap = barge-in
-                        if self.clap and self.engine is not None:
-                            f32 = pkt[:, 0].astype(np.float32)
-                            if self.clap.feed(float(np.max(np.abs(f32))),
-                                              float(np.sqrt(np.mean(f32 ** 2))),
-                                              self.noise_rms, time.time()):
+                        # two barge-ins stay live:
+                        #  · double clap
+                        #  · Conversation Mode: sustained speech clearly LOUDER than
+                        #    our own voice's echo (the laptop's echo cancellation only
+                        #    partly removes it: measured p95 ~410, peaks ~700 RMS)
+                        f32 = pkt[:, 0].astype(np.float32)
+                        b_rms = float(np.sqrt(np.mean(f32 ** 2)))
+                        preroll.append(pkt[:, 0])
+                        if self.engine is not None:
+                            if self.clap and self.clap.feed(float(np.max(np.abs(f32))), b_rms,
+                                                            self.noise_rms, time.time()):
                                 await self.engine.cancel(reason="double clap (barge-in)")
                                 self.muted = False
+                                barge = 0
+                                continue
+                            if self._conversation():
+                                self.echo_rms = 0.95 * self.echo_rms + 0.05 * min(b_rms, 4000)
+                                bar = max(900.0, self.echo_rms * 3.5)
+                                barge = barge + 1 if b_rms > bar else 0
+                                if barge >= 6:                  # 0.3 s of loud speech
+                                    self.barge_ins += 1
+                                    await self.engine.cancel(reason="operator spoke (barge-in)")
+                                    self.muted = False
+                                    in_speech, silence_count = True, 0
+                                    buffer = list(preroll)        # keep the words that interrupted
+                                    barge = 0
+                                    await self.hub.broadcast({"type": "voice", "event": "listening"})
+                                    continue
                         buffer = []
-                        preroll.clear()
                         in_speech = False
                         silence_count = 0
                         continue
+                    barge = 0
 
                     samples = pkt[:, 0]
                     f32 = samples.astype(np.float32)
@@ -244,6 +284,14 @@ class VoiceLoop:
                     if not in_speech:     # learn the room while nobody talks
                         self.noise_rms = 0.97 * self.noise_rms + 0.03 * min(rms, self.noise_rms * 3)
                     threshold = fixed_thr or max(120.0, self.noise_rms * 4.5)
+                    now_t = time.time()
+                    self._lvl_peak = max(getattr(self, "_lvl_peak", 0.0), peak)
+                    if now_t - getattr(self, "_lvl_t", 0.0) > 0.25:
+                        self._lvl_t = now_t
+                        await self.hub.broadcast({"type": "mic", "peak": round(self._lvl_peak),
+                                                  "rms": round(rms), "noise": round(self.noise_rms),
+                                                  "trigger": round(threshold)})
+                        self._lvl_peak = 0.0
 
                     if self.clap and self.clap.feed(peak, rms, self.noise_rms, time.time()):
                         buffer, in_speech, silence_count = [], False, 0
@@ -256,13 +304,13 @@ class VoiceLoop:
                         if rms < threshold:
                             silence_count += 1
                             if silence_count >= end_silence_chunks:
-                                await self._finish(buffer, stt, np, min_utterance_chunks)
+                                self._enqueue(buffer, stt, np, min_utterance_chunks)
                                 buffer, in_speech, silence_count = [], False, 0
                                 preroll.clear()
                         else:
                             silence_count = 0
                         if len(buffer) >= max_utterance_chunks:
-                            await self._finish(buffer, stt, np, min_utterance_chunks)
+                            self._enqueue(buffer, stt, np, min_utterance_chunks)
                             buffer, in_speech, silence_count = [], False, 0
                             preroll.clear()
                     else:
@@ -277,6 +325,27 @@ class VoiceLoop:
                 "type": "log", "level": "error",
                 "msg": f"voice loop crashed: {e}",
             })
+
+    def _enqueue(self, buffer, stt, np, min_chunks) -> None:
+        q = getattr(self, "_utt_q", None)
+        if q is None:                                   # not running (tests): process inline
+            asyncio.create_task(self._finish(buffer, stt, np, min_chunks))
+            return
+        while q.qsize() >= 2:                           # real-time: stale phrases are dropped
+            try:
+                q.get_nowait()
+                self.dropped_stale = getattr(self, "dropped_stale", 0) + 1
+            except asyncio.QueueEmpty:
+                break
+        q.put_nowait((list(buffer), stt, np, min_chunks))
+
+    async def _stt_worker(self) -> None:
+        while True:
+            buffer, stt, np, min_chunks = await self._utt_q.get()
+            try:
+                await self._finish(buffer, stt, np, min_chunks)
+            except Exception as e:
+                await self.hub.broadcast({"type": "log", "level": "warn", "msg": f"voice worker: {e}"})
 
     async def _hub_listener(self) -> None:
         q = self.hub.subscribe()
@@ -312,7 +381,9 @@ class VoiceLoop:
         self.last_level = level
         await self.hub.broadcast({"type": "voice", "event": "processing"})
 
+        seconds = round(len(audio) / 16000, 2)
         loop = asyncio.get_running_loop()
+        t_stt = time.perf_counter()
         try:
             text = await loop.run_in_executor(None, self._transcribe, stt, audio)
         except Exception as e:
@@ -323,21 +394,56 @@ class VoiceLoop:
             await self.hub.broadcast({"type": "voice", "event": "idle"})
             return
 
-        if not text or len(text) < 2:
+        entry = {"ts": time.time(), "text": text or "", "seconds": seconds,
+                 "stt_ms": round((time.perf_counter() - t_stt) * 1000),
+                 "peak": level["peak"], "gain": level["gain"],
+                 "noise_rms": round(self.noise_rms), "model": getattr(self, "model_name", "?"),
+                 "outcome": ""}
+        self.diag.append(entry)
+        if not text or len(text) < 2 or is_phantom(text, seconds):
+            entry["outcome"] = "ignored (empty / phantom)"
             await self.hub.broadcast({"type": "voice", "event": "idle"})
             return
 
         await self.hub.broadcast({"type": "voice", "event": "heard", "text": text,
-                                  "level": getattr(self, "last_level", None)})
+                                  "level": getattr(self, "last_level", None),
+                                  "seconds": seconds, "stt_ms": entry["stt_ms"]})
 
         # "stop" / "cancel" / "never mind" need no wake word while BUCS is busy
         if self.engine is not None:
             from intents import is_cancel
             if is_cancel(text) and (self.engine.active or getattr(self.engine.state.get("tts"), "speaking", False)):
+                entry["outcome"] = "cancel"
                 await self.engine.submit(text, source="voice")
+                return
+            # Conversation Mode: one agent (JARVIS). Say "Jarvis" anywhere to
+            # start; then no wake word is needed while the conversation is
+            # live (ENGAGED_S after each reply / summon). Outside that window
+            # other people's chatter is ignored instead of answered.
+            if self._conversation():
+                named, rest = self._mentions_jarvis(text)
+                engaged = time.time() < self.follow_until
+                if not (named or engaged):
+                    entry["outcome"] = "ignored (not addressed — say 'Jarvis')"
+                    await self.hub.broadcast({"type": "voice", "event": "unrouted", "text": text,
+                                              "hint": "say “Jarvis …” to start talking"})
+                    await self.hub.broadcast({"type": "voice", "event": "idle"})
+                    return
+                if named and not rest:                       # just "Jarvis"
+                    entry["outcome"] = "summon"
+                    await self.engine.summon("jarvis", source="voice")
+                    self._open_followup("jarvis", self.ENGAGED_S)
+                    return
+                req = rest if named else text.strip()
+                entry["outcome"] = "→ jarvis (" + ("named" if named else "engaged") + ")"
+                await self.hub.broadcast({"type": "voice", "event": "routed",
+                                          "agent": "jarvis", "command": req})
+                await self.engine.submit(req, source="voice", agent="jarvis",
+                                         on_done=lambda c: self._open_followup("jarvis", self.ENGAGED_S))
                 return
 
         agent_key, command = self._match_agent(text)
+        entry["outcome"] = f"→ {agent_key}" if agent_key else "no wake word"
         if not agent_key and self.follow_agent and time.time() < self.follow_until:
             agent_key, command = self.follow_agent, text.strip()   # conversation mode
         if not agent_key:
@@ -492,6 +598,30 @@ class VoiceLoop:
 
         return False
 
+    ENGAGED_S = 20.0
+
+    @staticmethod
+    def _mentions_jarvis(text: str) -> tuple[bool, str]:
+        """("Jarvis" said anywhere, the request without the name). Tolerant of
+        the usual mis-hearings ("Jarvis," "Jervis", "jarvis's")."""
+        low = re.sub(r"[^\w\s']", " ", (text or "").lower())
+        m = re.search(r"\b(hey |ok |okay |hi )?(jarvis|jervis|javis|jarvas|travis)('s)?\b", low)
+        if not m:
+            return False, ""
+        rest = (low[:m.start()] + " " + low[m.end():]).strip()
+        return True, re.sub(r"\s+", " ", rest).strip()
+
+    def _conversation(self) -> bool:
+        tts = self.engine.state.get("tts") if self.engine is not None else None
+        return bool(getattr(tts, "conversation_mode", False))
+
+    def diagnostics(self) -> dict:
+        return {"model": getattr(self, "model_name", None), "noise_rms": round(self.noise_rms),
+                "echo_rms": round(self.echo_rms), "barge_ins": self.barge_ins,
+                "dropped_stale": getattr(self, "dropped_stale", 0),
+                "conversation_mode": self._conversation(),
+                "utterances": list(self.diag)[::-1]}
+
     def _open_followup(self, agent_key: str, seconds: float = 12.0) -> None:
         self.follow_agent = agent_key
         self.follow_until = time.time() + seconds
@@ -520,6 +650,12 @@ class VoiceLoop:
         # with a short hint + hotwords; temperature fallback rescues low-
         # confidence segments. On the Core Ultra 9 CPU a 2-4 s command decodes
         # in ~1-2 s with `small`.
+        #
+        # 2026-10-05 field data: weak mic input (peaks 1-8% of full scale) made
+        # Whisper re-decode at higher temperatures (up to 14 s for 2 s of audio)
+        # and invent sentences ("It's going to be OK" x3). So: one temperature,
+        # and segments Whisper itself isn't confident about are DROPPED rather
+        # than answered — silence beats a wrong command.
         kw = dict(
             language="en",
             beam_size=5, best_of=5,
@@ -527,14 +663,25 @@ class VoiceLoop:
             vad_parameters={"min_silence_duration_ms": 300},
             initial_prompt=INITIAL_PROMPT,
             condition_on_previous_text=False,
-            no_speech_threshold=0.55,
-            temperature=[0.0, 0.2, 0.4],
+            temperature=0.0,
         )
         try:
             segments, _info = stt.transcribe(audio, hotwords=HOTWORDS, **kw)
         except TypeError:          # older faster-whisper without `hotwords`
             segments, _info = stt.transcribe(audio, **kw)
-        return " ".join(s.text for s in segments).strip()
+        return " ".join(s.text for s in segments if VoiceLoop._confident(s)).strip()
+
+    @staticmethod
+    def _confident(seg) -> bool:
+        """Whisper's own signals: likely-silence, low token confidence, or
+        looping/repetitive output (compression ratio) mean "don't trust it"."""
+        if getattr(seg, "no_speech_prob", 0.0) > 0.6:
+            return False
+        if getattr(seg, "avg_logprob", 0.0) < -1.0:
+            return False
+        if getattr(seg, "compression_ratio", 1.0) > 2.4:
+            return False
+        return True
 
     @staticmethod
     def _match_agent(text: str) -> tuple[str | None, str | None]:
