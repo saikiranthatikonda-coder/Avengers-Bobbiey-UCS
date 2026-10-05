@@ -34,6 +34,19 @@ from dataclasses import dataclass, field
 import intents
 
 SENTENCE_END = re.compile(r"([.!?…])(\s+|$)")
+_MD = [(re.compile(r"```.*?```", re.S), " "), (re.compile(r"`([^`]*)`"), r"\1"),
+       (re.compile(r"\*\*|__|\*|#+\s*|^\s*[-•>]\s+", re.M), ""), (re.compile(r"\[([^\]]+)\]\([^)]+\)"), r"\1"),
+       (re.compile(r"\s*[│·•→←]\s*"), ", "), (re.compile(r"\s{2,}"), " ")]
+SPOKEN_STYLE = ("[You are speaking aloud to the operator in a live voice conversation. "
+                "Answer in 1-3 short, plain spoken sentences. No markdown, lists, headings "
+                "or emoji. Ask a brief follow-up question only if truly needed.] ")
+
+
+def speakable(text: str) -> str:
+    """Strip markdown/symbols so TTS never reads "asterisk asterisk"."""
+    for pat, rep in _MD:
+        text = pat.sub(rep, text)
+    return text.strip(" ,")
 SPOKEN_SOURCES = {"voice", "clap", "text", "ui"}
 
 
@@ -261,6 +274,8 @@ class Engine:
         team = self.state.get("team") or {}
         target = cmd.agent if cmd.agent in team else None
         delegated = None
+        if not target and self.conversation_mode():
+            target = "jarvis"                       # one consistent agent to talk to
         if not target:
             delegated = intents.delegate(cmd.text)
             target = delegated if delegated in team else "jarvis"
@@ -275,9 +290,11 @@ class Engine:
             await self._say(self._ack_phrase(), cmd)          # sub-second audible ack
 
         prompt = cmd.text
+        if cmd.source in ("voice", "clap") or (self.conversation_mode() and cmd.source != "api"):
+            prompt = SPOKEN_STYLE + prompt
         if self.context:
             ctx = " | ".join(f"Q:{q[:70]} A:{a[:90]}" for q, a, _ in list(self.context)[-3:])
-            prompt = f"(recent conversation: {ctx}) New request: {cmd.text}"
+            prompt = f"(recent conversation: {ctx}) New request: {prompt}"
 
         chunker = SentenceChunker()
         pending = {"buf": "", "t": 0.0}
@@ -305,6 +322,10 @@ class Engine:
         self.totals["llm"] += 1
 
     # ── helpers ───────────────────────────────────────────────────
+    def conversation_mode(self) -> bool:
+        tts = self.state.get("tts")
+        return bool(getattr(tts, "conversation_mode", False))
+
     _ACKS = ["On it, sir.", "One moment.", "Right away.", "Working on it."]
 
     def _ack_phrase(self) -> str:
@@ -317,9 +338,13 @@ class Engine:
         if not (tts.enabled and not tts.muted and tts.volume > 0):
             return
         cmd.mark("speech_queued_ms")
+        text = speakable(text)
+        if not text:
+            return
         try:   # first_speech_ms = the moment playback really starts (TTS worker)
-            asyncio.create_task(tts.say(text, on_start=lambda: cmd.mark("first_speech_ms")))
-        except TypeError:                                      # older TTS without on_start
+            asyncio.create_task(tts.say(text, on_start=lambda: cmd.mark("first_speech_ms"),
+                                        channel="conversation"))
+        except TypeError:                                      # older TTS without channels
             asyncio.create_task(tts.say(text))
 
     async def _agent_reply(self, agent_key: str, q: str, a: str) -> None:

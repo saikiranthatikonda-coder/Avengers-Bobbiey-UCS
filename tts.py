@@ -44,6 +44,14 @@ class TTSPlayer:
         self._persistent_ok = os.getenv("JARVIS_TTS_PERSISTENT", "1") != "0"
         self.speaking = False
         self.cancels = 0
+        # Conversation Mode (operator toggle, persisted): only speech on the
+        # "conversation" channel (replies to the operator) is voiced; ambient
+        # speech — agent ticks, announcements, briefings, vitals — stays on
+        # screen only. Measured 2026-10-05: ambient speech kept the mic muted
+        # ~62% of the time, so the operator's words were being discarded.
+        self.conversation_mode = True
+        self.ambient_dropped = 0
+        self.speaking_channel = ""
         self.rate = self._parse_rate(os.getenv("JARVIS_VOICE_RATE", "180"))
         self._load_pref()
 
@@ -57,6 +65,7 @@ class TTSPlayer:
                 d = json.load(f)
             self.muted = bool(d.get("muted", False))
             self.volume = max(0, min(100, int(d.get("volume", 100))))
+            self.conversation_mode = bool(d.get("conversation_mode", True))
         except Exception:
             pass
 
@@ -64,7 +73,8 @@ class TTSPlayer:
         import json
         try:
             with open(self._PREF, "w", encoding="utf-8") as f:
-                json.dump({"muted": self.muted, "volume": self.volume}, f)
+                json.dump({"muted": self.muted, "volume": self.volume,
+                           "conversation_mode": self.conversation_mode}, f)
         except Exception:
             pass
 
@@ -87,8 +97,16 @@ class TTSPlayer:
         except Exception:
             pass
 
+    def set_conversation_mode(self, on: bool) -> None:
+        self.conversation_mode = bool(on)
+        if self.conversation_mode and self.speaking_channel == "ambient":
+            self.cancel()             # stop the background chatter right away
+        self._save_pref()
+
     def audio_state(self) -> dict:
-        return {"available": self.enabled, "muted": self.muted, "volume": self.volume}
+        return {"available": self.enabled, "muted": self.muted, "volume": self.volume,
+                "conversation_mode": self.conversation_mode,
+                "ambient_dropped": self.ambient_dropped}
 
     @staticmethod
     def _parse_rate(s: str) -> int:
@@ -288,6 +306,7 @@ class TTSPlayer:
                 break
             text, fut = item[0], item[1]
             on_start = item[2] if len(item) > 2 else None
+            self.speaking_channel = item[3] if len(item) > 3 else "ambient"
             self.speaking = True
             if on_start and self.loop:            # real playback start (latency metric)
                 self.loop.call_soon_threadsafe(on_start)
@@ -303,8 +322,14 @@ class TTSPlayer:
                 if self.loop and fut and not fut.done():
                     self.loop.call_soon_threadsafe(fut.set_result, True)
 
-    async def say(self, text: str, on_start=None) -> None:
+    async def say(self, text: str, on_start=None, channel: str = "ambient") -> None:
+        """channel: "conversation" for replies to the operator (always voiced
+        unless muted); "ambient" (default, every legacy caller) for background
+        speech, which Conversation Mode keeps silent."""
         if not self.enabled or self.muted or self.volume == 0 or not text or not text.strip():
+            return
+        if channel != "conversation" and self.conversation_mode:
+            self.ambient_dropped += 1
             return
         if text.lstrip().startswith("["):
             return  # don't speak internal error markers
@@ -313,7 +338,7 @@ class TTSPlayer:
         if self.q.qsize() >= self.max_queue:
             return  # backpressure
         fut = self.loop.create_future()
-        self.q.put((text, fut, on_start))
+        self.q.put((text, fut, on_start, channel))
         try:
             await fut
         except Exception:

@@ -43,6 +43,22 @@ def _r(say, agent=None, **kw) -> dict:
 
 
 # ── live-data answers ────────────────────────────────────────────
+async def i_conversation(ctx, text, low):
+    tts = ctx.get("tts")
+    if tts is None or not hasattr(tts, "set_conversation_mode"):
+        return None
+    on = re.search(r"\b(conversation|focus) mode (on|enable|start)\b|\b(mute|silence|stop) (the )?(background|event|other agents?|announcements?)( voices?| stream| speech)?\b", low)
+    off = re.search(r"\b(conversation|focus) mode (off|disable|stop)\b|\b(unmute|resume|enable) (the )?(background|event|other agents?|announcements?)( voices?| stream| speech)?\b", low)
+    if not (on or off):
+        return None
+    tts.set_conversation_mode(bool(on))
+    if ctx.get("hub"):
+        await ctx["hub"].broadcast({"type": "conversation", "on": bool(on)})
+    return _r("Conversation mode on. It's just you and me, sir, background voices are silenced." if on
+              else "Conversation mode off. The team's announcements are back on.",
+              action={"name": "voice.conversation_mode", "target": "on" if on else "off"})
+
+
 async def i_time(ctx, text, low):
     if re.search(r"\bwhat(?:'s| is)? the (time|date|day)\b|\bwhat time is it\b|\btoday's date\b", low):
         now = datetime.now()
@@ -273,7 +289,7 @@ async def i_dashboard(ctx, text, low):
 
 # order matters: actions that start with "open" (apps, sites) before dashboard
 # sections, specific questions before broad ones
-HANDLERS = [i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
+HANDLERS = [i_conversation, i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
             i_inbox, i_threats, i_news, i_memory, i_vision, i_missions, i_dashboard]
 
 

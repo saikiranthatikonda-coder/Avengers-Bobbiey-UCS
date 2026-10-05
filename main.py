@@ -485,7 +485,7 @@ async def ask(req: Ask):
             "fullscreen": intent["fullscreen"], **result,
         })
         if tts.enabled:
-            await tts.say(reply)
+            await tts.say(reply, channel="conversation")
         return {"reply": reply, "agent": target.name, "browser": result}
 
     # ── normal agent flow (via the real-time engine) ───────────────
@@ -537,6 +537,33 @@ async def engine_status():
     return state["engine"].snapshot()
 
 
+class ConversationReq(BaseModel):
+    on: bool
+
+
+@app.get("/api/conversation")
+async def conversation_get():
+    t = state["tts"]
+    return {"on": t.conversation_mode, "agent": "jarvis", "ambient_dropped": t.ambient_dropped}
+
+
+@app.post("/api/conversation")
+async def conversation_set(req: ConversationReq):
+    """Conversation Mode: talk to JARVIS with no wake word; background agent
+    speech stays on screen only (it was muting the mic ~62% of the time)."""
+    state["tts"].set_conversation_mode(req.on)
+    await _audit("voice.conversation_mode", "on" if req.on else "off")
+    await state["hub"].broadcast({"type": "conversation", "on": req.on})
+    return await conversation_get()
+
+
+@app.get("/api/voice/diagnostics")
+async def voice_diagnostics():
+    v = state.get("voice")
+    return v.diagnostics() if v is not None else {"enabled": False,
+                                                    "hint": "set JARVIS_VOICE=1 in .env"}
+
+
 class BrowserReq(BaseModel):
     url: str
     fullscreen: bool = False
@@ -558,7 +585,7 @@ async def speak(payload: dict):
     text = (payload or {}).get("text", "").strip()
     if not text:
         return {"spoken": False, "error": "empty text"}
-    await state["tts"].say(text)
+    await state["tts"].say(text, channel="conversation")
     return {"spoken": True}
 
 
@@ -1123,7 +1150,7 @@ async def memory_enroll(req: EnrollReq):
     await state["hub"].broadcast({"type": "log", "level": "info",
                                   "msg": f"memory: operator enrolled ({who_name})"})
     if state["tts"].enabled:
-        await state["tts"].say(line)
+        await state["tts"].say(line, channel="conversation")
     return {"ok": True, "appearance": desc.strip()[:600]}
 
 
@@ -1163,7 +1190,7 @@ async def memory_speak():
         "ts": __import__("time").time(),
     })
     if state["tts"].enabled:
-        await state["tts"].say(text)
+        await state["tts"].say(text, channel="conversation")
     return {"ok": True, "summary": text}
 
 
