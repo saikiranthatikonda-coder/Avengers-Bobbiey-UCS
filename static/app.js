@@ -330,10 +330,29 @@ class OrbEarth {
 })();
 
 // ── voice state ──────────────────────────────────────
+// orb "engaged" glow: BUCS is waiting for the operator's follow-up
+var OrbEngage = {
+  _t: null,
+  on(seconds) {
+    const orb = document.getElementById("voice-orb"); if (!orb) return;
+    orb.classList.add("engaged"); clearTimeout(this._t);
+    this._t = setTimeout(() => orb.classList.remove("engaged"), Math.max(1, seconds || 20) * 1000);
+  },
+};
+// map a mic reading (int16 peak) onto 0..1 on a log scale, smoothed
+var OrbMic = { v: 0, set(peak, trigger) {
+  const orb = document.getElementById("voice-orb"); if (!orb) return;
+  const lo = Math.log10(Math.max(trigger || 150, 100)), hi = Math.log10(12000);
+  const x = Math.max(0, Math.min(1, (Math.log10(Math.max(peak, 1)) - lo) / (hi - lo)));
+  this.v = x > this.v ? x : this.v * 0.6 + x * 0.4;          // fast attack, gentle release
+  orb.style.setProperty("--mic", this.v.toFixed(3));
+} };
+
 function setVoiceState(state) {
   const orb = $("#voice-orb"); if (!orb) return;
   orb.classList.remove("listening","speaking","processing");
   if (state !== "idle" && state !== "standby") orb.classList.add(state);
+  if (state !== "listening") orb.style.setProperty("--mic", "0");
   $("#voice-label").textContent = state === "idle" ? "STANDBY" : state.toUpperCase();
   wave.setState(state);
   const sub = $("#voice-sublabel");
@@ -3099,6 +3118,7 @@ function handle(msg) {
       ConversationMode.set(!!msg.on);
       break;
     case "mic": {
+      if (document.getElementById("voice-orb")?.classList.contains("listening")) OrbMic.set(msg.peak, msg.trigger);
       // log scale so quiet speech is visible: 100 → 0 %, 32767 → 100 %
       const pct = v => Math.max(0, Math.min(100, (Math.log10(Math.max(v, 100)) - 2) / (Math.log10(32767) - 2) * 100));
       const f = document.getElementById("mm-fill"), t = document.getElementById("mm-trig"), st = document.getElementById("mm-state");
@@ -3176,6 +3196,7 @@ function handle(msg) {
       if (msg.event === "routed")     { setHeard(null, `→ ${(msg.agent || "").toUpperCase()}`); logEvent(`<span class="tag">[voice]</span> → ${escapeHTML(msg.agent)} · ${escapeHTML(msg.command)}`); }
       if (msg.event === "speak")      { setVoiceState("speaking"); setPill("#sp-voice", "SPEAKING", "ok"); logEvent(`<span class="tag">[voice]</span> ◉ ${escapeHTML(msg.text || "")}`); }
       if (msg.event === "idle")       { setVoiceState("idle"); setPill("#sp-voice", "READY", "ok"); }
+      if (msg.event === "engaged")    OrbEngage.on(msg.seconds);
       if (msg.event === "unrouted")   setHeard(msg.text, "no wake word — start with “Hey Jarvis…” or double-clap");
       if (msg.event === "summon")     { JarvisSummon.open(); logEvent(`<span class="tag">[voice]</span> 👏👏 double clap — JARVIS summoned`); }
       if (msg.event === "heard")      JarvisSummon.heard(msg.text);

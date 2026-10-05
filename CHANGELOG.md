@@ -5,6 +5,9 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-05 — Orb lights up while listening
+- **feat:** the voice orb glows while BUCS hears you. Halo, ring glow and core brightness scale with the **live mic level** (measured: halo 22 → 76 px, brightness 1.10 → 1.64 from quiet to loud speech). A steady cyan **engaged** glow shows when JARVIS is waiting for your follow-up (voice.py broadcasts the window). Thinking and speaking glow in their colours. Respects reduced motion.
+
 ## 2026-10-05 — Conversation Mode + voice that hears the operator
 - **fix (root cause):** background agent speech (13 utterances / 2 min) kept the mic muted **62% of the time**, discarding the operator's words. **Conversation Mode** (default on, header switch, `/api/conversation`, or by voice) voices only replies to the operator (`tts.say(channel="conversation")`), keeps ambient speech on screen, talks to one agent (JARVIS), and replies in plain spoken style. Markdown is never read aloud.
 - **fix:** Whisper hallucinations and other people's chatter. Low-confidence segments are dropped (no-speech / logprob / repetition), temperature re-decodes removed (one decode took 14 s), phantom phrases ("Thank you.") ignored. In Conversation Mode "Jarvis" anywhere starts a turn, follow-ups need no name for 20 s, and unaddressed speech is ignored.

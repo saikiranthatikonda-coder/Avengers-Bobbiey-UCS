@@ -2217,3 +2217,39 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 .mm-trig { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--accent); left: 0; }
 .mm-state { font-size: 0.5rem; letter-spacing: 0.14em; min-width: 6.5em; text-align: right; color: var(--text-dim); }
 .mm-state.good { color: var(--success); } .mm-state.quiet { color: var(--warn); }
+
+/* ── orb lights up while listening (level-driven, real mic data) ──────
+   --mic (0..1) is set from {"type":"mic"} readings while the orb listens;
+   it scales halo, glow and core so the light follows the operator's voice. */
+.orb-stage { --mic: 0; }
+.orb-stage::after {
+  content: ''; position: absolute; inset: 6%; border-radius: 50%; pointer-events: none; z-index: 0;
+  opacity: 0; transition: opacity 0.35s ease, box-shadow 0.12s linear;
+}
+.orb-stage.listening::before { animation: orb-breathe 1.6s ease-in-out infinite;
+  background: radial-gradient(circle, color-mix(in srgb, var(--orb-color) calc(30% + var(--mic) * 45%), transparent) 0%, transparent 72%);
+  transform: scale(calc(1.04 + var(--mic) * 0.14)); }
+.orb-stage.listening::after { opacity: 1;
+  box-shadow: 0 0 calc(22px + var(--mic) * 60px) calc(4px + var(--mic) * 18px) color-mix(in srgb, var(--orb-color) 55%, transparent),
+              inset 0 0 calc(18px + var(--mic) * 40px) color-mix(in srgb, var(--orb-color) 45%, transparent); }
+.orb-stage.listening .orb-svg { filter: drop-shadow(0 0 calc(22px + var(--mic) * 34px) var(--orb-color)) brightness(calc(1.1 + var(--mic) * 0.6)); }
+.orb-stage.listening .orb-svg .ring-core { stroke-width: calc(2.5px + var(--mic) * 3px); }
+.orb-stage.listening .orb-svg .ring-glow { transform: scale(calc(1 + var(--mic) * 0.45)); transition: transform 0.1s linear; }
+.orb-stage.listening .orb-svg .ring-inner { animation-duration: 2.5s; opacity: 1; }
+.orb-stage.listening .orb-svg .ring-mid { animation-duration: 6s; opacity: 0.9; }
+.orb-stage.listening .orb-label { text-shadow: 0 0 calc(14px + var(--mic) * 24px) var(--orb-color), 0 0 4px rgba(0,0,0,0.7); }
+
+/* engaged: JARVIS is waiting for the operator's follow-up (no name needed) */
+.orb-stage.engaged:not(.listening):not(.speaking):not(.processing) { --orb-color: #00d9ff; }
+.orb-stage.engaged:not(.listening):not(.speaking):not(.processing)::before { animation: orb-breathe 2.6s ease-in-out infinite; }
+.orb-stage.engaged:not(.listening):not(.speaking):not(.processing)::after { opacity: 0.8;
+  box-shadow: 0 0 26px 6px rgba(0, 217, 255, 0.35), inset 0 0 22px rgba(0, 217, 255, 0.25); }
+.orb-stage.engaged:not(.listening):not(.speaking):not(.processing) .orb-svg { filter: drop-shadow(0 0 22px #00d9ff); }
+
+.orb-stage.processing::after { opacity: 0.7; box-shadow: 0 0 26px 5px color-mix(in srgb, var(--warn) 40%, transparent); animation: orb-think 0.9s ease-in-out infinite; }
+@keyframes orb-think { 50% { opacity: 0.35; } }
+.orb-stage.speaking::after { opacity: 0.85; box-shadow: 0 0 34px 8px color-mix(in srgb, var(--stark) 40%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .orb-stage.listening .orb-svg .ring-glow { transition: none; }
+}

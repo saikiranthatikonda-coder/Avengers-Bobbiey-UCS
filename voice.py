@@ -625,6 +625,11 @@ class VoiceLoop:
     def _open_followup(self, agent_key: str, seconds: float = 12.0) -> None:
         self.follow_agent = agent_key
         self.follow_until = time.time() + seconds
+        try:   # the dashboard orb glows while BUCS is waiting for the operator
+            asyncio.get_running_loop().create_task(self.hub.broadcast(
+                {"type": "voice", "event": "engaged", "agent": agent_key, "seconds": seconds}))
+        except RuntimeError:
+            pass                                    # no loop (sync caller) — nothing to show
 
     async def _summon(self) -> None:
         """Double clap → JARVIS pops up on the dashboard and answers."""
