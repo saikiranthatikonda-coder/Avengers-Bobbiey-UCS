@@ -471,6 +471,95 @@ var ConversationMode = {
 document.addEventListener("click", e => { if (e.target && e.target.id === "conv-toggle") ConversationMode.toggle(); });
 setTimeout(() => ConversationMode.load(), 500);
 
+// ═══ JARVIS · ENGINEERING panel (devagent.py events: {"type":"dev"}) ═══
+var DevPanel = {
+  el: id => document.getElementById(id),
+  open() { const p = this.el("dev-panel"); if (p) p.hidden = false; },
+  close() { const p = this.el("dev-panel"); if (p) p.hidden = true; },
+  stage(t, ok) { const s = this.el("dev-stage"); if (s) { s.textContent = t; s.className = "dev-stage" + (ok ? " ok" : ""); } },
+  actions(list) {
+    const a = this.el("dev-actions"); if (!a) return;
+    a.innerHTML = list.map(([id, label]) => `<button class="cmd-btn" data-dev="${id}">${label}</button>`).join("");
+  },
+  on(m) {
+    if (m.type === "dev-open") { this.open(); return; }
+    this.open();
+    if (m.stage === "diagnosing") {
+      this.el("dev-req").textContent = `“${m.request}”`; this.el("dev-out").textContent = "";
+      this.el("dev-tools").innerHTML = ""; this.el("dev-result").innerHTML = ""; this.actions([]);
+      this.stage("DIAGNOSING · READ-ONLY");
+    }
+    if (m.stage === "tool") {
+      const t = this.el("dev-tools"); const line = document.createElement("div");
+      line.textContent = `${m.tool === "Read" ? "reading" : m.tool === "Grep" ? "searching" : m.tool === "Glob" ? "listing" : m.tool === "Edit" || m.tool === "Write" ? "editing" : m.tool} ${m.target || ""}`;
+      t.prepend(line);
+    }
+    if (m.stage === "delta") { const o = this.el("dev-out"); o.textContent += m.text; o.scrollTop = o.scrollHeight; }
+    if (m.stage === "proposed" || m.stage === "diagnosed") {
+      this.el("dev-out").textContent = m.plan || this.el("dev-out").textContent;
+      this.stage(m.stage === "proposed" ? "FIX PROPOSED · AWAITING YOUR OK" : "DIAGNOSED", m.stage !== "proposed");
+      this.actions(m.fixable ? [["apply", "✓ APPLY FIX"], ["dismiss", "DISMISS"]] : [["dismiss", "CLOSE"]]);
+    }
+    if (m.stage === "applying") { this.stage("APPLYING · NO SHELL ACCESS"); this.actions([]); this.el("dev-tools").innerHTML = ""; }
+    if (m.stage === "testing") this.stage("RUNNING TESTS");
+    if (m.stage === "applied") {
+      const ok = m.tests && m.tests.ok;
+      this.stage(ok ? "APPLIED · TESTS PASS" : "APPLIED · TESTS FAILING", ok);
+      this.el("dev-result").innerHTML = `<div>Changed: ${(m.changed || []).map(escapeHTML).join(", ") || "nothing"}</div>`
+        + `<div class="${ok ? "good" : "bad"}">Tests: ${escapeHTML((m.tests && m.tests.summary) || "")}</div>`
+        + (m.restored && m.restored.length ? `<div class="bad">Protected files touched and restored: ${m.restored.map(escapeHTML).join(", ")}</div>` : "")
+        + (m.diffstat ? `<div>${escapeHTML(m.diffstat)}</div>` : "")
+        + `<div>Front-end changes show after a reload; back-end changes after restarting BUCS.</div>`;
+      this.actions(ok ? [["keep", "KEEP"], ["undo", "UNDO"], ["ship", "⇪ SHIP (commit + push)"], ["reload", "↻ RELOAD DASHBOARD"]]
+                      : [["undo", "UNDO"], ["keep", "KEEP ANYWAY"]]);
+    }
+    if (m.stage === "undone") { this.stage("UNDONE", true); this.el("dev-result").textContent = `Reverted: ${(m.reverted || []).join(", ") || "nothing"}`; this.actions([["dismiss", "CLOSE"]]); }
+    if (m.stage === "kept") { this.stage("KEPT", true); this.actions([["reload", "↻ RELOAD DASHBOARD"], ["dismiss", "CLOSE"]]); }
+    if (m.stage === "shipped") { this.stage(m.pushed ? `SHIPPED · ${m.commit}` : `COMMITTED ${m.commit} · PUSH FAILED`, m.pushed); this.actions([["reload", "↻ RELOAD DASHBOARD"], ["dismiss", "CLOSE"]]); }
+  },
+  async act(id) {
+    if (id === "dismiss") return this.close();
+    if (id === "reload") return location.reload();
+    this.actions([]);
+    const r = await (await fetch(`/api/dev/${id}`, { method: "POST" })).json();
+    if (r && r.ok === false) { this.el("dev-result").innerHTML = `<div class="bad">${escapeHTML(r.error || "failed")}</div>`; }
+  },
+};
+document.addEventListener("click", e => {
+  const d = e.target && e.target.dataset && e.target.dataset.dev; if (d) DevPanel.act(d);
+  if (e.target && e.target.id === "dev-close") DevPanel.close();
+});
+document.addEventListener("submit", async e => {
+  if (!e.target || e.target.id !== "dev-ask") return;
+  e.preventDefault(); const i = document.getElementById("dev-input"); const t = i.value.trim(); if (!t) return; i.value = "";
+  await fetch("/api/dev/diagnose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ request: t }) });
+});
+
+// ═══ 3D card depth — tilt toward the pointer (±5°), rAF-throttled ═══
+// Skipped on touch / coarse pointers and with prefers-reduced-motion. Only
+// `transform` changes, so layout, hit-testing and clicks are unaffected.
+var Tilt3D = {
+  SEL: ".tool-card, .agent-card, .bs-card",
+  on: !matchMedia("(pointer: coarse)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches,
+  cur: null, raf: 0,
+  move(e) {
+    if (!this.on) return;
+    const el = e.target.closest && e.target.closest(this.SEL);
+    if (el !== this.cur) { this.reset(); this.cur = el; if (el) el.classList.add("tilt-3d", "tilting"); }
+    if (!el || this.raf) return;
+    this.raf = requestAnimationFrame(() => {
+      this.raf = 0; if (!this.cur) return;
+      const r = this.cur.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+      const lift = this.cur.classList.contains("bs-card") ? " translateY(-2px)" : "";
+      this.cur.style.transform = `perspective(700px) rotateX(${(-y * 8).toFixed(2)}deg) rotateY(${(x * 10).toFixed(2)}deg)${lift}`;
+    });
+  },
+  reset() { if (this.cur) { this.cur.style.transform = ""; this.cur.classList.remove("tilting"); } this.cur = null; },
+};
+document.addEventListener("pointermove", e => Tilt3D.move(e), { passive: true });
+document.addEventListener("pointerleave", () => Tilt3D.reset());
+
 // JARVIS summon card — opened by a double clap, shows what was heard and the
 // reply, closes itself after 20 s of quiet. Function declaration object built
 // lazily so early WS messages can't hit a TDZ.
@@ -505,6 +594,15 @@ var JarvisSummon = {
   close() { const c = this.el("jarvis-summon"); if (c) c.hidden = true; clearTimeout(this._t); },
 };
 document.addEventListener("click", e => { if (e.target && e.target.id === "js-close") JarvisSummon.close(); });
+
+// Vision Digest — server-held (GET /api/digest) + live {"type":"digest"} updates
+function renderDigest(d) {
+  const el = document.getElementById("digest"); if (!el || !d || !d.msg) return;
+  const when = d.ts ? new Date(d.ts * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "";
+  el.innerHTML = `<div class="digest-meta">${d.kind === "briefing" ? "EXECUTIVE BRIEFING" : "VISION SYNTHESIS"}${when ? " · " + when : ""}</div>`
+    + d.msg.split("\n").map(l => `<div class="digest-line">${escapeHTML(l)}</div>`).join("");
+}
+setTimeout(async () => { try { renderDigest(await (await fetch("/api/digest")).json()); } catch (e) {} }, 1500);
 
 function setHeard(text, routeLabel) {
   const t = $("#heard-text"); const r = $("#heard-route");
@@ -2393,27 +2491,83 @@ async function refreshCalSummary() {
 }
 setTimeout(refreshCalSummary, 12000); setInterval(refreshCalSummary, 600000);
 
-$("#gcal-btn")?.addEventListener("click", async () => {
-  logEvent('<span class="tag">[calendar]</span> starting Google authorization — check your browser…');
+// Google setup — guided, inside the dashboard (G button)
+var GoogleSetup = {
+  link: (href, label) => `<a href="${href}" target="_blank" rel="noopener noreferrer" class="gs-link">${label} ↗</a>`,
+  open() {
+    const modal = document.getElementById("tool-modal"); if (!modal) return;
+    document.getElementById("modal-title").textContent = "CONNECT GOOGLE";
+    document.getElementById("modal-sub").textContent = "ONE SIGN-IN · CALENDAR · GMAIL · TASKS · READ-ONLY";
+    document.getElementById("modal-icon").textContent = "G";
+    const L = this.link;
+    document.getElementById("modal-body").innerHTML = `
+      <ol class="gs-steps">
+        <li>Create a Google Cloud project — ${L("https://console.cloud.google.com/projectcreate", "new project")}</li>
+        <li>Enable the three APIs in that project — ${L("https://console.cloud.google.com/apis/library/calendar-json.googleapis.com", "Calendar")} ·
+            ${L("https://console.cloud.google.com/apis/library/gmail.googleapis.com", "Gmail")} ·
+            ${L("https://console.cloud.google.com/apis/library/tasks.googleapis.com", "Tasks")}</li>
+        <li>OAuth consent screen → <b>External</b> → add <b>your own Gmail</b> as a test user — ${L("https://console.cloud.google.com/apis/credentials/consent", "consent screen")}</li>
+        <li>Credentials → <b>Create OAuth client ID</b> → type <b>Desktop app</b> → <b>Download JSON</b> — ${L("https://console.cloud.google.com/apis/credentials", "credentials")}</li>
+        <li>Choose that downloaded file here — BUCS checks it and stores it locally (never uploaded anywhere, never committed):
+          <label class="gs-drop" id="gs-drop"><input type="file" id="gs-file" accept=".json,application/json" hidden>
+            <span id="gs-drop-txt">⇪ choose or drop <b>client_secret_….json</b></span></label></li>
+        <li><button class="cmd-btn" id="gs-connect" disabled>SIGN IN WITH GOOGLE</button> — your browser opens Google's own sign-in; approve once.</li>
+      </ol>
+      <div class="gs-status" id="gs-status" aria-live="polite"></div>`;
+    modal.hidden = false;
+    const file = document.getElementById("gs-file"), drop = document.getElementById("gs-drop");
+    const take = f => f && this.upload(f);
+    file.addEventListener("change", () => take(file.files[0]));
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); take(e.dataTransfer.files[0]); });
+    document.getElementById("gs-connect").addEventListener("click", () => this.connect());
+    fetch("/api/google/setup").then(r => r.json()).then(d => {
+      if (d.credentials_present) { this.status("✓ OAuth client already stored — sign in below (or choose a new file to replace it).", "ok"); document.getElementById("gs-connect").disabled = false; }
+    }).catch(() => {});
+  },
+  status(t, cls = "") { const s = document.getElementById("gs-status"); if (s) { s.textContent = t; s.className = "gs-status " + cls; } },
+  async upload(f) {
+    if (f.size > 20000) return this.status("That file is too large to be an OAuth client JSON.", "bad");
+    const content = await f.text();
+    const d = await (await fetch("/api/google/credentials", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content }) })).json();
+    if (!d.ok) return this.status("✗ " + (d.error || "rejected"), "bad");
+    document.getElementById("gs-drop-txt").textContent = `✓ ${f.name}`;
+    document.getElementById("gs-connect").disabled = false;
+    this.status(`✓ ${d.client_type} client stored${d.project ? " for project " + d.project : ""}. Now sign in.`, "ok");
+  },
+  async connect() {
+    this.status("Opening Google sign-in in your browser… approve, then come back here.", "");
+    document.getElementById("gs-connect").disabled = true;
+    const d = await GoogleConnect.run();
+    if (d && d.ok) { this.status(`✓ Connected${d.account ? " as " + d.account : ""} — ${d.synced ?? 0} events, ${d.emails ?? 0} emails, ${d.tasks ?? 0} tasks.`, "ok"); setTimeout(closeToolModal, 2500); }
+    else { this.status("✗ " + ((d && d.error) || "sign-in did not complete") , "bad"); document.getElementById("gs-connect").disabled = false; }
+  },
+};
+var GoogleConnect = { async run() {
   try {
-    const r = await fetch("/api/calendar/connect", { method: "POST" });
-    const d = await r.json();
+    const d = await (await fetch("/api/calendar/connect", { method: "POST" })).json();
     if (d.ok) {
       const cals = (d.calendars || []).length;
       logEvent(`<span class="tag">[google]</span> ${d.reused ? "already signed in — re-synced" : "connected ✓"}`
         + `${d.account ? " as " + escapeHTML(d.account) : ""} — ${d.synced ?? 0} events from ${cals} calendar${cals === 1 ? "" : "s"}`
         + ` · ${d.emails ?? 0} emails · ${d.tasks ?? 0} tasks`);
-      const b = $("#gcal-btn");
-      if (b && d.account) b.title = `Google: ${d.account} — click to re-sync`;
+      const b = $("#gcal-btn"); if (b && d.account) b.title = `Google: ${d.account} — click to re-sync`;
       refreshAgenda();
-    } else {
-      logEvent(`<span class="tag">[calendar]</span> ${escapeHTML(d.error || "connect failed")} — see google_sync.py setup steps`, "warn");
-    }
-  } catch (e) {
-    logEvent("calendar connect failed: " + escapeHTML(e.message), "error");
-  }
-});
+    } else logEvent(`<span class="tag">[google]</span> ${escapeHTML(d.error || "connect failed")}`, "warn");
+    return d;
+  } catch (e) { logEvent("google connect failed: " + escapeHTML(e.message), "error"); return { ok: false, error: e.message }; }
+} };
 
+$("#gcal-btn")?.addEventListener("click", async () => {
+  // no OAuth client yet → guided setup; otherwise sign in / re-sync directly
+  try {
+    const s = await (await fetch("/api/google/setup")).json();
+    if (!s.credentials_present) return GoogleSetup.open();
+  } catch (e) {}
+  logEvent('<span class="tag">[google]</span> signing in / syncing — check your browser if Google asks…');
+  await GoogleConnect.run();
+});
 /* ═══ SESSION TRACKING (vision) ══════════════════════ */
 
 let sessionStart = null;
@@ -3117,6 +3271,10 @@ function handle(msg) {
     case "conversation":
       ConversationMode.set(!!msg.on);
       break;
+    case "dev":
+    case "dev-open":
+      DevPanel.on(msg);
+      break;
     case "mic": {
       if (document.getElementById("voice-orb")?.classList.contains("listening")) OrbMic.set(msg.peak, msg.trigger);
       // log scale so quiet speech is visible: 100 → 0 %, 32767 → 100 %
@@ -3184,7 +3342,7 @@ function handle(msg) {
       logEvent(`<span class="tag">[widow]</span> world feed refreshed · ${msg.items.length} headlines`);
       break;
     case "digest":
-      $("#digest").textContent = msg.msg;
+      renderDigest(msg);
       logEvent(`<span class="tag">[${msg.kind === "briefing" ? "captain" : "vision"}]</span> digest updated`);
       break;
     case "voice":

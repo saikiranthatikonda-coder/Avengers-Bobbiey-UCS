@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=6.3" />
+  <link rel="stylesheet" href="/static/style.css?v=6.5" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -195,22 +195,6 @@
         <div class="conn-row" id="conn-bat"><span class="conn-icon">▌</span><span class="conn-label">BATTERY</span><span class="conn-val" id="bat-val">—</span></div>
       </div>
 
-      <div class="mini-card voice-ref">
-        <div class="mini-card-title">VOICE COMMAND REFERENCE</div>
-        <div class="vr-hint">click any command to run it</div>
-        <button class="vr-row" data-cmd="@jarvis status report"><b>"Hey Jarvis…"</b> — anything, or just status</button>
-        <button class="vr-row" data-cmd="@stark run system diagnostics"><b>"Hey Stark"</b> — system diagnostics</button>
-        <button class="vr-row" data-cmd="@widow brief me on the latest intel"><b>"Hey Widow"</b> — research &amp; intel</button>
-        <button class="vr-row" data-cmd="what meetings do I have today?"><b>"What meetings do I have today?"</b></button>
-        <button class="vr-row" data-cmd="summarize my inbox"><b>"Summarize my inbox"</b></button>
-        <button class="vr-row" data-cmd="open threat intelligence"><b>"Open threat intelligence"</b></button>
-        <button class="vr-row" data-cmd="what's the threat status?"><b>"What's the threat status?"</b></button>
-        <div class="vr-divider">VOICE ENGINE</div>
-        <div class="vr-stat"><span>RECOGNITION</span><b id="vr-engine">—</b></div>
-        <div class="vr-stat"><span>MICROPHONE</span><b id="vr-mic">checking…</b></div>
-        <div class="vr-stat"><span>LAST COMMAND</span><b id="vr-last">—</b></div>
-      </div>
-
       <form id="ask-form" class="ask-form">
         <input id="ask-input" placeholder="address the team…   (try @stark or @widow)" autocomplete="off" />
         <button type="submit" title="send">▶</button>
@@ -316,6 +300,7 @@
             </g>
           </svg>
           <canvas id="orb-earth" class="orb-earth" width="184" height="184" aria-hidden="true"></canvas>
+          <div class="orb-gyro" aria-hidden="true"><i></i><i></i><i></i></div>
           <div class="orb-globe-data" aria-hidden="true">
             <span title="fleet nodes online">◉ <b id="og-sats">—</b> NODE</span>
             <span title="active orchestrator directives"><b id="og-nodes">—</b> MISSION</span>
@@ -404,15 +389,6 @@
         </div>
       </div>
 
-      <!-- REAL-TIME ENGINE · live command pipeline (realtime.py) -->
-      <div class="cmd-console" id="cmd-console" aria-live="polite">
-        <div class="cmd-head">
-          <span class="cmd-title">LIVE COMMANDS</span>
-          <span class="cmd-lat" id="cmd-lat" title="engine latency — p50 per path (from /api/engine)">measuring…</span>
-          <button class="cmd-stop" id="cmd-stop-all" title="stop everything now (Esc)" hidden>■ STOP</button>
-        </div>
-        <div class="cmd-list" id="cmd-list"><div class="cmd-empty">speak, type, click or double-clap — every command streams here live</div></div>
-      </div>
 
       <div class="diag-strip">
         <div class="strip-card">
@@ -1435,6 +1411,21 @@
   <!-- ═══ ALERT CARDS (compact, corner-only) ═════════════ -->
   <div class="alert-stack" id="alert-stack" aria-live="polite"></div>
 
+  <!-- JARVIS · ENGINEERING — diagnose → approve → apply → test (devagent.py) -->
+  <aside class="dev-panel" id="dev-panel" hidden role="dialog" aria-label="JARVIS engineering">
+    <div class="dev-head">
+      <span class="dev-title">JARVIS · ENGINEERING</span>
+      <span class="dev-stage" id="dev-stage">IDLE</span>
+      <button class="js-close" id="dev-close" aria-label="Close engineering panel">×</button>
+    </div>
+    <div class="dev-req" id="dev-req"></div>
+    <div class="dev-tools" id="dev-tools"></div>
+    <pre class="dev-out" id="dev-out"></pre>
+    <div class="dev-result" id="dev-result"></div>
+    <div class="dev-actions" id="dev-actions"></div>
+    <form class="dev-ask" id="dev-ask"><input id="dev-input" placeholder="describe a BUCS issue or feature…  e.g. “the vision digest is empty, fix it”" autocomplete="off"/><button class="cmd-btn" type="submit">DIAGNOSE</button></form>
+  </aside>
+
   <!-- JARVIS summon card: opens on a double clap (voice.py ClapDetector) -->
   <aside class="jarvis-summon" id="jarvis-summon" hidden role="dialog" aria-live="polite" aria-label="JARVIS">
     <div class="js-orb" aria-hidden="true"><span></span></div>
@@ -1461,6 +1452,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=6.3"></script>
+  <script src="/static/app.js?v=6.5"></script>
 </body>
 </html>

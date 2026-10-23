@@ -2253,3 +2253,65 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 @media (prefers-reduced-motion: reduce) {
   .orb-stage.listening .orb-svg .ring-glow { transition: none; }
 }
+
+/* ── Vision Digest ─────────────────────────────────────────────── */
+.digest-meta { font-size: 0.5rem; letter-spacing: 0.2em; color: var(--accent); margin-bottom: 0.25rem; }
+.digest-line { font-size: 0.66rem; line-height: 1.45; color: var(--text); }
+.digest-line + .digest-line { border-top: 1px dashed rgba(255, 255, 255, 0.06); padding-top: 0.12rem; margin-top: 0.12rem; }
+
+/* ── Google guided setup (G button) ─────────────────────────────── */
+.gs-steps { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.55rem; font-size: 0.78rem; line-height: 1.5; color: var(--text); }
+.gs-link { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); white-space: nowrap; }
+.gs-link:hover, .gs-link:focus-visible { color: #fff; outline: none; }
+.gs-drop { display: block; margin-top: 0.4rem; padding: 0.8rem; text-align: center; border: 1px dashed var(--accent); border-radius: 6px; cursor: pointer; color: var(--text-dim); transition: background 0.2s; }
+.gs-drop.over, .gs-drop:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--text); }
+.gs-status { margin-top: 0.7rem; font-size: 0.72rem; min-height: 1.2em; color: var(--text-dim); }
+.gs-status.ok { color: var(--success); } .gs-status.bad { color: var(--warn); }
+
+/* ── JARVIS · ENGINEERING panel ─────────────────────────────────── */
+.dev-panel { position: fixed; top: 5.5rem; right: 1.2rem; bottom: 1.2rem; z-index: 58; width: min(560px, calc(100vw - 2rem));
+  display: flex; flex-direction: column; gap: 0.5rem; padding: 0.9rem 1rem; border: 1px solid var(--accent); border-radius: 8px;
+  background: linear-gradient(160deg, rgba(0, 24, 40, 0.96), rgba(2, 6, 13, 0.98)); box-shadow: 0 0 30px rgba(0, 217, 255, 0.25);
+  animation: js-in 0.3s ease-out; }
+.dev-panel[hidden] { display: none; }
+.dev-head { display: flex; align-items: center; gap: 0.6rem; }
+.dev-title { font-family: var(--font-display); font-size: 0.78rem; font-weight: 900; letter-spacing: 0.22em; color: var(--accent); }
+.dev-stage { font-size: 0.56rem; letter-spacing: 0.18em; padding: 0.1rem 0.45rem; border: 1px solid currentColor; border-radius: 3px; color: var(--warn); }
+.dev-stage.ok { color: var(--success); }
+.dev-req { font-size: 0.74rem; color: var(--text); font-style: italic; }
+.dev-tools { font-size: 0.6rem; color: var(--text-dim); max-height: 4.6em; overflow: hidden; display: flex; flex-direction: column-reverse; }
+.dev-out { flex: 1; min-height: 6rem; margin: 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono);
+  font-size: 0.7rem; line-height: 1.5; color: var(--text); background: rgba(0, 0, 0, 0.45); border: 1px solid var(--panel-edge); border-radius: 5px; padding: 0.6rem; }
+.dev-result { font-size: 0.7rem; color: var(--text); white-space: pre-wrap; }
+.dev-result .bad { color: var(--warn); } .dev-result .good { color: var(--success); }
+.dev-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.dev-actions button { min-height: 30px; }
+.dev-ask { display: flex; gap: 0.4rem; }
+.dev-ask input { flex: 1; min-width: 0; background: rgba(0, 0, 0, 0.55); border: 1px solid var(--panel-edge); border-radius: 4px; padding: 0.45rem 0.6rem; color: var(--text); font-family: var(--font-mono); font-size: 0.75rem; outline: none; }
+.dev-ask input:focus { border-color: var(--accent); }
+
+/* ── 3D layer ──────────────────────────────────────────────────────
+   Gyroscope: three tilted rings orbiting the globe in real 3D (preserve-3d),
+   tinted by the orb state (green while listening). Purely decorative,
+   pointer-events none, below the orb label. */
+.orb-gyro { position: absolute; top: 50%; left: 50%; width: 148px; height: 148px; transform: translate(-50%, -52%);
+  perspective: 520px; transform-style: preserve-3d; pointer-events: none; z-index: 1; }
+.orb-gyro i { position: absolute; inset: 0; border-radius: 50%; border: 1px solid currentColor; opacity: 0.38;
+  transform-style: preserve-3d; box-shadow: 0 0 8px color-mix(in srgb, currentColor 35%, transparent); }
+.orb-gyro i:nth-child(1) { animation: gyro-a 11s linear infinite; }
+.orb-gyro i:nth-child(2) { inset: 8%; animation: gyro-b 15s linear infinite; border-style: dashed; opacity: 0.3; }
+.orb-gyro i:nth-child(3) { inset: -6%; animation: gyro-c 19s linear infinite; opacity: 0.22; }
+@keyframes gyro-a { from { transform: rotateX(72deg) rotateZ(0deg); } to { transform: rotateX(72deg) rotateZ(360deg); } }
+@keyframes gyro-b { from { transform: rotateY(68deg) rotateZ(0deg); } to { transform: rotateY(68deg) rotateZ(-360deg); } }
+@keyframes gyro-c { from { transform: rotateX(58deg) rotateY(28deg) rotateZ(0deg); } to { transform: rotateX(58deg) rotateY(28deg) rotateZ(360deg); } }
+.orb-stage.listening .orb-gyro i { opacity: calc(0.45 + var(--mic) * 0.5); animation-duration: 4s; }
+.orb-stage.speaking .orb-gyro i, .orb-stage.processing .orb-gyro i { animation-duration: 6s; opacity: 0.5; }
+
+/* card depth: tilt follows the pointer (set inline by app.js); layout never moves */
+.tilt-3d { transform-style: preserve-3d; will-change: transform; transition: transform 0.18s ease-out, box-shadow 0.25s; }
+.tilt-3d.tilting { box-shadow: 0 14px 30px rgba(0, 0, 0, 0.55), 0 0 18px color-mix(in srgb, var(--accent) 18%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .orb-gyro i { animation: none !important; }
+  .tilt-3d { transform: none !important; }
+}
