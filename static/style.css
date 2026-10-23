@@ -2343,3 +2343,18 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 .links-row:hover, .links-row:focus-visible { background: color-mix(in srgb, var(--accent) 10%, transparent); outline: none; }
 .links-k { font-size: 0.52rem; letter-spacing: 0.18em; color: var(--text-dim); }
 .links-v { font-size: 0.62rem; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* ── Commander Profile (long-form private memory) ─────────────────── */
+.cp-block { border: 1px dashed var(--panel-edge); border-radius: 6px; padding: 0.45rem 0.55rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.cp-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.cp-title { font-family: var(--font-display); font-size: 0.52rem; font-weight: 900; letter-spacing: 0.2em; color: var(--accent); }
+.cp-meta { font-size: 0.58rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cp-meta.set { color: var(--success); }
+.cp-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.cp-upload { cursor: pointer; }
+.cp-editor { width: 100%; min-height: 46vh; resize: vertical; box-sizing: border-box; background: rgba(0, 0, 0, 0.55); color: var(--text);
+  border: 1px solid var(--panel-edge); border-radius: 5px; padding: 0.6rem; font-family: var(--font-mono); font-size: 0.74rem; line-height: 1.5; outline: none; }
+.cp-editor:focus { border-color: var(--accent); }
+.cp-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-dim); }
+.cp-row label { display: inline-flex; gap: 0.3rem; align-items: center; cursor: pointer; }
+.cp-titles { margin-top: 0.5rem; font-size: 0.64rem; color: var(--text-dim); line-height: 1.6; }

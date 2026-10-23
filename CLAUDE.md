@@ -253,6 +253,15 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
 - Diagnosis takes ~1–3 min (it reads code). Measured 2026-10-23: correct file:line
   diagnosis of the digest bug, working tree unchanged.
 
+### 6d. Commander Memory (commander_memory.py, 2026-10-23)
+
+- The operator's long-form profile lives in `commander_memory.md`: **private, gitignored,
+  in devagent.PROTECTED. Never print, commit, or paste its contents into chat or logs.**
+- Agents get it via `Avenger._commander_context()` (core identity + top relevant sections,
+  ~2.6 KB budget). Rule sections are weighted ×2. Respect them, e.g. SmartDesk
+  production data must never be reset or recreated without explicit authorisation + backup.
+- Treat employment/project facts in it as historical unless confirmed (the profile says so).
+
 ### 7. Local Startup (verified from launcher scripts)
 
 **Start the main application (Windows):**

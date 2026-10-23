@@ -5,6 +5,13 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-23 — Commander Memory (long-form private profile)
+- **fix:** operator memory silently truncated profiles: UI input 200 chars, server 240 chars per fact, only 40 facts kept. A ~25 KB memory protocol was cut to ~200 chars.
+- **feat:** `commander_memory.py` stores a full profile (paste/edit or upload .md/.txt, up to 300,000 chars) **locally only** (`commander_memory.md`: gitignored, protected from engineering-mode edits). It is split into sections; every agent request gets an always-on core identity plus the most relevant sections (dependency-free BM25-lite, title-aware, **rule sections weighted ×2** so "never reset production data" outranks descriptions). Engineering-mode diagnoses also receive the operator's rules.
+- **ui:** COMMANDER PROFILE block in Operator Memory (status, editor with replace/append/clear, upload). Facts now 500 chars × 100.
+- **verified:** a real 7,901-char profile became 25 sections. JARVIS answered "how should you address me", refused dropping production tables citing the operator's rules, and listed accelerator startups, all from the profile.
+- **test:** `tests/test_commander_memory.py` (synthetic profile).
+
 ## 2026-10-23 — Event stream no longer grows the page
 - **fix:** the previous fill fix used flex-basis auto, so every new log line enlarged the panel and the page kept extending. The stream now takes only the leftover height (flex-basis 0 + contain: size) and scrolls internally; 260 px fixed on single-column layouts. Verified: +300 lines → panel/page height +0 px.
 

@@ -560,6 +560,61 @@ var Tilt3D = {
 document.addEventListener("pointermove", e => Tilt3D.move(e), { passive: true });
 document.addEventListener("pointerleave", () => Tilt3D.reset());
 
+// ═══ COMMANDER PROFILE · long-form private memory (commander_memory.py) ═══
+var CommanderProfile = {
+  fmt(d) { return d && d.chars ? `${d.chars.toLocaleString()} chars · ${d.sections} sections${d.updated ? " · " + new Date(d.updated * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : ""}` : "not set"; },
+  async refresh() {
+    try { const d = await (await fetch("/api/memory/profile")).json(); const m = document.getElementById("cp-meta");
+      if (m) { m.textContent = this.fmt(d); m.classList.toggle("set", !!d.chars); } return d; } catch (e) { return null; }
+  },
+  async open(prefill) {
+    const modal = document.getElementById("tool-modal"); if (!modal) return;
+    let current = "";
+    try { current = (await (await fetch("/api/memory/profile/text")).json()).content || ""; } catch (e) {}
+    document.getElementById("modal-title").textContent = "COMMANDER PROFILE";
+    document.getElementById("modal-sub").textContent = "PRIVATE · STORED ONLY ON THIS MACHINE · NEVER COMMITTED";
+    document.getElementById("modal-icon").textContent = "◆";
+    document.getElementById("modal-body").innerHTML = `
+      <textarea class="cp-editor" id="cp-text" spellcheck="false" placeholder="Paste your full profile / memory protocol here (Markdown or plain text, up to 300,000 characters). JARVIS splits it into sections and uses the relevant ones in every answer."></textarea>
+      <div class="cp-row"><span id="cp-count">0 chars</span>
+        <label><input type="radio" name="cp-mode" value="replace" checked> replace</label>
+        <label><input type="radio" name="cp-mode" value="append"> append</label>
+        <button class="cmd-btn" id="cp-save">SAVE PROFILE</button>
+        <button class="cmd-btn" id="cp-clear" title="delete the stored profile">CLEAR</button></div>
+      <div class="gs-status" id="cp-status" aria-live="polite"></div>
+      <div class="cp-titles" id="cp-titles"></div>`;
+    modal.hidden = false;
+    const ta = document.getElementById("cp-text"), cnt = document.getElementById("cp-count");
+    ta.value = prefill != null ? prefill : current;
+    const upd = () => { cnt.textContent = `${ta.value.length.toLocaleString()} chars`; }; upd(); ta.addEventListener("input", upd);
+    if (prefill != null) document.querySelector('input[name="cp-mode"][value="replace"]').checked = true;
+    document.getElementById("cp-save").addEventListener("click", () => this.save(ta.value, document.querySelector('input[name="cp-mode"]:checked').value));
+    document.getElementById("cp-clear").addEventListener("click", async () => {
+      if (!confirm("Delete the stored commander profile? (Facts and observations are kept.)")) return;
+      await fetch("/api/memory/profile/clear", { method: "POST" }); ta.value = ""; upd(); this.status("profile cleared", ""); this.refresh();
+    });
+    this.titles(await this.refresh());
+  },
+  status(t, cls) { const s = document.getElementById("cp-status"); if (s) { s.textContent = t; s.className = "gs-status " + (cls || ""); } },
+  titles(d) { const el = document.getElementById("cp-titles"); if (el && d && d.titles && d.titles.length) el.textContent = "SECTIONS · " + d.titles.join(" · "); },
+  async save(content, mode) {
+    this.status("saving…");
+    const d = await (await fetch("/api/memory/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content, mode }) })).json();
+    if (!d.ok) return this.status("✗ " + (d.error || "not saved"), "bad");
+    this.status(`✓ saved — ${d.chars.toLocaleString()} chars in ${d.sections} sections. Every agent now uses the relevant parts.`, "ok");
+    this.titles(d); this.refresh();
+    logEvent(`<span class="tag">[memory]</span> commander profile ${mode === "append" ? "extended" : "saved"} · ${d.sections} sections`);
+  },
+  async upload(f) {
+    if (!f) return;
+    if (f.size > 1200000) { alert("That file is too large for a profile (limit ~300,000 characters)."); return; }
+    this.open(await f.text());
+  },
+};
+document.addEventListener("click", e => { if (e.target && e.target.id === "cp-edit") CommanderProfile.open(); });
+document.addEventListener("change", e => { if (e.target && e.target.id === "cp-file") { CommanderProfile.upload(e.target.files[0]); e.target.value = ""; } });
+setTimeout(() => CommanderProfile.refresh(), 1200);
+
 // JARVIS summon card — opened by a double clap, shows what was heard and the
 // reply, closes itself after 20 s of quiet. Function declaration object built
 // lazily so early WS messages can't hit a TDZ.

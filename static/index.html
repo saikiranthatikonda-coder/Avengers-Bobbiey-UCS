@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=6.9" />
+  <link rel="stylesheet" href="/static/style.css?v=7.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -813,9 +813,16 @@
           <div class="tf-empty">memory is empty — it fills as JARVIS observes you</div>
         </div>
         <form class="mem-add" id="mem-add-form">
-          <input id="mem-add-input" placeholder="teach JARVIS a fact about you…" maxlength="200"/>
+          <input id="mem-add-input" placeholder="teach JARVIS a fact about you…" maxlength="500"/>
           <button type="submit" title="add fact">+</button>
         </form>
+        <div class="cp-block" id="cp-block">
+          <div class="cp-head"><span class="cp-title">COMMANDER PROFILE</span><span class="cp-meta" id="cp-meta">not set</span></div>
+          <div class="cp-actions">
+            <button class="quick-btn" id="cp-edit">📄 PASTE / EDIT</button>
+            <label class="quick-btn cp-upload">⇪ UPLOAD .md / .txt<input type="file" id="cp-file" accept=".md,.txt,text/plain,text/markdown" hidden></label>
+          </div>
+        </div>
         <button class="quick-btn" id="btn-mem-speak">🗣 WHAT DO YOU KNOW ABOUT ME?</button>
       </div>
     </div>
@@ -1460,6 +1467,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=6.9"></script>
+  <script src="/static/app.js?v=7.0"></script>
 </body>
 </html>
