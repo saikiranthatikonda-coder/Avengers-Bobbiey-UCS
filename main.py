@@ -1341,8 +1341,10 @@ async def google_credentials(req: GoogleClientReq):
 @app.get("/api/google/setup")
 async def google_setup():
     g = state["gcal"].status()
-    return {**g, "next": "connect" if g["credentials_present"] and not g["connected"]
-            else "connected" if g["connected"] else "upload"}
+    nxt = ("upload" if not g["credentials_present"] else
+           "enable_apis" if g["api_issues"] else
+           "connected" if g["connected"] else "connect")
+    return {**g, "next": nxt}
 
 
 @app.post("/api/calendar/connect")
@@ -1367,6 +1369,7 @@ async def calendar_connect():
             result["tasks"] = len(tasks)
         result["account"] = state["gcal"].account
         result["calendars"] = state["gcal"].calendars
+        result["api_issues"] = state["gcal"].api_issues
     return result
 
 

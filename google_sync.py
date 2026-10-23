@@ -133,6 +133,7 @@ class GoogleCalendar:
         self.calendars: list[str] = []       # calendar names included in sync
         self.task_count = 0
         self.tasks_error: str | None = None
+        self.api_issues: dict[str, dict] = {}   # service → {"project", "enable_url"}
 
     # ── status helpers ────────────────────────────────────────────
     def credentials_present(self) -> bool:
@@ -172,7 +173,19 @@ class GoogleCalendar:
             "task_count": self.task_count,
             "tasks_error": self.tasks_error,
             "scopes_ok": self._scopes_ok(),
+            "api_issues": self.api_issues,
         }
+
+    def _note_api(self, service: str, err: Exception | None) -> bool:
+        """Track per-API enablement. Returns True if err was 'API not enabled'."""
+        if err is None:
+            self.api_issues.pop(service, None)
+            return False
+        project = api_not_enabled(err)
+        if project is None:
+            return False
+        self.api_issues[service] = {"project": project, "enable_url": enable_url(service, project)}
+        return True
 
     def _scopes_ok(self) -> bool:
         """True when the saved token already grants every scope we use."""
@@ -313,12 +326,16 @@ class GoogleCalendar:
             loop = asyncio.get_running_loop()
             per_cal = await loop.run_in_executor(None, _fetch)
         except Exception as e:
-            self.last_error = str(e)
             self.connected = False
+            if self._note_api("calendar", e):
+                self.last_error = "Google Calendar API is not enabled in your Cloud project — click G to fix"
+            else:
+                self.last_error = str(e)
             if self.hub:
                 await self.hub.broadcast({"type": "log", "level": "warn",
-                                          "msg": f"calendar sync failed: {e}"})
+                                          "msg": f"calendar sync failed: {self.last_error[:200]}"})
             return None
+        self._note_api("calendar", None)
 
         events = merge_events(per_cal)
         self.calendars = [name for name, _ in per_cal]
@@ -371,12 +388,16 @@ class GoogleCalendar:
         try:
             loop = asyncio.get_running_loop()
             mails = await loop.run_in_executor(None, _fetch)
+            self._note_api("gmail", None)
             return mails
         except Exception as e:
-            self.last_error = f"gmail: {e}"
+            if self._note_api("gmail", e):
+                self.last_error = "Gmail API is not enabled in your Cloud project — click G to fix"
+            else:
+                self.last_error = f"gmail: {e}"
             if self.hub:
                 await self.hub.broadcast({"type": "log", "level": "warn",
-                                          "msg": f"gmail sync failed: {e}"})
+                                          "msg": f"gmail sync failed: {self.last_error[:200]}"})
             return None
 
     # ── Google Tasks (same OAuth, readonly) ───────────────────────
@@ -397,8 +418,12 @@ class GoogleCalendar:
             tasks = await loop.run_in_executor(None, _fetch)
             self.task_count = len(tasks)
             self.tasks_error = None
+            self._note_api("tasks", None)
             return tasks
         except Exception as e:
+            if self._note_api("tasks", e):
+                self.tasks_error = "Google Tasks API is not enabled in your Cloud project — click G to fix"
+                return None
             msg = str(e)
             if "insufficient" in msg.lower() or "scope" in msg.lower():
                 msg = "Tasks not granted yet — click G to approve the new permission"
@@ -479,3 +504,23 @@ def validate_client_config(raw: str) -> tuple[dict | None, str]:
     if not str(c["client_id"]).endswith(".apps.googleusercontent.com"):
         return None, "client_id doesn't look like a Google OAuth client"
     return cfg, ""
+
+
+API_IDS = {"calendar": "calendar-json.googleapis.com", "gmail": "gmail.googleapis.com",
+           "tasks": "tasks.googleapis.com"}
+
+
+def api_not_enabled(err: Exception) -> str | None:
+    """Project number when Google says the API is disabled for the OAuth
+    client's Cloud project (HTTP 403 accessNotConfigured), else None."""
+    import re as _re
+    msg = str(err)
+    if "accessNotConfigured" not in msg and "has not been used in project" not in msg:
+        return None
+    m = _re.search(r"project[= ](\d{6,})", msg)
+    return m.group(1) if m else ""
+
+
+def enable_url(service: str, project: str) -> str:
+    base = f"https://console.cloud.google.com/apis/library/{API_IDS[service]}"
+    return f"{base}?project={project}" if project else base

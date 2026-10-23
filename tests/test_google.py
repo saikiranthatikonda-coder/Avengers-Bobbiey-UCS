@@ -143,5 +143,18 @@ class AgendaCarriesDetails(unittest.TestCase):
         self.assertEqual(snap["source"], "google")
 
 
+class ApiNotEnabled(unittest.TestCase):
+    def test_disabled_api_is_recognised_with_project_link_and_cleared_on_success(self):
+        gc = g.GoogleCalendar(root=Path("."))
+        err = Exception("HttpError 403 Gmail API has not been used in project 374840143375 before "
+                        "or it is disabled ... 'reason': 'accessNotConfigured'")
+        self.assertTrue(gc._note_api("gmail", err))
+        self.assertEqual(gc.api_issues["gmail"]["enable_url"],
+                         "https://console.cloud.google.com/apis/library/gmail.googleapis.com?project=374840143375")
+        self.assertFalse(gc._note_api("calendar", Exception("timed out")))      # other errors untouched
+        gc._note_api("gmail", None)
+        self.assertEqual(gc.api_issues, {})
+
+
 if __name__ == "__main__":
     unittest.main()
