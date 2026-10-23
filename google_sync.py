@@ -138,6 +138,24 @@ class GoogleCalendar:
     def credentials_present(self) -> bool:
         return self.credentials_path.exists()
 
+    def save_client_config(self, raw: str) -> dict:
+        """Store an uploaded OAuth client file as credentials.json (gitignored,
+        local only). A new client invalidates the old sign-in token."""
+        cfg, why = validate_client_config(raw)
+        if cfg is None:
+            return {"ok": False, "error": why}
+        import json as _json
+        tmp = self.credentials_path.with_suffix(".json.tmp")
+        tmp.write_text(_json.dumps(cfg, indent=2), encoding="utf-8")
+        tmp.replace(self.credentials_path)
+        try:
+            self.token_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        kind = "installed" if "installed" in cfg else "web"
+        return {"ok": True, "client_type": "desktop" if kind == "installed" else "web",
+                "project": cfg[kind].get("project_id")}
+
     def token_present(self) -> bool:
         return self.token_path.exists()
 
@@ -436,3 +454,28 @@ def fetch_open_tasks(svc, max_results: int = 20) -> list[dict]:
                         "due": due, "notes": (t.get("notes") or "")[:160]})
     out.sort(key=lambda t: (t["due"] is None, t["due"] or ""))
     return out[:max_results]
+
+
+def validate_client_config(raw: str) -> tuple[dict | None, str]:
+    """(config, "") for a genuine Google OAuth client JSON, else (None, reason).
+    Accepts the file Google Cloud Console downloads for a Desktop ("installed")
+    or Web client; rejects service-account keys and anything else."""
+    import json as _json
+    try:
+        cfg = _json.loads(raw)
+    except Exception:
+        return None, "that file isn't valid JSON"
+    if not isinstance(cfg, dict):
+        return None, "unexpected file format"
+    if cfg.get("type") == "service_account":
+        return None, "that's a service-account key — create an OAuth client ID (Desktop app) instead"
+    kind = "installed" if "installed" in cfg else "web" if "web" in cfg else None
+    if not kind:
+        return None, "not an OAuth client file (expected an 'installed' or 'web' section)"
+    c = cfg[kind]
+    missing = [k for k in ("client_id", "client_secret", "auth_uri", "token_uri") if not c.get(k)]
+    if missing:
+        return None, "client file is missing: " + ", ".join(missing)
+    if not str(c["client_id"]).endswith(".apps.googleusercontent.com"):
+        return None, "client_id doesn't look like a Google OAuth client"
+    return cfg, ""
