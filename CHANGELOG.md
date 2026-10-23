@@ -5,6 +5,13 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-23 — Engineering mode, Google setup in the dashboard, digest fix, 3D layer
+- **feat:** **JARVIS Engineering mode** (`devagent.py`). Say or type an issue, and JARVIS diagnoses BUCS's own code read-only with live diagnostics, proposes a fix, and applies it only on approval (edit tools, **no shell**), runs the tests, then offers Keep / Undo (reverts only its own changes) / Ship (commit + push). Secrets are restored if touched. Commander-only, audited. Dashboard ENGINEERING panel streams what it reads.
+- **feat:** **G button guided setup.** Without `credentials.json` it opens a 6-step in-dashboard guide with direct Google Cloud links, accepts the downloaded OAuth client file (validated: rejects service-account keys and junk; stored locally, gitignored), then signs in.
+- **fix:** Vision Digest was only written by the 08:30 briefing over the websocket, so it was empty all day and after reloads. Now a continuous real-data synthesis every 3 min, served at `/api/digest`.
+- **ui:** removed LIVE COMMANDS and VOICE COMMAND REFERENCE. Added 3D orb gyroscope rings (state-tinted, mic-reactive) and pointer-tilt card depth (no layout shift; off for touch / reduced motion).
+- **test:** `tests/test_devagent.py` (approval gate, undo isolation, secret restore, ship gate, routing, client-file validation).
+
 ## 2026-10-05 — Orb lights up while listening
 - **feat:** the voice orb glows while BUCS hears you. Halo, ring glow and core brightness scale with the **live mic level** (measured: halo 22 → 76 px, brightness 1.10 → 1.64 from quiet to loud speech). A steady cyan **engaged** glow shows when JARVIS is waiting for your follow-up (voice.py broadcasts the window). Thinking and speaking glow in their colours. Respects reduced motion.
 

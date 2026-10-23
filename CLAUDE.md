@@ -236,6 +236,23 @@ ideally the running endpoint) before calling something implemented.
 - Legacy paths stay as fallbacks: `Avenger.handle()`, `/api/ask`'s blocking contract,
   voice without an engine. Don't remove them.
 
+### 6c. JARVIS Engineering mode (devagent.py, 2026-10-23)
+
+The operator can ask BUCS to diagnose and fix itself from the dashboard ("Jarvis, the
+X isn't working, fix it", or the ENGINEERING panel's input). Contract, never weaken it:
+- **Diagnose = read-only**: Claude CLI in the repo with `--tools Read,Grep,Glob` +
+  live-state snapshot. Must end with SUMMARY / CAUSE / PROPOSED FIX / RISK / NEEDS.
+- **Apply only after explicit approval** (APPLY button / "apply the fix"):
+  `--tools Read,Grep,Glob,Edit,Write --permission-mode acceptEdits`. **Never add Bash
+  or any shell tool**: verified the CLI cannot execute commands with this set.
+- Protected files (`devagent.PROTECTED`) are backed up before apply and restored if
+  touched. Tests run after every apply.
+- **Undo** reverts only files the job changed that were clean before. Operator's
+  uncommitted work is never touched. **Ship** refuses while tests fail. Nothing is
+  committed/pushed without the operator's click/phrase. Commander role + audited.
+- Diagnosis takes ~1–3 min (it reads code). Measured 2026-10-23: correct file:line
+  diagnosis of the digest bug, working tree unchanged.
+
 ### 7. Local Startup (verified from launcher scripts)
 
 **Start the main application (Windows):**

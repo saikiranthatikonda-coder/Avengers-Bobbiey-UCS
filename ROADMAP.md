@@ -64,6 +64,11 @@ tracks both.
 | Delegation + handoff events (JARVIS → specialist) | IMPLEMENTED (keyword routing) |
 | Windows-native actions (apps, folders, media/volume, lock) | IMPLEMENTED (allow-list, audited) |
 | Latency metrics (p50/p95 per path, first token, first audio) | IMPLEMENTED (`/api/engine`) |
+| JARVIS Engineering mode: diagnose (read-only) → approve → apply (no shell) → test → keep/undo/ship | IMPLEMENTED |
+| Google setup inside the dashboard (guided steps + client-file upload + sign-in) | IMPLEMENTED |
+| Vision Digest: continuous real-data synthesis, server-held | IMPLEMENTED |
+| 3D layer: orb gyroscope rings, pointer-tilt card depth | IMPLEMENTED |
+| BUPIS (planetary intelligence) integration | PLANNED (next) |
 | LLM-chosen tool use / multi-step plans across agents | PLANNED |
 | Orchestrator directives & decisions routed through the engine | PLANNED |
 | Conversation Mode: one agent, quiet background, name-to-start, engaged follow-ups | IMPLEMENTED (default on) |
