@@ -5,6 +5,10 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-23 — Google API enablement guidance + header fix
+- **fix:** a Google Cloud project with Calendar/Gmail/Tasks switched off produced a raw 403 dump. BUCS now recognises "API not enabled" per service, shows an **Enable Google APIs** panel on G with one-click links for the exact project and a Re-check & Sync button, and clears each issue as soon as that API works.
+- **fix:** header items overflowed onto the UNIFIED COMMAND SYSTEM banner below ~1600 px (the right-hand group needs ~650 px). It now wraps into two right-aligned rows (29 px clearance at 1280).
+
 ## 2026-10-23 — Engineering mode, Google setup in the dashboard, digest fix, 3D layer
 - **feat:** **JARVIS Engineering mode** (`devagent.py`). Say or type an issue, and JARVIS diagnoses BUCS's own code read-only with live diagnostics, proposes a fix, and applies it only on approval (edit tools, **no shell**), runs the tests, then offers Keep / Undo (reverts only its own changes) / Ship (commit + push). Secrets are restored if touched. Commander-only, audited. Dashboard ENGINEERING panel streams what it reads.
 - **feat:** **G button guided setup.** Without `credentials.json` it opens a 6-step in-dashboard guide with direct Google Cloud links, accepts the downloaded OAuth client file (validated: rejects service-account keys and junk; stored locally, gitignored), then signs in.

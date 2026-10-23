@@ -2315,3 +2315,11 @@ body.observer-mode .dec-btn { opacity: 0.45; }
   .orb-gyro i { animation: none !important; }
   .tilt-3d { transform: none !important; }
 }
+
+.gs-note { font-size: 0.76rem; line-height: 1.5; color: var(--text); margin: 0 0 0.6rem; }
+.gs-enable { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 0.6rem; }
+.gs-en { text-decoration: none; text-align: center; padding: 0.55rem; }
+
+/* header: the right-hand group needs ~650 px; on narrower screens let it wrap
+   onto two right-aligned rows instead of spilling left over the banner */
+.hud-meta { flex-wrap: wrap; row-gap: 0.35rem; min-width: 0; flex-shrink: 1; }

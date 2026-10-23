@@ -2526,6 +2526,29 @@ var GoogleSetup = {
       if (d.credentials_present) { this.status("✓ OAuth client already stored — sign in below (or choose a new file to replace it).", "ok"); document.getElementById("gs-connect").disabled = false; }
     }).catch(() => {});
   },
+  openEnable(issues) {
+    const modal = document.getElementById("tool-modal"); if (!modal) return;
+    const names = { calendar: "Google Calendar API", gmail: "Gmail API", tasks: "Google Tasks API" };
+    const project = (Object.values(issues || {})[0] || {}).project;
+    document.getElementById("modal-title").textContent = "ENABLE GOOGLE APIS";
+    document.getElementById("modal-sub").textContent = `SIGNED IN ✓ · TURN ON ${Object.keys(issues).length} API${Object.keys(issues).length > 1 ? "S" : ""}${project ? " · PROJECT " + project : ""}`;
+    document.getElementById("modal-icon").textContent = "G";
+    document.getElementById("modal-body").innerHTML = `
+      <p class="gs-note">Your sign-in worked and all permissions were granted — but these APIs are switched off in the Google Cloud project your client belongs to. Open each, click <b>ENABLE</b>, then come back and re-check.</p>
+      <div class="gs-enable">${Object.entries(issues).map(([k, v]) =>
+        `<a class="cmd-btn gs-en" href="${escapeHTML(v.enable_url)}" target="_blank" rel="noopener noreferrer">ENABLE ${escapeHTML(names[k] || k).toUpperCase()} ↗</a>`).join("")}</div>
+      <p class="gs-note">Google can take 1–5 minutes to apply it.</p>
+      <button class="cmd-btn" id="gs-recheck">↻ RE-CHECK &amp; SYNC</button>
+      <div class="gs-status" id="gs-status" aria-live="polite"></div>`;
+    modal.hidden = false;
+    document.getElementById("gs-recheck").addEventListener("click", async () => {
+      this.status("Checking with Google…");
+      const d = await GoogleConnect.run();
+      const left = Object.keys((d && d.api_issues) || {});
+      if (d && d.ok && !left.length) { this.status(`✓ All set — ${d.synced ?? 0} events, ${d.emails ?? 0} emails, ${d.tasks ?? 0} tasks.`, "ok"); setTimeout(closeToolModal, 2500); }
+      else this.status(left.length ? `Still disabled: ${left.map(k => names[k]).join(", ")} — Google may need a few more minutes.` : "✗ " + ((d && d.error) || "sync failed"), "bad");
+    });
+  },
   status(t, cls = "") { const s = document.getElementById("gs-status"); if (s) { s.textContent = t; s.className = "gs-status " + cls; } },
   async upload(f) {
     if (f.size > 20000) return this.status("That file is too large to be an OAuth client JSON.", "bad");
@@ -2560,10 +2583,12 @@ var GoogleConnect = { async run() {
 } };
 
 $("#gcal-btn")?.addEventListener("click", async () => {
-  // no OAuth client yet → guided setup; otherwise sign in / re-sync directly
+  // no OAuth client yet → guided setup; APIs disabled → one-click enable
+  // panel; otherwise sign in / re-sync directly
   try {
     const s = await (await fetch("/api/google/setup")).json();
     if (!s.credentials_present) return GoogleSetup.open();
+    if (s.next === "enable_apis") return GoogleSetup.openEnable(s.api_issues);
   } catch (e) {}
   logEvent('<span class="tag">[google]</span> signing in / syncing — check your browser if Google asks…');
   await GoogleConnect.run();
