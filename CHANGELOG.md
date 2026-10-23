@@ -5,6 +5,11 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-23 — Gyroscope alignment, centre-column fill, links card
+- **fix:** orb gyroscope rings used three unrelated tilts (one off-axis rotateY), so they wandered around the globe. They are now concentric (measured ≤0.08 px centre offset through the spin), share one tilt, and sit at 0°/60°/120°.
+- **fix:** empty frame below Process Monitor / Network Traffic. The centre panel stretches to the tallest column but the event stream was capped at 220 px; it now fills the column (capped only in single-column layouts).
+- **ui:** website link moved out of the UNIFIED COMMAND SYSTEM banner into a **BUCS · ON THE WEB** card (website, GitHub Pages mirror, source).
+
 ## 2026-10-23 — Google API enablement guidance + header fix
 - **fix:** a Google Cloud project with Calendar/Gmail/Tasks switched off produced a raw 403 dump. BUCS now recognises "API not enabled" per service, shows an **Enable Google APIs** panel on G with one-click links for the exact project and a Re-check & Sync button, and clears each issue as soon as that API works.
 - **fix:** header items overflowed onto the UNIFIED COMMAND SYSTEM banner below ~1600 px (the right-hand group needs ~650 px). It now wraps into two right-aligned rows (29 px clearance at 1280).

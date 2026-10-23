@@ -2291,21 +2291,25 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 .dev-ask input:focus { border-color: var(--accent); }
 
 /* ── 3D layer ──────────────────────────────────────────────────────
-   Gyroscope: three tilted rings orbiting the globe in real 3D (preserve-3d),
-   tinted by the orb state (green while listening). Purely decorative,
-   pointer-events none, below the orb label. */
-.orb-gyro { position: absolute; top: 50%; left: 50%; width: 148px; height: 148px; transform: translate(-50%, -52%);
-  perspective: 520px; transform-style: preserve-3d; pointer-events: none; z-index: 1; }
-.orb-gyro i { position: absolute; inset: 0; border-radius: 50%; border: 1px solid currentColor; opacity: 0.38;
-  transform-style: preserve-3d; box-shadow: 0 0 8px color-mix(in srgb, currentColor 35%, transparent); }
-.orb-gyro i:nth-child(1) { animation: gyro-a 11s linear infinite; }
-.orb-gyro i:nth-child(2) { inset: 8%; animation: gyro-b 15s linear infinite; border-style: dashed; opacity: 0.3; }
-.orb-gyro i:nth-child(3) { inset: -6%; animation: gyro-c 19s linear infinite; opacity: 0.22; }
-@keyframes gyro-a { from { transform: rotateX(72deg) rotateZ(0deg); } to { transform: rotateX(72deg) rotateZ(360deg); } }
-@keyframes gyro-b { from { transform: rotateY(68deg) rotateZ(0deg); } to { transform: rotateY(68deg) rotateZ(-360deg); } }
-@keyframes gyro-c { from { transform: rotateX(58deg) rotateY(28deg) rotateZ(0deg); } to { transform: rotateX(58deg) rotateY(28deg) rotateZ(360deg); } }
-.orb-stage.listening .orb-gyro i { opacity: calc(0.45 + var(--mic) * 0.5); animation-duration: 4s; }
-.orb-stage.speaking .orb-gyro i, .orb-stage.processing .orb-gyro i { animation-duration: 6s; opacity: 0.5; }
+   Gyroscope: three orbit rings, all CONCENTRIC with the globe (same centre
+   offset as .orb-earth) and sharing one tilt, rotated 0° / 60° / 120° about
+   the view axis — a symmetric "atom" frame. Each ring spins within its own
+   plane (dashes show the motion). Tinted by orb state; pointer-events none;
+   sits below the orb label. */
+.orb-gyro { position: absolute; top: 50%; left: 50%; width: 150px; height: 150px;
+  margin: -75px 0 0 -75px; transform: translateY(-2px);           /* = .orb-earth centre */
+  transform-style: preserve-3d; perspective: none; pointer-events: none; z-index: 1; }
+.orb-gyro i { position: absolute; inset: 0; border-radius: 50%; border: 1px dashed currentColor;
+  opacity: 0.4; box-shadow: 0 0 6px color-mix(in srgb, currentColor 30%, transparent); }
+.orb-gyro i:nth-child(1) { --z: 0deg;   animation: gyro-spin 14s linear infinite; }
+.orb-gyro i:nth-child(2) { --z: 60deg;  animation: gyro-spin 14s linear infinite; animation-delay: -4.7s; }
+.orb-gyro i:nth-child(3) { --z: 120deg; animation: gyro-spin 14s linear infinite; animation-delay: -9.3s; }
+@keyframes gyro-spin {
+  from { transform: rotateZ(var(--z)) rotateX(74deg) rotateZ(0deg); }
+  to   { transform: rotateZ(var(--z)) rotateX(74deg) rotateZ(360deg); }
+}
+.orb-stage.listening .orb-gyro i { opacity: calc(0.5 + var(--mic) * 0.45); animation-duration: 5s; }
+.orb-stage.speaking .orb-gyro i, .orb-stage.processing .orb-gyro i { animation-duration: 8s; opacity: 0.5; }
 
 /* card depth: tilt follows the pointer (set inline by app.js); layout never moves */
 .tilt-3d { transform-style: preserve-3d; will-change: transform; transition: transform 0.18s ease-out, box-shadow 0.25s; }
@@ -2323,3 +2327,17 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 /* header: the right-hand group needs ~650 px; on narrower screens let it wrap
    onto two right-aligned rows instead of spilling left over the banner */
 .hud-meta { flex-wrap: wrap; row-gap: 0.35rem; min-width: 0; flex-shrink: 1; }
+
+/* ── centre panel: the event stream fills the column's height so there is
+   no empty frame below Process Monitor / Network Traffic (the panel stretches
+   to the tallest column; the stream was capped at 220 px) ─────────────── */
+#stage-panel .event-stream { flex: 1 1 auto; min-height: 160px; max-height: none; }
+@media (max-width: 1280px) { #stage-panel .event-stream { max-height: 320px; } }
+
+/* ── BUCS · ON THE WEB card (left column) ─────────────────────────── */
+.links-card { margin-top: 0.6rem; border: 1px dashed var(--panel-edge); border-radius: 6px; padding: 0.45rem 0.55rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.links-title { font-family: var(--font-display); font-size: 0.52rem; font-weight: 900; letter-spacing: 0.22em; color: var(--accent); }
+.links-row { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; text-decoration: none; padding: 0.2rem 0.25rem; border-radius: 3px; transition: background 0.2s; min-height: 24px; }
+.links-row:hover, .links-row:focus-visible { background: color-mix(in srgb, var(--accent) 10%, transparent); outline: none; }
+.links-k { font-size: 0.52rem; letter-spacing: 0.18em; color: var(--text-dim); }
+.links-v { font-size: 0.62rem; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
