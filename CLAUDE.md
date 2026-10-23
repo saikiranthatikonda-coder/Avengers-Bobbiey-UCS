@@ -435,6 +435,10 @@ unresolved issues · secrets are detected · the change is incomplete · the
 operation would be destructive · there are unexpected unrelated changes · a
 credential or external approval is still needed. Report instead.
 
+**Gate the commit on the test exit code, never on piped output.** (2026-10-23: a
+`tests | tail -1 && git commit` chain shipped a failing test because the pipe hid the
+failure. Capture `rc=$?` from the test run and stop if it is non-zero.)
+
 "Ship it" / "commit and push" means the same pipeline, triggered explicitly:
 1. `git status`
 2. `git diff`
