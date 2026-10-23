@@ -33,7 +33,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PROTECTED = [".env", "credentials.json", "token.json", "auth.json", "fleet_token.txt",
-             "pair_code.txt", "node_id.txt", "node_token.txt", "operators.json"]
+             "pair_code.txt", "node_id.txt", "node_token.txt", "operators.json",
+             "commander_memory.md", "operator_memory.json"]
 DIAG_TOOLS = "Read,Grep,Glob"
 APPLY_TOOLS = "Read,Grep,Glob,Edit,Write"
 
@@ -191,6 +192,10 @@ class DevAgent:
             await self._audit("dev.diagnose", request[:120])
             try:
                 live = await self._live_state()
+                cm = self.state.get("commander")
+                if cm is not None and cm.sections:
+                    rules = cm.context_for(request + " rules production data never require authorisation", budget=1800)
+                    live += "\n  operator's own rules/context:\n" + rules
                 plan = await self._run_cli(DIAG_PROMPT.format(request=request, live=live),
                                            DIAG_TOOLS, apply=False, timeout=240)
             except asyncio.TimeoutError:

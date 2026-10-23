@@ -156,7 +156,7 @@ class OperatorMemory:
         self.save()
 
     async def add_fact(self, text: str, source: str = "manual") -> None:
-        text = (text or "").strip()[:240]
+        text = (text or "").strip()[:500]
         if not text:
             return
         # dedupe on near-identical text
@@ -165,7 +165,7 @@ class OperatorMemory:
             return
         self.data["facts"] = ([{
             "text": text, "ts": time.time(), "source": source,
-        }] + self.data["facts"])[:40]
+        }] + self.data["facts"])[:100]
         self.save()
         await self._announce()
 

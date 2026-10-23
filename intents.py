@@ -232,6 +232,11 @@ async def i_inbox(ctx, text, low):
 async def i_memory(ctx, text, low):
     mem = ctx.get("memory")
     if mem and re.search(r"\b(what do you know about me|who am i|remember about me|my memory)\b", low):
+        cm = ctx.get("commander")
+        if cm is not None and cm.sections:
+            meta = cm.meta()
+            return _r(f"I hold your commander profile: {meta['sections']} sections, including "
+                      f"{', '.join(meta['titles'][:4])}. {mem.summary_text()}")
         return _r(mem.summary_text())
 
 

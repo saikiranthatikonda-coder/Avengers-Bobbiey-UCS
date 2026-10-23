@@ -32,6 +32,8 @@ from memory import OperatorMemory
 from netspeed import NetMonitor
 from realtime import Engine
 from devagent import DevAgent
+from commander_memory import CommanderMemory
+import agents as agents_mod
 from orchestrator import Orchestrator
 from productivity import Productivity
 from roadmap import Roadmap
@@ -220,6 +222,8 @@ async def lifespan(app: FastAPI):
     engine = Engine(state)
     state["engine"] = engine
     state["dev"] = DevAgent(state)            # JARVIS engineering mode (devagent.py)
+    state["commander"] = CommanderMemory()    # long-form private operator profile
+    agents_mod.COMMANDER["memory"] = state["commander"]
     if voice is not None:
         voice.engine = engine
 
@@ -565,6 +569,51 @@ async def dev_action(action: str):
         asyncio.create_task(fn())                                        # long-running; streams
         return {"ok": True}
     return await fn()
+
+
+# ═══ COMMANDER MEMORY · long-form private profile (commander_memory.py) ═══
+
+class ProfileReq(BaseModel):
+    content: str
+    mode: str = "replace"          # replace | append
+
+
+@app.get("/api/memory/profile")
+async def profile_meta():
+    return state["commander"].meta()
+
+
+@app.get("/api/memory/profile/text")
+async def profile_text():
+    """Full text for the dashboard editor (loopback/authenticated only, like every API)."""
+    if not _commander():
+        return _locked()
+    return {"content": state["commander"].text}
+
+
+@app.post("/api/memory/profile")
+async def profile_save(req: ProfileReq):
+    if not _commander():
+        return _locked()
+    res = state["commander"].save(req.content, mode="append" if req.mode == "append" else "replace")
+    if res.get("ok"):
+        await _audit("memory.profile", f"{req.mode}: {res['chars']:,} chars, {res['sections']} sections")
+    return res
+
+
+@app.post("/api/memory/profile/clear")
+async def profile_clear():
+    if not _commander():
+        return _locked()
+    state["commander"].clear()
+    await _audit("memory.profile", "cleared")
+    return {"ok": True}
+
+
+@app.get("/api/memory/profile/search")
+async def profile_search(q: str):
+    return {"q": q, "hits": [{"title": h["title"], "score": h["score"], "preview": h["text"][:200]}
+                             for h in state["commander"].search(q, k=5)]}
 
 
 @app.get("/api/digest")

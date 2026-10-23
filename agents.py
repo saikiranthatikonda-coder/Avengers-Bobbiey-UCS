@@ -5,6 +5,10 @@ from brain import Brain
 from hub import Hub
 
 
+# set by main.py at startup: {"memory": CommanderMemory} — shared by every agent
+COMMANDER: dict = {}
+
+
 @dataclass
 class Avenger:
     name: str
@@ -54,6 +58,16 @@ class Avenger:
         await self._emit("status", status=status, note=note,
                          task=self.current_task, confidence=self.confidence)
 
+    def _commander_context(self, prompt: str) -> str:
+        """Relevant sections of the operator's private profile (commander_memory.py)."""
+        cm = COMMANDER.get("memory")
+        if cm is None:
+            return ""
+        try:
+            return cm.context_for(prompt)
+        except Exception:
+            return ""
+
     def _live_telemetry(self) -> str:
         """Real host metrics for the LLM, so answers cite measured numbers
         instead of guessing. Empty when no sample exists yet."""
@@ -76,7 +90,7 @@ class Avenger:
                 ctx = self.team_memory.context_block(self.name)
             except Exception:
                 ctx = ""
-        ctx = self._live_telemetry() + ctx
+        ctx = self._live_telemetry() + self._commander_context(prompt) + ctx
         reply = await self.brain.think(ctx + prompt, system=self.system_prompt,
                                        agent=self.name, fast=True)
         self.history.append({"q": prompt, "a": reply, "ts": time.time()})
@@ -115,7 +129,7 @@ class Avenger:
                 ctx = self.team_memory.context_block(self.name)
             except Exception:
                 ctx = ""
-        ctx = self._live_telemetry() + ctx
+        ctx = self._live_telemetry() + self._commander_context(prompt) + ctx
         try:
             if hasattr(self.brain, "stream"):
                 reply, path = await self.brain.stream(ctx + prompt, system=self.system_prompt,
