@@ -43,6 +43,7 @@ class InsightsEngine:
         self.tts = tts
         self.threats = threats   # ThreatEngine (set after construction is fine)
         self.recent: list[dict] = []
+        self.last_digest: dict | None = None     # served at /api/digest (survives reloads)
         self.presence = {"state": "offline", "motion": 0.0, "since": time.time()}
         self._last_greet = 0.0
         self._recent_template_keys: list[str] = []
@@ -227,6 +228,31 @@ class InsightsEngine:
         return item
 
     # ── executive briefing ────────────────────────────────────────
+    async def digest(self) -> dict:
+        """Vision's continuous synthesis — every line is a measured value or a
+        real item (headline, insight, meeting). No LLM, no invented numbers.
+        Before 2026-10-23 the panel was only written by the 08:30 briefing and
+        only over the websocket, so it sat empty all day and after reloads."""
+        s = self.snapshot()
+        lines = [f"{datetime.now():%H:%M} · CPU {s['cpu']:.0f}% · MEM {s['mem']:.0f}% · DISK {s['disk']:.0f}%"
+                 f" · {s['agents_busy']}/{s['agents_total']} agents busy"]
+        lines.append(f"Risk {s['risk_score']}/100 ({s['risk_level']}) · {s['threat_count']} incident"
+                     f"{'' if s['threat_count'] == 1 else 's'} on the board")
+        if s.get("cal_source") == "google":
+            nm = (f"next: \"{s['next_meeting']}\" in {s['next_meeting_min']:.0f} min"
+                  if s.get("next_meeting") and s.get("next_meeting_min") is not None else "no meetings ahead")
+            lines.append(f"Agenda {nm} · {s['priority_mail']} priority mail")
+        else:
+            lines.append("Agenda not connected — click G to link Google")
+        if s.get("headlines"):
+            lines.append(f"Intel {len(s['headlines'])} headlines · top: {s['headlines'][0][:90]}")
+        latest = next((i for i in self.recent if i.get("source") != "briefing"), None)
+        if latest:
+            lines.append(f"Insight: {latest['insight'][:140]}")
+        self.last_digest = {"msg": "\n".join(lines), "kind": "synthesis", "ts": time.time()}
+        await self.hub.broadcast({"type": "digest", **self.last_digest})
+        return self.last_digest
+
     async def briefing(self, speak: bool = True) -> dict:
         """Compile a daily/executive briefing from every input and deliver it."""
         s = self.snapshot()
@@ -269,7 +295,8 @@ class InsightsEngine:
                 "confidence": 85, "source": "briefing", "ts": time.time()}
         self.recent = ([item] + self.recent)[:12]
         await self.hub.broadcast({"type": "insight", **item})
-        await self.hub.broadcast({"type": "digest", "msg": text, "kind": "briefing"})
+        self.last_digest = {"msg": text, "kind": "briefing", "ts": time.time()}
+        await self.hub.broadcast({"type": "digest", **self.last_digest})
         if speak and self.tts:
             asyncio.create_task(self.tts.say(text))
         return item

@@ -83,6 +83,13 @@ def schedule_all(team, news, sysmon, hub, agenda=None, tts=None, insights=None,
                       next_run_time=now + timedelta(seconds=20),
                       max_instances=1, coalesce=True)
 
+        # Vision Digest: continuous synthesis every 3 min (first at +25 s)
+        async def digest_tick():
+            await insights.digest()
+        sched.add_job(digest_tick, IntervalTrigger(minutes=3),
+                      next_run_time=now + timedelta(seconds=25),
+                      max_instances=1, coalesce=True)
+
         # daily executive briefing at 08:30 local
         async def daily_briefing():
             await insights.briefing(speak=True)
