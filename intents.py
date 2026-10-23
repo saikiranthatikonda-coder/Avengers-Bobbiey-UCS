@@ -59,6 +59,50 @@ async def i_conversation(ctx, text, low):
               action={"name": "voice.conversation_mode", "target": "on" if on else "off"})
 
 
+_DEV_VERB = r"\b(fix|debug|troubleshoot|diagnose|repair|investigate|not (working|showing|loading|updating|responding)|isn't (working|showing|loading)|doesn't (work|show|load)|won't (work|show|load|open)|broken|error|bug|crash(es|ing)?|implement|add (a |an )?(new )?(feature|panel|section|button|widget)|remove (the )?.{0,30}(section|panel|button|widget))\b"
+_DEV_SUBJECT = r"\b(bucs|ucs|dashboard|panel|section|button|tile|widget|orb|agenda|inbox|calendar|news|feed|digest|vision|voice|mic|jarvis|agent|map|globe|ui|page|screen|icon|code|feature|server|engine|console|weather|network|fleet)\b"
+
+
+async def i_dev(ctx, text, low):
+    dev = ctx.get("dev")
+    if dev is None:
+        return None
+    # approvals for the open engineering job
+    if dev.job and dev.job.get("stage") == "proposed" and re.search(r"\b(apply|do it|go ahead|implement it|make the (fix|change))\b", low):
+        async def run(progress):
+            await progress("applying the approved fix…")
+            r = await dev.apply()
+            if not r.get("ok"):
+                return r.get("error", "Couldn't apply it, sir.")
+            t = r["tests"]
+            return (f"Applied — {len(r['changed'])} file{'s' if len(r['changed']) != 1 else ''} changed, tests "
+                    f"{'passing' if t['ok'] else 'FAILING'}. Say keep it, undo that, or ship it.")
+        return _r("Applying the fix now, sir.", slow=True, run=run, action={"name": "dev.apply"})
+    if dev.job and dev.job.get("stage") == "applied":
+        for pat, fn, say in ((r"\b(undo|revert|roll ?back)\b", dev.undo, "Reverted."),
+                             (r"\b(ship it|commit and push|push it)\b", dev.ship, None),
+                             (r"\b(keep it|keep the (fix|change)|looks good)\b", dev.keep, "Kept.")):
+            if re.search(pat, low):
+                r = await fn()
+                msg = say if r.get("ok") and say else (
+                    f"Shipped as {r['commit']}{'' if r.get('pushed') else ' — push failed, check GitHub access'}."
+                    if r.get("ok") else r.get("error", "That didn't work."))
+                return _r(msg, action={"name": f"dev.{fn.__name__}"})
+    if not (re.search(_DEV_VERB, low) and re.search(_DEV_SUBJECT, low)):
+        return None
+
+    async def run(progress):
+        await progress("reading the code and live diagnostics…")
+        r = await dev.diagnose(text)
+        if not r.get("ok"):
+            return "I couldn't complete the diagnosis, sir. Details are on the engineering panel."
+        tail = " I have a fix ready — say apply the fix, or use the panel." if r.get("fixable") else ""
+        return r["summary"] + tail
+    return _r("On it, sir. I'm looking into the code now — I'll show you what I find before changing anything.",
+              slow=True, run=run, action={"name": "dev.diagnose"},
+              ui=[{"type": "dev-open"}])
+
+
 async def i_time(ctx, text, low):
     if re.search(r"\bwhat(?:'s| is)? the (time|date|day)\b|\bwhat time is it\b|\btoday's date\b", low):
         now = datetime.now()
@@ -289,7 +333,7 @@ async def i_dashboard(ctx, text, low):
 
 # order matters: actions that start with "open" (apps, sites) before dashboard
 # sections, specific questions before broad ones
-HANDLERS = [i_conversation, i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
+HANDLERS = [i_conversation, i_dev, i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
             i_inbox, i_threats, i_news, i_memory, i_vision, i_missions, i_dashboard]
 
 

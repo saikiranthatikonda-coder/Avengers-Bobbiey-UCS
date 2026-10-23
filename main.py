@@ -31,6 +31,7 @@ from local_brain import LocalBrain
 from memory import OperatorMemory
 from netspeed import NetMonitor
 from realtime import Engine
+from devagent import DevAgent
 from orchestrator import Orchestrator
 from productivity import Productivity
 from roadmap import Roadmap
@@ -218,6 +219,7 @@ async def lifespan(app: FastAPI):
     # through `state`, so later phases inherit it automatically.
     engine = Engine(state)
     state["engine"] = engine
+    state["dev"] = DevAgent(state)            # JARVIS engineering mode (devagent.py)
     if voice is not None:
         voice.engine = engine
 
@@ -530,6 +532,45 @@ class CancelReq(BaseModel):
 async def command_cancel(req: CancelReq):
     n = await state["engine"].cancel(req.id, reason="ui")
     return {"ok": True, "stopped": n}
+
+
+# ═══ JARVIS ENGINEERING MODE · diagnose → approve → apply → test → keep/undo/ship ═══
+
+class DevReq(BaseModel):
+    request: str
+
+
+@app.get("/api/dev")
+async def dev_status():
+    return state["dev"].snapshot()
+
+
+@app.post("/api/dev/diagnose")
+async def dev_diagnose(req: DevReq):
+    if not _commander():
+        return _locked()
+    asyncio.create_task(state["dev"].diagnose(req.request[:1000]))   # streams over /ws
+    return {"ok": True}
+
+
+@app.post("/api/dev/{action}")
+async def dev_action(action: str):
+    if not _commander():
+        return _locked()
+    dev = state["dev"]
+    fn = {"apply": dev.apply, "undo": dev.undo, "keep": dev.keep, "ship": dev.ship}.get(action)
+    if fn is None:
+        return {"ok": False, "error": "unknown action"}
+    if action == "apply":
+        asyncio.create_task(fn())                                        # long-running; streams
+        return {"ok": True}
+    return await fn()
+
+
+@app.get("/api/digest")
+async def digest_endpoint():
+    d = state["insights"].last_digest
+    return d or await state["insights"].digest()
 
 
 @app.get("/api/engine")
@@ -1278,6 +1319,30 @@ async def briefing_endpoint():
 @app.get("/api/calendar/status")
 async def calendar_status():
     return state["gcal"].status()
+
+
+class GoogleClientReq(BaseModel):
+    content: str
+
+
+@app.post("/api/google/credentials")
+async def google_credentials(req: GoogleClientReq):
+    """Dashboard upload of the OAuth client JSON downloaded from Google Cloud
+    Console. Validated, saved as credentials.json (gitignored), never echoed."""
+    if not _commander():
+        return _locked()
+    if len(req.content) > 20000:
+        return {"ok": False, "error": "file too large for an OAuth client JSON"}
+    res = state["gcal"].save_client_config(req.content)
+    await _audit("google.credentials", "OAuth client file " + ("stored" if res.get("ok") else "rejected"))
+    return res
+
+
+@app.get("/api/google/setup")
+async def google_setup():
+    g = state["gcal"].status()
+    return {**g, "next": "connect" if g["credentials_present"] and not g["connected"]
+            else "connected" if g["connected"] else "upload"}
 
 
 @app.post("/api/calendar/connect")
