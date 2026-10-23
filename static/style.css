@@ -2331,8 +2331,10 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 /* ── centre panel: the event stream fills the column's height so there is
    no empty frame below Process Monitor / Network Traffic (the panel stretches
    to the tallest column; the stream was capped at 220 px) ─────────────── */
-#stage-panel .event-stream { flex: 1 1 auto; min-height: 160px; max-height: none; }
-@media (max-width: 1280px) { #stage-panel .event-stream { max-height: 320px; } }
+/* flex-basis 0 + contain:size: the stream takes ONLY the leftover height and its
+   growing log never sizes the panel (flex-basis auto made the page grow forever) */
+#stage-panel .event-stream { flex: 1 1 0; min-height: 160px; max-height: none; contain: size; }
+@media (max-width: 1280px) { #stage-panel .event-stream { flex: none; height: 260px; contain: strict; } }
 
 /* ── BUCS · ON THE WEB card (left column) ─────────────────────────── */
 .links-card { margin-top: 0.6rem; border: 1px dashed var(--panel-edge); border-radius: 6px; padding: 0.45rem 0.55rem; display: flex; flex-direction: column; gap: 0.25rem; }

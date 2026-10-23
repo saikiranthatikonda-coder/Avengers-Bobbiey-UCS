@@ -5,6 +5,9 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-23 — Event stream no longer grows the page
+- **fix:** the previous fill fix used flex-basis auto, so every new log line enlarged the panel and the page kept extending. The stream now takes only the leftover height (flex-basis 0 + contain: size) and scrolls internally; 260 px fixed on single-column layouts. Verified: +300 lines → panel/page height +0 px.
+
 ## 2026-10-23 — Gyroscope alignment, centre-column fill, links card
 - **fix:** orb gyroscope rings used three unrelated tilts (one off-axis rotateY), so they wandered around the globe. They are now concentric (measured ≤0.08 px centre offset through the spin), share one tilt, and sit at 0°/60°/120°.
 - **fix:** empty frame below Process Monitor / Network Traffic. The centre panel stretches to the tallest column but the event stream was capped at 220 px; it now fills the column (capped only in single-column layouts).
