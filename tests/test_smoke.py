@@ -153,8 +153,13 @@ class Billing(unittest.TestCase):
         self.assertIn("community", ids)
         self.assertEqual(b["current"]["id"] if "id" in b["current"] else "community", "community")
         target = next(i for i in ids if i != "community")
-        self.assertTrue(SERVER.post("/api/billing/edition", {"edition": target}).get("ok"))
-        self.assertFalse(SERVER.post("/api/billing/edition", {"edition": "bogus"}).get("ok"))
+        # customer install (no BUCS_OWNER): a demo switch must NOT mint a paid edition
+        r = SERVER.post("/api/billing/edition", {"edition": target})
+        self.assertFalse(r.get("ok"))
+        self.assertIn("licence", r.get("error", ""))
+        lic = SERVER.get("/api/license")
+        self.assertEqual((lic["owner"], lic["edition"]), (False, "community"))
+        self.assertFalse(lic["entitlements"]["cloud_brain"])
 
 
 class Web3(unittest.TestCase):

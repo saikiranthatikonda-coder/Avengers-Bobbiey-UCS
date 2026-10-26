@@ -1,0 +1,10 @@
+{
+  "_readme": "Checkout links for the pricing buttons. Paste a LemonSqueezy checkout URL (https://<store>.lemonsqueezy.com/buy/<variant-id>) per plan and push: the site turns the plan's button into a real BUY button. Leave a plan empty and its button stays an honest waitlist link. Licence keys are issued by LemonSqueezy at checkout and activated in the dashboard's LICENSE panel.",
+  "provider": "lemonsqueezy",
+  "currency": "USD",
+  "checkout": {
+    "pro": "",
+    "team": ""
+  },
+  "enterprise_contact": "#access"
+}

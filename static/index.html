@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=7.0" />
+  <link rel="stylesheet" href="/static/style.css?v=7.1" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -1168,7 +1168,12 @@
         <div class="lic-credit-row"><span>AI CREDITS THIS CYCLE</span><span id="lic-credit-txt">—</span></div>
         <div class="lic-credit-bar"><div id="lic-credit-fill"></div></div>
       </div>
-      <div class="intel-divider">EDITIONS · CLICK TO SWITCH (DEMO)</div>
+      <div class="lic-status" id="lic-status"><div class="tf-empty">checking licence…</div></div>
+      <form class="mem-add-form" id="lic-form" hidden>
+        <input type="password" id="lic-key" placeholder="paste your licence key from the purchase email…" maxlength="120" autocomplete="off"/>
+        <button type="submit" class="cmd-btn">ACTIVATE</button>
+      </form>
+      <div class="intel-divider" id="lic-tiers-label">EDITIONS · CLICK TO BUY</div>
       <div class="lic-tiers" id="lic-tiers"></div>
       <div class="lic-paths-label">ALSO AVAILABLE</div>
       <div class="lic-paths" id="lic-paths"></div>
@@ -1467,6 +1472,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=7.0"></script>
+  <script src="/static/app.js?v=7.1"></script>
 </body>
 </html>

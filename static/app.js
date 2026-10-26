@@ -2704,7 +2704,9 @@ async function refreshProcs() {
   try {
     const r = await fetch("/api/processes"); const d = await r.json();
     const host = $("#proc-list"); if (!host) return;
-    const rows = (d.top_cpu || []).slice(0, 5);
+    // show as many real processes as the card has room for (5–12)
+    const fit = Math.max(5, Math.min(12, Math.floor((host.clientHeight || 120) / 22)));
+    const rows = (d.top_cpu || []).slice(0, fit);
     if (!rows.length) return;
     const maxc = Math.max(...rows.map(p => p.cpu), 1);
     const sp = $("#st-proc");
@@ -2835,67 +2837,147 @@ async function openAgentModal(name) {
   }
 }
 
-/* — Ollama model manager — */
+/* — LLM SWITCH: provider registry + local Ollama models (llm_providers.py) — */
 async function openModelManager() {
-  openCustomModal("AI MODEL MANAGER", "CLOUD + LOCAL OLLAMA · CLICK TO LOAD",
+  openCustomModal("LLM SWITCH", "CHOOSE THE BRAIN · PLUG IN ANY OPENAI-COMPATIBLE MODEL",
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z"/><circle cx="12" cy="11" r="3" fill="currentColor"/></svg>',
-    '<div style="color:var(--text-dim);font-style:italic">querying endpoints…</div>');
+    '<div style="color:var(--text-dim);font-style:italic">querying providers…</div>');
   try {
-    const d = await (await fetch("/api/models")).json();
-    renderModelManager(d);
+    const [m, p] = await Promise.all([
+      fetch("/api/models").then(r => r.json()),
+      fetch("/api/llm/providers").then(r => r.json())]);
+    renderModelManager(m, p);
   } catch (e) {
-    $("#modal-body").innerHTML = `<div style="color:var(--error)">model query failed: ${escapeHTML(e.message)}</div>`;
+    $("#modal-body").innerHTML = `<div style="color:var(--error)">provider query failed: ${escapeHTML(e.message)}</div>`;
   }
 }
-function renderModelManager(d) {
+const _llmPost = (url, body) => fetch(url, { method: "POST",
+  headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) }).then(r => r.json());
+
+function renderModelManager(d, reg) {
   const body = $("#modal-body"); if (!body) return;
-  const claudeActive = !d.force_local && d.cloud_claude;
-  let html = `<div class="mb-row" style="margin-bottom:.6rem">ACTIVE BRAIN: <b style="color:var(--success)">${escapeHTML((d.active_brain || "—").toUpperCase())}</b> — click any model to switch. Selection persists across restarts.</div>`;
-  html += `<div class="model-section">— CLOUD</div>
-    <div class="model-row${claudeActive ? " selected" : ""}" data-model="claude" tabindex="0" role="button">
-      <span class="mr-name">claude (CLI)</span>
-      <span class="mr-spec">ANTHROPIC · CLOUD BRAIN</span>
-      <span class="mr-status ${claudeActive ? "loaded" : (d.cloud_claude ? "available" : "offline")}">${claudeActive ? "ACTIVE" : (d.cloud_claude ? "AVAILABLE" : "OFFLINE")}</span>
-    </div>
-    <div class="model-section">— LOCAL OLLAMA · ${escapeHTML(d.endpoint || "")}</div>`;
+  const provs = reg.providers || [];
+  const anyLocked = provs.some(p => p.locked);
+  let html = `<div class="mb-row" style="margin-bottom:.5rem">ACTIVE: <b style="color:var(--success)">${escapeHTML((provs.find(p => p.active) || {}).name || reg.active)}</b>
+    — every reply uses it; if it fails BUCS falls back to Claude → local → rules, so it never goes silent.</div>`;
+  if (anyLocked) html += `<div class="llm-lock-note">🔒 Cloud brains are a <b>Pro</b> feature on this install — local models stay free. <a href="#" data-act="licence">Activate a licence →</a></div>`;
+  html += `<div class="model-section">— PROVIDERS</div><div class="llm-list">`;
+  for (const p of provs) {
+    const h = p.health;
+    const health = h ? (h.ok ? `<span class="llm-ok">✓ ${h.latency_ms} ms</span>`
+      : `<span class="llm-bad" title="${escapeHTML(h.reply || "")}">✕ failed</span>`) : "";
+    const avail = p.available === false ? '<span class="llm-bad">offline</span>' : "";
+    const spec = [p.tier.toUpperCase(), p.model, p.api_key ? "key " + p.api_key : ""].filter(Boolean).join(" · ");
+    html += `<div class="llm-row${p.active ? " selected" : ""}${p.locked ? " locked" : ""}" data-id="${escapeHTML(p.id)}">
+      <div class="llm-main">
+        <span class="mr-name">${escapeHTML(p.name)}</span>
+        <span class="mr-spec">${escapeHTML(spec)}</span>
+        <span class="llm-meta">${health} ${avail}</span>
+      </div>
+      <div class="llm-acts">
+        ${p.active ? '<span class="mr-status loaded">ACTIVE</span>'
+          : `<button class="cmd-btn" data-act="use" ${p.locked ? 'disabled title="needs a Pro licence"' : ""}>${p.locked ? "🔒 PRO" : "USE"}</button>`}
+        <button class="ghost-btn" data-act="test" title="send a real test prompt">TEST</button>
+        ${p.builtin ? "" : '<button class="ghost-btn" data-act="edit" title="edit">✎</button><button class="ghost-btn" data-act="del" title="remove">×</button>'}
+      </div></div>`;
+  }
+  html += `</div>`;
+
+  // add / edit form — presets fill base URL + model; keys are stored locally, shown masked
+  const presets = reg.presets || {};
+  html += `<div class="model-section">— CONNECT ANOTHER MODEL</div>
+    <form class="llm-form" id="llm-form" autocomplete="off">
+      <select id="llm-preset">${Object.entries(presets).map(([k, v]) => `<option value="${k}">${escapeHTML(v.name)}</option>`).join("")}</select>
+      <input id="llm-name" placeholder="display name" maxlength="40" required/>
+      <input id="llm-url" placeholder="base URL (…/v1)" required/>
+      <input id="llm-model" placeholder="model id" required/>
+      <input id="llm-key" type="password" placeholder="API key (stored on this machine only)"/>
+      <input id="llm-id" type="hidden"/>
+      <div class="llm-form-acts"><button class="cmd-btn" type="submit">SAVE + TEST</button><span class="llm-msg" id="llm-msg"></span></div>
+    </form>
+    <div class="mb-row-meta">Any OpenAI-compatible API works: OpenAI, Anthropic, Gemini, Groq, OpenRouter, DeepSeek, Mistral, Together, LM Studio, vLLM. Remote endpoints must use https.</div>`;
+
+  // local Ollama models (picks the model the "Ollama" provider uses)
   const locals = d.local || [];
-  if (!locals.length) {
-    html += `<div class="mb-row">no local models detected — install one with <b style="color:var(--accent)">ollama pull llama3.2</b> and reopen.
-      <div class="mb-row-meta">ENDPOINT OFFLINE — run \`ollama serve\`</div></div>`;
-  }
+  html += `<div class="model-section">— LOCAL OLLAMA MODELS · ${escapeHTML(d.endpoint || "")}</div>`;
+  if (!locals.length) html += `<div class="mb-row">no local models detected — install one with <b style="color:var(--accent)">ollama pull llama3.2</b>. <div class="mb-row-meta">ENDPOINT OFFLINE — run \`ollama serve\`</div></div>`;
   for (const m of locals) {
-    const spec = [m.param_size, m.quant, m.size_gb ? m.size_gb + " GB" : null]
-      .filter(Boolean).join(" · ") || (m.family || "local model");
+    const mspec = [m.param_size, m.quant, m.size_gb ? m.size_gb + " GB" : null].filter(Boolean).join(" · ") || (m.family || "local model");
     const isActive = d.force_local && m.name === d.selected;
-    const status = isActive ? "loaded" : "available";
     html += `<div class="model-row${isActive ? " selected" : ""}" data-model="${escapeHTML(m.name)}" tabindex="0" role="button">
-      <span class="mr-name">${escapeHTML(m.name)}</span>
-      <span class="mr-spec">${escapeHTML(spec.toUpperCase())}</span>
-      <span class="mr-status ${status}">${isActive ? "ACTIVE" : "AVAILABLE"}</span></div>`;
+      <span class="mr-name">${escapeHTML(m.name)}</span><span class="mr-spec">${escapeHTML(mspec.toUpperCase())}</span>
+      <span class="mr-status ${isActive ? "loaded" : "available"}">${isActive ? "ACTIVE" : "USE"}</span></div>`;
   }
-  html += `<div class="mb-row" style="margin-top:.5rem">Local models keep everything on-device. On a machine without a GPU they answer slower than Claude — pick based on your priority (privacy vs speed).</div>`;
   body.innerHTML = html;
+
+  const reload = async () => {
+    const [m2, p2] = await Promise.all([fetch("/api/models").then(r => r.json()), fetch("/api/llm/providers").then(r => r.json())]);
+    renderModelManager(m2, p2);
+    const rm = $("#reason-model"); const act = (p2.providers || []).find(p => p.active);
+    if (rm && act) rm.textContent = act.name.toUpperCase().slice(0, 20);
+  };
+  const form = $("#llm-form"), msg = $("#llm-msg");
+  const fill = (k) => {
+    const v = presets[k] || {};
+    $("#llm-name").value = k === "custom" ? "" : (v.name || "");
+    $("#llm-url").value = v.base_url || ""; $("#llm-model").value = v.model || ""; $("#llm-id").value = "";
+    $("#llm-key").placeholder = v.key ? "API key (required · stored on this machine only)" : "API key (optional)";
+  };
+  $("#llm-preset").addEventListener("change", e => fill(e.target.value));
+  fill($("#llm-preset").value);
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault(); msg.textContent = "saving…";
+    const r = await _llmPost("/api/llm/providers", { name: $("#llm-name").value, base_url: $("#llm-url").value,
+      model: $("#llm-model").value, api_key: $("#llm-key").value || null, id: $("#llm-id").value || null });
+    if (!r.ok) { msg.textContent = r.error || "refused"; return; }
+    msg.textContent = "saved — testing…";
+    const t = await _llmPost(`/api/llm/providers/${encodeURIComponent(r.id)}/test`);
+    msg.textContent = t.ok ? `✓ reachable · ${t.latency_ms} ms` : `✕ ${t.reply || t.error || "no reply"}`;
+    setTimeout(reload, 1200);
+  });
+  body.querySelector('[data-act="licence"]')?.addEventListener("click", (e) => {
+    e.preventDefault(); $("#tool-modal").hidden = true;
+    $("#license-card")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    $("#lic-key")?.focus();
+  });
+  body.querySelectorAll(".llm-row").forEach(row => row.addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-act]"); if (!b) return;
+    const id = row.dataset.id, act = b.dataset.act;
+    if (act === "use") {
+      b.textContent = "SWITCHING…";
+      const r = await _llmPost("/api/llm/active", { id });
+      if (!r.ok) {
+        b.textContent = "REFUSED"; b.title = r.error || "";
+        logEvent(`<span class="tag">[llm]</span> ${escapeHTML(r.error || "switch refused")}`, "warn");
+        return;
+      }
+      reload();
+    } else if (act === "test") {
+      b.textContent = "…";
+      await _llmPost(`/api/llm/providers/${encodeURIComponent(id)}/test`);
+      reload();
+    } else if (act === "del") {
+      if (!confirm("Remove this provider? Its stored API key is deleted too.")) return;
+      await _llmPost(`/api/llm/providers/${encodeURIComponent(id)}/delete`);
+      reload();
+    } else if (act === "edit") {
+      const p = provs.find(x => x.id === id) || {};
+      $("#llm-preset").value = "custom"; $("#llm-name").value = p.name || ""; $("#llm-url").value = p.base_url || "";
+      $("#llm-model").value = p.model || ""; $("#llm-id").value = id;
+      $("#llm-key").placeholder = p.api_key ? `keep ${p.api_key} (leave blank)` : "API key (optional)";
+      $("#llm-name").focus();
+    }
+  }));
   body.querySelectorAll(".model-row[data-model]").forEach(r => {
     const pick = async () => {
-      const name = r.dataset.model;
       r.querySelector(".mr-status").textContent = "SWITCHING…";
-      try {
-        await fetch("/api/models/select", { method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ model: name }) });
-        const d2 = await (await fetch("/api/models")).json();
-        renderModelManager(d2);
-        const rm = $("#reason-model");
-        if (rm) rm.textContent = (d2.active_brain || "").toUpperCase().slice(0, 20);
-        const sl = $("#st-llm");
-        if (sl) sl.textContent = (d2.force_local ? String(d2.selected) : "claude").split(":")[0].slice(0, 9);
-      } catch (e) {}
+      try { await _llmPost("/api/models/select", { model: r.dataset.model }); await reload(); } catch (e) {}
     };
     r.addEventListener("click", pick);
     r.addEventListener("keydown", (e) => { if (e.key === "Enter") pick(); });
   });
 }
-makeInteractive($("#model-row"), openModelManager, "Click to manage local Ollama models");
+makeInteractive($("#model-row"), openModelManager, "Click to switch the AI brain or connect another model");
 
 /* — scanner tiles — */
 function updateScanTiles(m) {
@@ -3563,11 +3645,52 @@ $("#news-refresh").addEventListener("click", async () => {
 });
 
 /* ═══ PHASE 6 · LICENSE & MONETIZATION ═══ */
+const PRICING_URL = "https://saikiranthatikonda-coder.github.io/Avengers-Bobbiey-UCS/#pricing";
+const _licPost = (url, body) => fetch(url, { method: "POST",
+  headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) }).then(r => r.json());
+
+function renderLicence(lic) {
+  const host = $("#lic-status"), form = $("#lic-form");
+  if (!host) return;
+  const ago = lic.validated_at ? Math.round((Date.now() / 1000 - lic.validated_at) / 3600) : null;
+  if (lic.owner) {
+    host.innerHTML = `<div class="lic-state ok">● OWNER MODE — every feature unlocked on this machine</div>`;
+    if (form) form.hidden = true;
+  } else if (lic.licensed) {
+    host.innerHTML = `<div class="lic-state ok">● ${escapeHTML((lic.edition || "").toUpperCase())} LICENCE · ${escapeHTML(lic.key || "")}</div>
+      <div class="lic-meta">${escapeHTML([lic.variant || lic.product, lic.customer, ago != null ? `verified ${ago} h ago` : ""].filter(Boolean).join(" · "))}</div>
+      <div class="lic-acts"><button class="ghost-btn" data-lic="validate">RE-VERIFY</button>
+        <button class="ghost-btn" data-lic="deactivate" title="free this seat for another machine">RELEASE SEAT</button></div>`;
+    if (form) form.hidden = true;
+  } else {
+    host.innerHTML = `<div class="lic-state">○ COMMUNITY — free forever. Cloud brains, Google sync and engineering mode need Pro.</div>
+      <div class="lic-acts"><a class="cmd-btn" href="${PRICING_URL}" target="_blank" rel="noopener">BUY A LICENCE ↗</a></div>`;
+    if (form) form.hidden = false;
+  }
+  host.querySelectorAll("[data-lic]").forEach(b => b.addEventListener("click", async () => {
+    if (b.dataset.lic === "deactivate" && !confirm("Release this machine's seat? Paid features lock until you activate again.")) return;
+    b.textContent = "…";
+    const r = await _licPost(`/api/license/${b.dataset.lic}`);
+    if (!r.ok && r.error) logEvent(`<span class="tag">[license]</span> ${escapeHTML(r.error)}`, "warn");
+    refreshBilling();
+  }));
+}
+$("#lic-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const inp = $("#lic-key"); const key = inp.value.trim(); if (!key) return;
+  const host = $("#lic-status");
+  host.innerHTML = `<div class="tf-empty">verifying with the licence server…</div>`;
+  const r = await _licPost("/api/license/activate", { key }).catch(err => ({ ok: false, error: err.message }));
+  inp.value = "";
+  if (r.ok) logEvent(`<span class="tag">[license]</span> activated — ${escapeHTML((r.edition || "").toUpperCase())} edition unlocked`);
+  else logEvent(`<span class="tag">[license]</span> ${escapeHTML(r.error || "activation refused")}`, "warn");
+  refreshBilling();
+});
 async function refreshBilling() {
   try {
     const d = await (await fetch("/api/billing")).json();
     const cur = d.current || {};
-    const ed = $("#lic-edition"); if (ed) ed.textContent = (cur.name || "—").toUpperCase();
+    const ed = $("#lic-edition"); if (ed) ed.textContent = ((d.license || {}).edition || cur.name || "—").toUpperCase();
     const txt = $("#lic-credit-txt"); const fill = $("#lic-credit-fill");
     if (txt) {
       if (cur.credits_unlimited) { txt.textContent = "UNLIMITED"; if (fill) fill.style.width = "100%"; }
@@ -3576,23 +3699,33 @@ async function refreshBilling() {
         if (fill) fill.style.width = Math.min(100, (cur.credits_used / (cur.credits_allotment || 1)) * 100) + "%";
       }
     }
+    const lic = d.license || {};
+    renderLicence(lic);
+    const owner = !!lic.owner;
+    const tl = $("#lic-tiers-label");
+    if (tl) tl.textContent = owner ? "EDITIONS · OWNER PREVIEW (CLICK TO SWITCH VIEW)" : "EDITIONS · CLICK TO BUY";
     const tiers = $("#lic-tiers");
     if (tiers) {
+      const curEd = lic.edition || cur.edition;
       tiers.innerHTML = (d.editions || []).map(e => `
-        <div class="lic-tier${e.id === cur.edition ? " current" : ""}" data-ed="${e.id}" tabindex="0" role="button">
+        <div class="lic-tier${e.id === curEd ? " current" : ""}" data-ed="${e.id}" tabindex="0" role="button">
           <div class="lic-tier-head">
             <span class="lic-tier-name">${escapeHTML(e.name)}</span>
             <span class="lic-tier-price">${escapeHTML(e.price)}<span class="per">${escapeHTML(e.period)}</span></span>
-            ${e.id === cur.edition ? '<span class="lic-tier-badge">● ACTIVE</span>' : ""}
+            ${e.id === curEd ? '<span class="lic-tier-badge">● ACTIVE</span>' : ""}
           </div>
           <div class="lic-tier-tag">${escapeHTML(e.tagline)}</div>
         </div>`).join("");
       tiers.querySelectorAll(".lic-tier").forEach(el => el.addEventListener("click", async () => {
+        if (!owner) {            // customers buy on the website; the key arrives by email
+          if (el.dataset.ed !== "community") window.open(PRICING_URL, "_blank", "noopener");
+          return;
+        }
         try {
           const r = await (await fetch("/api/billing/edition", { method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ edition: el.dataset.ed }) })).json();
-          if (r.ok) logEvent(`<span class="tag">[license]</span> switched to ${el.dataset.ed.toUpperCase()} (demo)`);
+          if (r.ok) logEvent(`<span class="tag">[license]</span> owner preview → ${el.dataset.ed.toUpperCase()}`);
           else if (r.error) logEvent(`<span class="tag">[license]</span> ${escapeHTML(r.error)}`, "warn");
         } catch (e) {}
         refreshBilling();
@@ -4825,3 +4958,238 @@ $("#sec-tok-form")?.addEventListener("submit", async (e) => {
 });
 
 connect();
+
+/* ═══ SECTION INFO — click any section title for what it is, where its data
+   comes from, and the live values behind it. Everything shown is read from
+   the real endpoint at click time; nothing here is invented. ═══ */
+const _siNum = (v, unit = "") => (v == null || v === "" ? "—" : `${typeof v === "number" ? Math.round(v * 10) / 10 : v}${unit}`);
+const _siAgo = (ts) => {
+  if (!ts) return "—";
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  return s < 90 ? `${Math.round(s)} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`;
+};
+const _siDom = (sel, n = 8) => [...document.querySelectorAll(sel)].slice(0, n)
+  .map(el => el.textContent.replace(/\s+/g, " ").trim()).filter(Boolean);
+
+const THREATS = {
+  api: "/api/threats",
+  source: "threats.py — scored every cycle from this machine's live telemetry (CPU, memory, disk, network), agenda pressure and open incidents.",
+  stats: d => [["RISK SCORE", d.risk_score], ["LEVEL", (d.level || "").toUpperCase()], ["EVENTS", (d.events || []).length],
+    ["ANALYZED", d.soc?.analyzed], ["ALERTS", d.soc?.alerts], ["RESOLVED", d.soc?.resolved], ["ACKED", d.acked]],
+  list: d => (d.events || []).slice(0, 8).map(e => `${(e.severity || "").toUpperCase()} · ${e.category} — ${e.title}`),
+};
+const AIOPS = {
+  api: "/api/aiops",
+  source: "insights.py — the AI engine analyses live telemetry, agenda and the webcam presence signal, then writes ranked insights.",
+  stats: d => [["READINESS", _siNum(d.readiness, "%")], ["ANOMALY", _siNum(d.anomaly, "%")], ["ENGINE", d.engine?.source],
+    ["MODEL", d.engine?.model], ["LAST RUN", _siAgo(d.engine?.last_run)], ["LATENCY", _siNum(d.engine?.latency_ms, " ms")],
+    ["PRESENCE", d.presence?.state]],
+  list: d => (d.insights || []).slice(0, 8).map(i => `${(i.severity || "").toUpperCase()} · ${i.insight}`),
+};
+const WEB3 = {
+  api: "/api/web3",
+  source: "web3 module — optional. Chain status and wallet balances are read live over public RPC; nothing moves funds and the module is inert while disabled.",
+  stats: d => [["MODULE", d.enabled ? "ENABLED" : "DISABLED"], ["CHAIN", d.chain?.name], ["RPC", d.chain?.online ? "ONLINE" : "OFFLINE"],
+    ["BLOCK", d.chain?.block], ["GAS", _siNum(d.chain?.gas_gwei, " gwei")], ["WALLET", d.wallet ? shortAddr(d.wallet.address || d.wallet) : "none"],
+    ["TOKEN CONTRACT", d.config?.has_contract ? "configured" : "not configured"]],
+};
+const TELEMETRY = {
+  api: "/api/status",
+  source: "psutil on this machine, sampled every second and pushed over the /ws WebSocket.",
+  stats: d => [["CPU", _siNum(d.metrics?.cpu, "%")], ["MEMORY", _siNum(d.metrics?.mem, "%")], ["DISK", _siNum(d.metrics?.disk, "%")],
+    ["NET ↓", _siNum(d.metrics?.net_down, " KB/s")], ["NET ↑", _siNum(d.metrics?.net_up, " KB/s")]],
+};
+const MEMORY = {
+  api: "/api/memory",
+  source: "memory.py — operator_memory.json on this machine (enrolment, facts you taught, webcam observations).",
+  stats: d => [["OPERATOR", d.name], ["ENROLLED", d.enrolled ? "YES" : "NO"], ["FACTS", (d.facts || []).length],
+    ["ARRIVALS TODAY", d.arrivals_today], ["ACTIVE TODAY", _siNum(d.active_minutes_today, " min")], ["SESSIONS", d.sessions_total],
+    ["GUEST SIGHTINGS", d.guest_sightings]],
+  list: d => (d.observations || []).slice(-6).reverse().map(o => `${new Date(o.ts * 1000).toLocaleTimeString()} · ${o.text}`),
+};
+const MODELS = {
+  api: "/api/models/stats",
+  source: "Ollama's /api/ps + measured latency of the last local completions. Click the LLM row in the stage panel to switch brains.",
+  stats: d => [["SELECTED", d.selected], ["ENDPOINT", d.endpoint_online ? "ONLINE" : "OFFLINE"], ["LATENCY", _siNum(d.perf?.latency_ms, " ms")],
+    ["TOKENS/S", _siNum(d.perf?.tokens_per_sec)], ["CALLS", d.perf?.calls_total], ["HOST RAM", `${_siNum(d.host_ram_used_gb)} / ${_siNum(d.host_ram_total_gb)} GB`]],
+  list: d => (d.running || []).map(r => `${r.name} · ${_siNum(r.ram_gb, " GB RAM")} · ${_siNum(r.vram_gb, " GB VRAM")}`),
+};
+const AGENDA = {
+  api: "/api/agenda",
+  source: "google_sync.py — your Google Calendar, Gmail and Tasks (read-only OAuth), synced every few minutes.",
+  stats: d => [["SOURCE", (d.source || "").toUpperCase()], ["EVENTS TODAY", d.events_today], ["MEETING MIN", d.intel?.meeting_minutes],
+    ["CONFLICTS", d.intel?.conflicts], ["FREE BLOCK", _siNum(d.intel?.largest_free_block_min, " min")], ["NEXT", d.intel?.next_title]],
+  list: d => (d.events || []).slice(0, 8).map(e => `${new Date(e.start_ts * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })} · ${e.title}`),
+};
+const HARDWARE = {
+  api: "/api/hardware",
+  source: "psutil + Windows PnP device query — volumes, adapters, battery and attached peripherals on this machine.",
+  stats: d => [["POWER", d.power?.present ? `${_siNum(d.power.percent, "%")} ${d.power.plugged ? "· plugged" : ""}` : "AC (no battery)"],
+    ["VOLUMES", (d.volumes || []).length], ["ADAPTERS", (d.net || []).length], ["PERIPHERALS", (d.peripherals || []).length]],
+  list: d => [...(d.volumes || []).map(v => `${v.mount} ${v.fstype} · ${_siNum(v.used_pct, "%")} of ${_siNum(v.total_gb, " GB")}`),
+    ...(d.peripherals || []).map(p => `${p.ok ? "●" : "○"} ${p.cls} · ${p.name}`)],
+};
+const GEO = {
+  api: "/api/geo",
+  source: "Static, hand-traced map outlines; the location pin comes from your public IP (ip-geo lookup) and the fleet nodes from /api/fleet.",
+  stats: d => [["CITY", d.city], ["REGION", d.region], ["COUNTRY", d.country], ["ISP", d.isp], ["LAT/LON", `${_siNum(d.lat)}, ${_siNum(d.lon)}`], ["SOURCE", d.source]],
+};
+
+const SECTION_INFO = {
+  "AVENGERS · ROSTER": { about: "The eight AI agents. Each runs its own routine and can be addressed by name.",
+    api: "/api/status", source: "agents.py — live status pushed over /ws; replies come from the active LLM.",
+    stats: d => [["AGENTS", (d.agents || []).length], ["BRAIN", (d.brain_mode || "").toUpperCase()], ["VOICE OUT", d.tts_enabled ? "ON" : "OFF"]],
+    list: d => (d.agents || []).map(a => `${a.codename} — ${a.role} · ${a.status}`) },
+  "EVENT STREAM": { about: "Everything the system does, as it happens: commands, agent actions, alerts. Mute it with the speaker toggle in Conversation Mode.",
+    api: "/api/engine", source: "hub.py WebSocket broadcast; command latency from realtime.py.",
+    stats: d => [["COMMANDS", d.totals?.commands], ["FAST PATH", d.totals?.fast], ["LLM", d.totals?.llm], ["CANCELLED", d.totals?.cancelled],
+      ["FAILED", d.totals?.failed], ["FIRST TOKEN p50", _siNum(d.first_token_p50_ms, " ms")], ["FIRST SPEECH p50", _siNum(d.first_speech_p50_ms, " ms")]] },
+  "WORLD CLOCKS": { about: "Local time in the cities you track.", api: null,
+    source: "Your computer's clock, formatted in the browser (Intl API). No network involved.",
+    stats: () => [["LOCAL", new Date().toLocaleTimeString()], ["UTC", new Date().toUTCString().slice(17, 25)],
+      ["TIMEZONE", Intl.DateTimeFormat().resolvedOptions().timeZone]] },
+  "AGENDA": { about: "Your next meetings, with conflicts and free blocks worked out.", ...AGENDA },
+  "INBOX": { about: "Priority unread mail from Gmail (read-only).", api: "/api/agenda", source: AGENDA.source,
+    stats: d => [["PRIORITY UNREAD", d.priority_unread], ["SHOWN", (d.emails || []).length], ["SOURCE", (d.source || "").toUpperCase()]],
+    list: d => (d.emails || []).map(e => `${e.sender} — ${e.subject}`) },
+  "WORLD FEED": { about: "Live headlines, refreshed every 10 minutes.", api: "/api/status",
+    source: "open_news.py — keyless open feeds (BBC World, The Hindu, Al Jazeera, The Hacker News, Hacker News). Real headlines only.",
+    stats: d => [["HEADLINES", d.news_count], ["SOURCE", (d.news_source || "").toUpperCase()]], list: () => _siDom("#news-list > *") },
+  "VISION DIGEST": { about: "A short synthesis of what the system observed in the last cycle.", api: "/api/digest",
+    source: "insights.py digest() — built from the webcam presence signal + live telemetry.",
+    stats: d => [["KIND", d.kind], ["WRITTEN", _siAgo(d.ts)]], list: d => d.msg ? [d.msg] : [] },
+  "INDIA · NATIONAL GRID": { about: "National view with your state highlighted.", ...GEO },
+  "GLOBAL ACTIVITY MAP": { about: "Where this node and your fleet nodes are.", ...GEO },
+  "TELANGANA · STATE": { about: "State view with district outlines.", ...GEO },
+  "THREAT MONITOR": { about: "Current risk level and the newest events.", ...THREATS },
+  "THREAT MATRIX": { about: "Risk split by domain (operational, infrastructure, network, AI, resource, security).", ...THREATS,
+    stats: d => Object.entries(d.matrix || {}).map(([k, v]) => [k.toUpperCase(), typeof v === "object" ? _siNum(v.score ?? v.level ?? JSON.stringify(v)) : v]) },
+  "THREAT ANALYTICS": { about: "Risk score history and event mix.", ...THREATS },
+  "SECURITY OPERATIONS": { about: "SOC counters: analysed, alerting, resolved.", ...THREATS },
+  "INCIDENT RESPONSE TIMELINE": { about: "The response queue: incidents waiting for action.", ...THREATS,
+    list: d => (d.response_queue || []).map(e => `${(e.severity || "").toUpperCase()} · ${e.title}`) },
+  "TELEMETRY ANALYSIS": { about: "Live machine load and readiness.", ...TELEMETRY },
+  "RESOURCE MONITOR": { about: "CPU, memory and disk on this machine.", ...TELEMETRY },
+  "STRATEGIC INTELLIGENCE": { about: "Ranked insights and the services that feed them.", ...AIOPS },
+  "JARVIS INSIGHTS": { about: "What JARVIS noticed and what it recommends.", ...AIOPS },
+  "PREDICTIVE ANALYTICS": { about: "Short-term CPU/memory trend forecast from recent samples.", ...AIOPS },
+  "AI REASONING": { about: "Which engine produced the last analysis, and how fast.", ...AIOPS },
+  "AI OBSERVATION LOG": { about: "Recent webcam observations (only when the camera is on).", ...MEMORY },
+  "MISSION READINESS": { about: "One score combining load, risk and schedule pressure.", ...AIOPS },
+  "VISION AWARENESS": { about: "Presence and motion from the webcam, processed locally.", ...AIOPS },
+  "AI PERFORMANCE": { about: "Speed and memory use of the local model.", ...MODELS },
+  "LOCAL AI CONTROL CENTER": { about: "Local models installed in Ollama, and which one is loaded.", ...MODELS },
+  "OPERATOR RECOGNITION": { about: "Whether the enrolled operator is at the desk.", ...MEMORY },
+  "OPERATOR MEMORY": { about: "What BUCS remembers about you: facts and the Commander profile.", ...MEMORY },
+  "ACTIVITY TIMELINE": { about: "Your presence across the 24 hours of today.", ...MEMORY,
+    list: d => (d.hourly_activity || []).map((v, h) => v ? `${String(h).padStart(2, "0")}:00 · ${v} min` : null).filter(Boolean) },
+  "OPERATOR PRODUCTIVITY": { about: "Focus sessions, task switches and the day's score.", api: "/api/productivity",
+    source: "productivity.py — focus timer + presence minutes, stored locally.",
+    stats: d => [["SCORE", d.score], ["FOCUS", `${_siNum(d.focus_min_today)} / ${_siNum(d.focus_target_min)} min`], ["SESSIONS", d.sessions_today],
+      ["SWITCHES", d.switches_today], ["TASKS DONE", d.tasks_done_today], ["PRESENT", _siNum(d.presence_min_today, " min")], ["CURRENT", d.current_task || "—"]] },
+  "NOTES": { about: "Quick notes, stored on this machine.", api: "/api/notes", source: "notes in the local data store.",
+    stats: d => [["NOTES", (d.notes || []).length]], list: d => (d.notes || []).slice(0, 8).map(n => n.text || String(n)) },
+  "MULTI-AGENT ORCHESTRATION": { about: "How JARVIS hands work to the other agents.", api: "/api/orchestrator",
+    source: "orchestrator.py — a shared blackboard of live conditions, prioritised directives and delegations.",
+    stats: d => [["COORDINATOR", (d.coordinator || "").toUpperCase()], ["ACTIVE", d.active], ["DELEGATIONS", d.delegations_total],
+      ["COLLABS", d.collabs_total], ["PREEMPTIONS", d.preemptions_total], ["CYCLES", d.cycles]],
+    list: d => (d.directives || []).map(x => `P${x.priority} · ${x.agent} — ${x.title}`) },
+  "LIVE OPERATIONS": { about: "Today's meeting load and the current mission.", ...AGENDA },
+  "LICENSE & MONETIZATION": { about: "Your edition and what it unlocks.", api: "/api/license",
+    source: "licensing.py — LemonSqueezy licence API (activate/validate), re-verified daily with a 7-day offline grace.",
+    stats: d => [["EDITION", (d.edition || "").toUpperCase()], ["MODE", d.owner ? "OWNER" : d.licensed ? "LICENSED" : "COMMUNITY"], ["KEY", d.key || "—"],
+      ["VERIFIED", _siAgo(d.validated_at)]],
+    list: d => Object.entries(d.entitlements || {}).map(([k, v]) => `${v ? "✓" : "🔒"} ${k.replace(/_/g, " ")}`) },
+  "KNOWLEDGE HUB": { about: "Everything BUCS can search, by source.", api: "/api/knowledge/stats",
+    source: "knowledge.py — indexes memory facts, observations, insights, agent output, incidents, calendar, email and news.",
+    stats: d => [["TOTAL", d.total], ...Object.entries(d.sources || {}).map(([k, v]) => [k.toUpperCase(), v])] },
+  "EXTERNAL HARDWARE": { about: "Drives, adapters and power.", ...HARDWARE },
+  "CONNECTED PERIPHERALS": { about: "Devices plugged into this machine.", ...HARDWARE },
+  "ENTERPRISE COMMAND": { about: "Roles, operators and the audit trail.", api: "/api/enterprise",
+    source: "auth.py + audit.py — local operators and an append-only audit log.",
+    stats: d => [["ROLE", (d.role || "").toUpperCase()], ["OPERATOR", d.operator], ["OPERATORS", (d.operators || []).length],
+      ["AUDIT ENTRIES", d.audit?.entries_total], ["PIN", d.pin_required ? "REQUIRED" : "OFF"]],
+    list: d => (d.audit?.recent || []).slice(0, 8).map(a => `${a.action || a.kind || ""} — ${a.detail || a.msg || ""}`) },
+  "DECISION SUPPORT": { about: "Proposed actions with predicted impact. Nothing runs without your approval unless autonomy is on.", api: "/api/decisions",
+    source: "decisions.py — proposals from live conditions; impact is a model prediction, executed actions are real.",
+    stats: d => [["AUTONOMY", d.autonomy ? "ON" : "OFF"], ["PROPOSALS", (d.proposals || []).length], ["EXECUTED", d.executed_total], ["AUTO-EXECUTED", d.auto_executed_total]],
+    list: d => (d.proposals || []).map(p => `${(p.risk || "").toUpperCase()} · ${p.title}`) },
+  "COMMAND RECOMMENDATIONS": { about: "What to do next, ranked.", api: "/api/recommendations", source: "insights.py + threats.py, ranked by severity.",
+    stats: d => [["RECOMMENDATIONS", (d.recommendations || []).length]], list: d => (d.recommendations || []).map(r => `#${r.rank} ${r.title} — ${r.detail}`) },
+  "COMMAND FLEET · MULTI-SITE": { about: "Every BUCS node reporting to this one.", api: "/api/fleet",
+    source: "fleet.py — nodes report over an authenticated token; this machine is always a node.",
+    stats: d => [["NODES", d.aggregate?.nodes], ["ONLINE", d.aggregate?.online], ["CORES", d.aggregate?.cpu_cores], ["RAM", _siNum(d.aggregate?.mem_total_gb, " GB")],
+      ["AVG CPU", _siNum(d.aggregate?.avg_cpu, "%")], ["REPORTS", d.reports_total]],
+    list: d => (d.nodes || []).map(n => `${n.name} · ${n.platform} · CPU ${_siNum(n.cpu, "%")}`) },
+  "REMOTE ACCESS & AUTH": { about: "Who can reach this dashboard from another device.", api: "/api/auth/status",
+    source: "auth.py — password + API tokens; sessions are listed here and can be revoked." },
+  "PRODUCT EVOLUTION": { about: "Build progress by phase.", api: "/api/roadmap", source: "roadmap.py — each feature is checked against the running system.",
+    stats: d => [["VERSION", d.version], ["PROGRESS", _siNum(d.progress_pct, "%")], ["FEATURES", `${d.completed_features} / ${d.total_features}`], ["PHASE", d.current_phase]],
+    list: d => (d.phases || []).map(p => `${p.n}. ${p.name} — ${p.done}/${p.total} (${p.status})`) },
+  "QUICK ACCESS": { about: "One-click commands. Each runs the same handler as typing or saying it.", api: null,
+    source: "dashboard command handlers — scans and diagnostics read live endpoints; nothing here is simulated.",
+    list: () => _siDom(".quick-grid .quick-btn", 12) },
+  "WEB3 COMMAND CENTER": { about: "Optional token and community layer.", ...WEB3 },
+  "WALLET": { about: "Your connected wallet. Keys never leave the browser.", ...WEB3 },
+  "PORTFOLIO": { about: "Balances of the connected wallet.", ...WEB3 },
+  "TOKEN CENTER": { about: "The configured token contract.", ...WEB3 },
+  "TREASURY": { about: "Treasury address and live native balance.", ...WEB3 },
+  "GOVERNANCE": { about: "Proposals and voting.", ...WEB3 },
+  "MARKETPLACE": { about: "Plugins you can install.", ...WEB3 },
+  "COMMUNITY & EVENTS": { about: "Community activity for the token layer.", ...WEB3 },
+  "BLOCKCHAIN STATUS": { about: "The selected chain's RPC, block height and gas.", ...WEB3 },
+};
+
+function _sectionKey(el) {
+  const c = el.cloneNode(true);
+  c.querySelectorAll(".title-badge, button, .map-sub, .sec-info-i").forEach(x => x.remove());
+  return c.textContent.replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+async function openSectionInfo(key) {
+  const def = SECTION_INFO[key]; if (!def) return;
+  openCustomModal(key, "SECTION INFO · LIVE DATA", null, `<div style="color:var(--text-dim);font-style:italic">reading live data…</div>`);
+  let d = {}, err = null;
+  if (def.api) {
+    try { const r = await fetch(def.api); d = r.ok ? await r.json() : {}; if (!r.ok) err = `HTTP ${r.status}`; }
+    catch (e) { err = e.message; }
+  }
+  let stats = [], list = [];
+  try { stats = (def.stats ? def.stats(d) : []).filter(([, v]) => v !== undefined); } catch (e) {}
+  try { list = (def.list ? def.list(d) : []).filter(Boolean).slice(0, 12); } catch (e) {}
+  if (!def.stats && def.api && !err) {           // generic: top-level scalars only
+    stats = Object.entries(d).filter(([, v]) => v == null || typeof v !== "object").slice(0, 8)
+      .map(([k, v]) => [k.replace(/_/g, " ").toUpperCase(), v]);
+  }
+  $("#modal-body").innerHTML = `
+    <div class="si-about">${escapeHTML(def.about || "")}</div>
+    ${stats.length ? `<div class="mb-grid">${stats.map(([k, v]) =>
+      `<div class="mb-stat"><span class="lbl">${escapeHTML(k)}</span><span class="val">${escapeHTML(v == null || v === "" ? "—" : String(v))}</span></div>`).join("")}</div>` : ""}
+    ${list.length ? `<div class="mb-list">${list.map(t => `<div class="mb-row">${escapeHTML(String(t))}</div>`).join("")}</div>` : ""}
+    ${err ? `<div class="mb-row" style="color:var(--error)">live data unavailable: ${escapeHTML(err)}</div>` : ""}
+    ${!stats.length && !list.length && !err && def.api ? `<div class="mb-row">no data yet — this section fills in once its source reports.</div>` : ""}
+    <div class="si-src"><span class="lbl">DATA SOURCE</span> ${escapeHTML(def.source || "")}
+      ${def.api ? `<code>${escapeHTML(def.api)}</code>` : ""} · read ${new Date().toLocaleTimeString()}</div>`;
+}
+
+function initSectionInfo() {
+  document.querySelectorAll(".panel-title, .bs-title").forEach(el => {
+    const key = _sectionKey(el);
+    if (!SECTION_INFO[key] || el.dataset.info) return;
+    el.dataset.info = key;
+    el.classList.add("has-info");
+    const i = document.createElement("span");
+    i.className = "sec-info-i"; i.textContent = "ⓘ"; i.setAttribute("aria-hidden", "true");
+    const txt = [...el.childNodes].find(n => n.nodeType === 3 && n.textContent.trim());
+    if (txt) txt.after(i); else (el.querySelector("span") || el).appendChild(i);
+    el.setAttribute("tabindex", "0"); el.setAttribute("role", "button");
+    el.title = `${key} — click for details and live data`;
+    const go = (e) => {
+      if (e.target.closest("button, a, input, select")) return;     // keep inline controls working
+      e.stopPropagation(); openSectionInfo(key);
+    };
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(e); } });
+  });
+}
+initSectionInfo();

@@ -5,6 +5,14 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-26 — LLM switch, real licensing, interactive sections, website checkout
+- **feat:** **LLM SWITCH** (click the LLM row / AI MODEL tile). Choose Auto, Claude, Ollama or **any OpenAI-compatible model** (presets: OpenAI, Anthropic, Gemini, Groq, OpenRouter, DeepSeek, Mistral, Together, LM Studio, custom). Each one gets **SAVE + TEST** (a real round-trip with measured latency), USE, edit and remove. Keys are stored locally and only ever shown masked. Failures fall back to the original chain.
+- **feat:** **Licensing** (`licensing.py`). The owner machine (`BUCS_OWNER=1`) has everything unlocked. Customer installs run Community until a LemonSqueezy licence key is activated in **LICENSE → ACTIVATE**. Cloud brains, Google sync and engineering mode are enforced server-side. Validation runs daily with a 7-day offline grace, plus re-verify and release-seat actions. The demo edition switch is now owner-only.
+- **feat:** **Every section is interactive.** All 53 section titles open an info panel: what the section is, the live values read from its real endpoint, and the data source. Nothing is invented.
+- **site:** the pricing buttons read `docs/payments.json`: a LemonSqueezy checkout URL makes the plan a real BUY button with overlay checkout, and an empty one stays an honest waitlist button. Added how-buying-works steps, a bring-any-model strip, an animated featured card, and removed the "every edition is live" claim.
+- **ui:** event stream fixed at 190 px; the process/traffic row takes the remaining height (shows up to 12 processes).
+- **test:** `tests/test_licensing_providers.py` (12), site checkout guards; billing smoke test now asserts that customers cannot mint a paid edition.
+
 ## 2026-10-23 — Commander Memory (long-form private profile)
 - **fix:** operator memory silently truncated profiles: UI input 200 chars, server 240 chars per fact, only 40 facts kept. A ~25 KB memory protocol was cut to ~200 chars.
 - **feat:** `commander_memory.py` stores a full profile (paste/edit or upload .md/.txt, up to 300,000 chars) **locally only** (`commander_memory.md`: gitignored, protected from engineering-mode edits). It is split into sections; every agent request gets an always-on core identity plus the most relevant sections (dependency-free BM25-lite, title-aware, **rule sections weighted ×2** so "never reset production data" outranks descriptions). Engineering-mode diagnoses also receive the operator's rules.

@@ -33,6 +33,8 @@ from netspeed import NetMonitor
 from realtime import Engine
 from devagent import DevAgent
 from commander_memory import CommanderMemory
+from llm_providers import PRESETS, ProviderRegistry
+from licensing import Licensing
 import agents as agents_mod
 from orchestrator import Orchestrator
 from productivity import Productivity
@@ -223,6 +225,22 @@ async def lifespan(app: FastAPI):
     state["engine"] = engine
     state["dev"] = DevAgent(state)            # JARVIS engineering mode (devagent.py)
     state["commander"] = CommanderMemory()    # long-form private operator profile
+    state["providers"] = ProviderRegistry(brain, local_llm)   # LLM switch (llm_providers.py)
+    state["licensing"] = Licensing()                          # paid access (licensing.py)
+    state["providers"].gate = state["licensing"].allows       # cloud brains need a paid edition
+    state["providers"]._apply()
+
+    async def license_loop():                  # re-validate a customer licence daily
+        while True:
+            try:
+                lic = state["licensing"]
+                if lic.data.get("key") and time.time() - lic.data.get("validated_at", 0) > 24 * 3600:
+                    await lic.validate()
+                state["providers"]._apply()          # grace expiry downgrades the brain too
+            except Exception:
+                pass
+            await asyncio.sleep(3600)
+    license_task = asyncio.create_task(license_loop())
     agents_mod.COMMANDER["memory"] = state["commander"]
     if voice is not None:
         voice.engine = engine
@@ -262,6 +280,7 @@ async def lifespan(app: FastAPI):
     finally:
         sysmon_task.cancel()
         net_task.cancel()
+        license_task.cancel()
         if voice_task:
             voice_task.cancel()
         scheduler.shutdown(wait=False)
@@ -553,6 +572,8 @@ async def dev_status():
 async def dev_diagnose(req: DevReq):
     if not _commander():
         return _locked()
+    if not state["licensing"].allows("engineering"):
+        return {"ok": False, "error": "Engineering mode is a Pro feature — activate a licence in LICENSE"}
     asyncio.create_task(state["dev"].diagnose(req.request[:1000]))   # streams over /ws
     return {"ok": True}
 
@@ -614,6 +635,68 @@ async def profile_clear():
 async def profile_search(q: str):
     return {"q": q, "hits": [{"title": h["title"], "score": h["score"], "preview": h["text"][:200]}
                              for h in state["commander"].search(q, k=5)]}
+
+
+# ═══ LLM SWITCH · provider registry (llm_providers.py) ═══
+
+@app.get("/api/llm/providers")
+async def llm_providers():
+    reg = state["providers"]
+    return {"active": reg.active, "providers": reg.list(),
+            "presets": {k: {kk: vv for kk, vv in v.items()} for k, v in PRESETS.items()},
+            "path": getattr(state["brain"], "provider_name", None)}
+
+
+class ProviderReq(BaseModel):
+    name: str
+    base_url: str
+    model: str
+    api_key: str | None = None
+    id: str | None = None
+
+
+@app.post("/api/llm/providers")
+async def llm_provider_save(req: ProviderReq):
+    if not _commander():
+        return _locked()
+    res = state["providers"].upsert(req.name, req.base_url, req.model, req.api_key, req.id)
+    if res.get("ok"):
+        await _audit("llm.provider", f"saved {res['id']} ({req.base_url})")       # never the key
+    return res
+
+
+@app.post("/api/llm/providers/{pid}/delete")
+async def llm_provider_delete(pid: str):
+    if not _commander():
+        return _locked()
+    await _audit("llm.provider", f"removed {pid}")
+    return state["providers"].remove(pid)
+
+
+@app.post("/api/llm/providers/{pid}/test")
+async def llm_provider_test(pid: str):
+    return await state["providers"].test(pid)
+
+
+class ActiveReq(BaseModel):
+    id: str
+
+
+@app.post("/api/llm/active")
+async def llm_active(req: ActiveReq):
+    if not _commander():
+        return _locked()
+    gate = state.get("licensing")
+    if gate is not None:
+        p = state["providers"].get(req.id) or {}
+        if p.get("locked"):
+            return {"ok": False, "error": "cloud AI providers need a Pro licence — activate one in LICENSE"}
+    res = state["providers"].set_active(req.id)
+    if res.get("ok"):
+        await _audit("brain.switch", f"provider → {req.id}")
+        await state["hub"].broadcast({"type": "models-updated"})
+        await state["hub"].broadcast({"type": "log", "level": "info", "msg": f"brain switched → {req.id}"})
+    return res
 
 
 @app.get("/api/digest")
@@ -803,8 +886,8 @@ async def processes_endpoint():
     for r in rows:
         r["cpu"] = round(r["cpu"], 1)
         r["mem_mb"] = round(r["mem_mb"], 1)
-    by_mem = sorted(rows, key=lambda r: r["mem_mb"], reverse=True)[:6]
-    by_cpu = sorted(rows, key=lambda r: r["cpu"], reverse=True)[:6]
+    by_mem = sorted(rows, key=lambda r: r["mem_mb"], reverse=True)[:12]
+    by_cpu = sorted(rows, key=lambda r: r["cpu"], reverse=True)[:12]
     # psutil's first sample reports 0% for everything — fall back to memory order
     if by_cpu and by_cpu[0]["cpu"] == 0:
         by_cpu = by_mem
@@ -1316,6 +1399,7 @@ async def models_select(req: ModelSel):
     name = req.model.strip()
     await _audit("brain.switch", f"model → {name}")
     if name.lower() == "claude":
+        state["providers"].set_active("auto")
         brain.force_local = False
         llm.save_pref(force_local=False)   # persist: next boot uses Claude
         await state["hub"].broadcast({"type": "log", "level": "info",
@@ -1329,6 +1413,7 @@ async def models_select(req: ModelSel):
     llm.model = name                # probe may overwrite; pin the chosen one
     llm.available = True
     llm.save_pref(force_local=True)  # persist: next boot keeps this brain
+    state["providers"].set_active("ollama")
     brain.force_local = True
     await state["hub"].broadcast({
         "type": "log", "level": "info",
@@ -1401,6 +1486,8 @@ async def calendar_connect():
     """Kick the OAuth flow (opens a browser on this machine). Then syncs."""
     if not _commander():
         return _locked()
+    if not state["licensing"].allows("google_sync"):
+        return {"ok": False, "error": "Google sync is a Pro feature — activate a licence in LICENSE"}
     await _audit("google.connect", "OAuth authorization initiated")
     result = await state["gcal"].connect()
     if result.get("ok"):
@@ -1601,7 +1688,43 @@ async def team_memory_endpoint():
 
 @app.get("/api/billing")
 async def billing_endpoint():
-    return state["billing"].snapshot()
+    return {**state["billing"].snapshot(), "license": state["licensing"].snapshot()}
+
+
+class LicenseReq(BaseModel):
+    key: str
+
+
+@app.get("/api/license")
+async def license_status():
+    return state["licensing"].snapshot()
+
+
+@app.post("/api/license/activate")
+async def license_activate(req: LicenseReq):
+    if not _commander():
+        return _locked()
+    res = await state["licensing"].activate(req.key)
+    state["providers"]._apply()
+    await _audit("license.activate", "ok" if res.get("ok") else f"refused: {res.get('error', '')[:80]}")
+    return res
+
+
+@app.post("/api/license/validate")
+async def license_validate():
+    res = await state["licensing"].validate()
+    state["providers"]._apply()
+    return res
+
+
+@app.post("/api/license/deactivate")
+async def license_deactivate():
+    if not _commander():
+        return _locked()
+    await _audit("license.deactivate", "seat released")
+    res = await state["licensing"].deactivate()
+    state["providers"]._apply()
+    return res
 
 
 class EditionReq(BaseModel):
@@ -1612,6 +1735,8 @@ class EditionReq(BaseModel):
 async def billing_set_edition(req: EditionReq):
     if not _commander():
         return _locked()
+    if not state["licensing"].owner:
+        return {"ok": False, "error": "editions come from a licence key — use LICENSE → Activate"}
     res = await state["billing"].set_edition(req.edition)
     if res.get("ok"):
         await _audit("billing.edition", f"edition → {req.edition} (demo)")

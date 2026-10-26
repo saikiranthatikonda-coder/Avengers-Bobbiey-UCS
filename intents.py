@@ -67,6 +67,11 @@ async def i_dev(ctx, text, low):
     dev = ctx.get("dev")
     if dev is None:
         return None
+    lic = ctx.get("licensing")
+    if lic is not None and not lic.allows("engineering"):
+        if re.search(_DEV_VERB, low) and re.search(_DEV_SUBJECT, low):
+            return _r("Engineering mode is part of BUCS Pro, sir. Activate a licence in the LICENSE panel.")
+        return None
     # approvals for the open engineering job
     if dev.job and dev.job.get("stage") == "proposed" and re.search(r"\b(apply|do it|go ahead|implement it|make the (fix|change))\b", low):
         async def run(progress):

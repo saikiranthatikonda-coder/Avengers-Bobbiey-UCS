@@ -2333,8 +2333,11 @@ body.observer-mode .dec-btn { opacity: 0.45; }
    to the tallest column; the stream was capped at 220 px) ─────────────── */
 /* flex-basis 0 + contain:size: the stream takes ONLY the leftover height and its
    growing log never sizes the panel (flex-basis auto made the page grow forever) */
-#stage-panel .event-stream { flex: 1 1 0; min-height: 160px; max-height: none; contain: size; }
-@media (max-width: 1280px) { #stage-panel .event-stream { flex: none; height: 260px; contain: strict; } }
+#stage-panel .event-stream { flex: none; height: 190px; min-height: 0; max-height: none; contain: strict; }
+/* the live process + traffic row takes the leftover column height instead */
+#stage-panel .ops-extra-row { flex: 1 1 0; min-height: 190px; contain: size; }
+#stage-panel .ops-extra-row > .strip-card { display: flex; flex-direction: column; min-height: 0; height: auto; }
+@media (max-width: 1280px) { #stage-panel .ops-extra-row { flex: none; height: 230px; } }
 
 /* ── BUCS · ON THE WEB card (left column) ─────────────────────────── */
 .links-card { margin-top: 0.6rem; border: 1px dashed var(--panel-edge); border-radius: 6px; padding: 0.45rem 0.55rem; display: flex; flex-direction: column; gap: 0.25rem; }
@@ -2358,3 +2361,48 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 .cp-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-dim); }
 .cp-row label { display: inline-flex; gap: 0.3rem; align-items: center; cursor: pointer; }
 .cp-titles { margin-top: 0.5rem; font-size: 0.64rem; color: var(--text-dim); line-height: 1.6; }
+
+/* ═══ LLM SWITCH (provider registry) ═══ */
+.llm-list { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.4rem; }
+.llm-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.6rem;
+  border: 1px solid var(--panel-edge); background: rgba(0, 20, 35, 0.45); transition: border-color 0.2s, box-shadow 0.2s; }
+.llm-row:hover { border-color: var(--panel-edge-bright); }
+.llm-row.selected { border-color: var(--success); box-shadow: 0 0 12px color-mix(in srgb, var(--success) 25%, transparent); }
+.llm-row.locked { opacity: 0.62; }
+.llm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.llm-main .mr-spec { font-size: 0.66rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.llm-meta { font-family: var(--font-mono); font-size: 0.64rem; }
+.llm-ok { color: var(--success); } .llm-bad { color: var(--error); }
+.llm-acts { display: flex; gap: 0.3rem; align-items: center; flex: 0 0 auto; }
+.llm-acts .cmd-btn[disabled] { cursor: not-allowed; opacity: 0.7; }
+.llm-lock-note { border: 1px dashed var(--warn); color: var(--warn); padding: 0.4rem 0.6rem; margin: 0.3rem 0 0.5rem;
+  font-size: 0.78rem; }
+.llm-lock-note a { color: var(--accent); }
+.llm-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; margin: 0.3rem 0; }
+.llm-form select, .llm-form input { background: rgba(0, 12, 22, 0.7); border: 1px solid var(--panel-edge); color: var(--text);
+  font-family: var(--font-mono); font-size: 0.74rem; padding: 0.38rem 0.5rem; outline: none; min-width: 0; }
+.llm-form select:focus, .llm-form input:focus { border-color: var(--accent); }
+.llm-form #llm-key, .llm-form .llm-form-acts { grid-column: 1 / -1; }
+.llm-form-acts { display: flex; gap: 0.6rem; align-items: center; }
+.llm-msg { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-dim); }
+
+/* ═══ LICENCE ═══ */
+.lic-status { margin: 0.35rem 0 0.45rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.lic-state { font-family: var(--font-mono); font-size: 0.74rem; color: var(--text-dim); letter-spacing: 0.04em; }
+.lic-state.ok { color: var(--success); }
+.lic-meta { font-size: 0.7rem; color: var(--text-dim); }
+.lic-acts { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.lic-acts a.cmd-btn { text-decoration: none; display: inline-block; }
+#lic-form { margin-bottom: 0.4rem; }
+#lic-form[hidden] { display: none; }
+
+/* ═══ SECTION INFO — every titled section opens its live details ═══ */
+.has-info { cursor: pointer; }
+.has-info:hover, .has-info:focus-visible { color: var(--accent-soft); outline: none; }
+.sec-info-i { display: inline-block; margin-left: 0.35rem; font-size: 0.72em; color: var(--text-dim); opacity: 0.55;
+  transition: opacity 0.2s, color 0.2s; vertical-align: 0.05em; }
+.has-info:hover .sec-info-i, .has-info:focus-visible .sec-info-i { opacity: 1; color: var(--accent); }
+.si-about { color: var(--text); font-size: 0.9rem; margin-bottom: 0.6rem; line-height: 1.4; }
+.si-src { margin-top: 0.7rem; padding-top: 0.5rem; border-top: 1px solid var(--panel-edge); font-size: 0.72rem; color: var(--text-dim); line-height: 1.45; }
+.si-src .lbl { font-family: var(--font-display); font-size: 0.6rem; letter-spacing: 0.14em; color: var(--accent); margin-right: 0.3rem; }
+.si-src code { font-family: var(--font-mono); color: var(--accent-soft); background: rgba(0, 217, 255, 0.07); padding: 0 0.25rem; }

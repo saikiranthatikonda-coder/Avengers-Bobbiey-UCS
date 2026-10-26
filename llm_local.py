@@ -22,20 +22,25 @@ PREF_FILE = Path(__file__).parent / "model_pref.json"
 
 class LocalLLM:
     def __init__(self, base_url: str | None = None, model: str | None = None,
-                 api_key: str | None = None, hub=None) -> None:
-        self.base_url = (base_url or os.getenv("LOCAL_LLM_URL",
-                         "http://127.0.0.1:11434/v1")).rstrip("/")
-        self.model = model or os.getenv("LOCAL_LLM_MODEL") or None
+                 api_key: str | None = None, hub=None, isolated: bool = False) -> None:
+        # isolated=True: a provider-registry client (llm_providers.py). It must
+        # NOT pick up the Ollama env/pref model or LOCAL_LLM_KEY — that would
+        # silently swap its model or send the local key to a remote provider.
+        self.base_url = (base_url or ("" if isolated else os.getenv("LOCAL_LLM_URL",
+                         "http://127.0.0.1:11434/v1"))).rstrip("/")
+        self.model = model or (None if isolated else os.getenv("LOCAL_LLM_MODEL")) or None
+        self.last_error: str | None = None
         # persisted selection (survives restarts) takes precedence
         self.pref_force_local = False   # user chose a local/Ollama brain last time
-        try:
-            pref = json.loads(PREF_FILE.read_text(encoding="utf-8"))
-            if pref.get("model"):
-                self.model = pref["model"]
-            self.pref_force_local = bool(pref.get("force_local"))
-        except Exception:
-            pass
-        self.api_key = api_key or os.getenv("LOCAL_LLM_KEY") or None
+        if not isolated:
+            try:
+                pref = json.loads(PREF_FILE.read_text(encoding="utf-8"))
+                if pref.get("model"):
+                    self.model = pref["model"]
+                self.pref_force_local = bool(pref.get("force_local"))
+            except Exception:
+                pass
+        self.api_key = api_key or (None if isolated else os.getenv("LOCAL_LLM_KEY")) or None
         self.hub = hub
         self.available = False
         self.remote_node = None                    # set when routed to a fleet node's Ollama
@@ -188,6 +193,7 @@ class LocalLLM:
         except asyncio.CancelledError:
             raise
         except Exception as e:
+            self.last_error = str(e)[:300]
             if self.hub:
                 await self.hub.broadcast({"type": "log", "level": "warn",
                                           "msg": f"local LLM stream failed: {e}"})
@@ -233,6 +239,7 @@ class LocalLLM:
                 content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL)
             return content.strip() or None
         except Exception as e:
+            self.last_error = str(e)[:300]
             self.available = False
             if self.hub:
                 await self.hub.broadcast({

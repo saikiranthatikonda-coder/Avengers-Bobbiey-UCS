@@ -76,7 +76,7 @@ EDITION_RANK = {"community": 0, "pro": 1, "team": 2, "enterprise": 3}
 ENTITLEMENTS = {
     "local_ai": "community", "agents": "community", "telemetry": "community",
     "threat_intel": "community", "cloud_brain": "pro", "vision_ai": "pro",
-    "briefings": "pro", "knowledge_hub": "pro", "google_sync": "pro",
+    "briefings": "pro", "knowledge_hub": "pro", "google_sync": "pro", "engineering": "pro",
     "multi_operator": "team", "fleet": "team", "team_memory": "team",
     "remote_access": "team", "on_prem_clusters": "enterprise",
     "sso": "enterprise", "compliance_export": "enterprise",

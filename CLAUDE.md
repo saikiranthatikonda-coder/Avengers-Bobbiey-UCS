@@ -262,6 +262,24 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
   production data must never be reset or recreated without explicit authorisation + backup.
 - Treat employment/project facts in it as historical unless confirmed (the profile says so).
 
+### 6e. LLM switch + licensing (llm_providers.py, licensing.py, 2026-10-26)
+
+- **LLM switch:** `ProviderRegistry` (`providers.json`, gitignored + PROTECTED). Built-ins `auto`
+  (original chain), `claude`, `ollama`; custom = any OpenAI-compatible `/v1` endpoint. Remote
+  endpoints must be https. API keys are stored locally, **never returned unmasked**, never
+  logged/audited. Custom clients use `LocalLLM(isolated=True)` so they never inherit
+  `LOCAL_LLM_KEY`/model prefs. Any provider failure falls back to the chain (never silent).
+- **Licensing:** `BUCS_OWNER=1` in `.env` = the owner's machine (everything unlocked). Customer
+  installs start on Community; a LemonSqueezy licence key (License API: activate/validate/
+  deactivate, no secret in the app) unlocks the edition named by the product/variant.
+  Re-validated daily, 7-day offline grace, then an honest drop to Community.
+- **Gates (server-side):** cloud brains (`brain.cloud_locked` stops every Claude call; cloud
+  providers locked → local only), Google sync, engineering mode, demo edition switch (owner only).
+  `ProviderRegistry.gate = licensing.allows`; call `providers._apply()` after any licence change.
+- Website checkout: `docs/payments.json` (LemonSqueezy checkout URL per plan; empty = waitlist
+  button). Keep `site/` mirrored. Never invent a checkout URL. Only the operator can create
+  the store/products.
+
 ### 7. Local Startup (verified from launcher scripts)
 
 **Start the main application (Windows):**

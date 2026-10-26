@@ -366,6 +366,36 @@ form textarea{min-height:84px;resize:vertical}
 .pc-feats li{color:var(--dim);font-size:.96rem;padding-left:1.2rem;position:relative}
 .pc-feats li::before{content:'◆';position:absolute;left:0;color:var(--cy);font-size:.6rem;top:.35em}
 .price-card .btn{text-align:center}
+.price-card::before{content:'';position:absolute;left:1.5rem;right:1.5rem;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--edge2),transparent);opacity:.7}
+.price-card.featured{overflow:visible}
+.price-card.featured::after{content:'';position:absolute;inset:-1px;border-radius:15px;padding:1px;pointer-events:none;
+  background:conic-gradient(from var(--ang,0deg),transparent 0 70%,var(--cy) 82%,#c084fc 90%,transparent 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:pc-spin 5s linear infinite}
+@property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes pc-spin{to{--ang:360deg}}
+.price-card.featured .pc-price{background:linear-gradient(110deg,#fff,#6ee7ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.price-card.featured .pc-price small{-webkit-text-fill-color:var(--dim)}
+.plan-btn.buy{position:relative;overflow:hidden}
+.plan-btn.buy::after{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.22) 50%,transparent 70%);transform:translateX(-100%);animation:btn-shine 3.2s ease-in-out infinite}
+@keyframes btn-shine{60%,100%{transform:translateX(100%)}}
+.pay-trust{display:flex;justify-content:center;flex-wrap:wrap;gap:.6rem 1.6rem;margin-top:1.6rem;font-family:var(--mono);font-size:.74rem;color:var(--dim);letter-spacing:.04em}
+.pay-trust[hidden]{display:none}
+.buy-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem;margin-top:3rem;counter-reset:s}
+@media(max-width:920px){.buy-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.buy-steps{grid-template-columns:1fr}}
+.bs-step{position:relative;border:1px solid var(--edge);border-radius:12px;padding:1.2rem 1.1rem;background:rgba(5,14,24,.55);transition:border-color .3s,transform .3s}
+.bs-step:hover{border-color:var(--cy);transform:translateY(-3px)}
+.bs-n{font-family:var(--disp);font-weight:900;font-size:1.5rem;background:linear-gradient(110deg,#c084fc,#00d9ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.bs-t{font-family:var(--disp);font-size:.62rem;letter-spacing:.26em;color:var(--ink);margin:.35rem 0 .45rem}
+.bs-step p{color:var(--dim);font-size:.92rem;line-height:1.45}
+.bs-step b{color:var(--cy);font-weight:600}
+.models-strip{margin-top:2.6rem;border-top:1px solid var(--edge);border-bottom:1px solid var(--edge);padding:1rem 0;overflow:hidden}
+.ms-label{font-family:var(--disp);font-size:.56rem;letter-spacing:.3em;color:var(--dim);text-align:center;margin-bottom:.7rem}
+.ms-track{overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent);mask:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent)}
+.ms-row{display:flex;gap:2.6rem;width:max-content;animation:ms-scroll 32s linear infinite}
+.ms-row span{font-family:var(--disp);font-weight:700;font-size:.95rem;letter-spacing:.12em;color:#7fa9c6;white-space:nowrap}
+@keyframes ms-scroll{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.ms-row,.price-card.featured::after,.plan-btn.buy::after{animation:none}}
 
 /* footer */
 footer{border-top:1px solid var(--edge);padding:2.2rem 4vw;display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center;position:relative;z-index:1;background:rgba(3,5,10,.7)}
@@ -685,7 +715,7 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
     <div class="reveal">
       <div class="eyebrow">— PRICING</div>
       <h2 class="sect">Free to start.<br>Scales to the enterprise.</h2>
-      <p class="sect-sub">The full command center is free forever on Community. Paid tiers add cloud AI, multi-operator fleets, and enterprise controls. Every edition is live in the dashboard's License &amp; Monetization module today.</p>
+      <p class="sect-sub">The full command center is free forever on Community. Paid tiers add cloud AI, any-model switching, multi-operator fleets and enterprise controls. Buy once, paste your licence key into the dashboard's LICENSE panel, and the paid features unlock on the spot.</p>
     </div>
     <div class="price-grid four">
       <div class="price-card reveal">
@@ -698,7 +728,7 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
           <li>Threat intelligence</li>
           <li>100 AI credits / month</li>
         </ul>
-        <a class="btn ghost" href="#access">START FREE</a>
+        <a class="btn ghost" href="https://github.com/saikiranthatikonda-coder/Avengers-Bobbiey-UCS" target="_blank" rel="noopener">START FREE ON GITHUB</a>
       </div>
       <div class="price-card reveal">
         <div class="pc-name">PRO</div>
@@ -706,11 +736,12 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
         <ul class="pc-feats">
           <li>Everything in Community</li>
           <li>Claude cloud brain + webcam vision</li>
+          <li>LLM switch: OpenAI, Gemini, Groq, any model</li>
           <li>Executive briefings + Knowledge Hub</li>
           <li>Google Calendar + Gmail</li>
           <li>2,000 AI credits / month</li>
         </ul>
-        <a class="btn ghost" href="#access">GO PRO</a>
+        <a class="btn ghost plan-btn" data-plan="pro" data-intent="waitlist" href="#access">JOIN THE PRO WAITLIST</a>
       </div>
       <div class="price-card featured reveal">
         <div class="pc-badge">MOST POPULAR</div>
@@ -723,7 +754,7 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
           <li>Shared team memory + audit trail</li>
           <li>10,000 pooled AI credits / month</li>
         </ul>
-        <a class="btn primary" href="#access">REQUEST EARLY ACCESS</a>
+        <a class="btn primary plan-btn" data-plan="team" data-intent="demo" href="#access">REQUEST EARLY ACCESS</a>
       </div>
       <div class="price-card reveal">
         <div class="pc-name">ENTERPRISE</div>
@@ -735,9 +766,28 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
           <li>Autonomous decision support at scale</li>
           <li>Dedicated engineer + SLA</li>
         </ul>
-        <a class="btn dark" href="#access">TALK TO THE FOUNDER</a>
+        <a class="btn dark" data-intent="demo" href="#access">TALK TO THE FOUNDER</a>
       </div>
     </div>
+    <div class="pay-trust reveal" id="pay-trust" hidden>
+      <span>🔒 Secure checkout</span><span>⚡ Licence key by email in seconds</span><span>🌍 Global tax handled</span><span>↺ Cancel anytime</span>
+    </div>
+
+    <div class="buy-steps reveal">
+      <div class="bs-step"><div class="bs-n">01</div><div class="bs-t">CHOOSE A PLAN</div><p>Start free forever, or pick Pro / Team when you want cloud AI and fleets.</p></div>
+      <div class="bs-step"><div class="bs-n">02</div><div class="bs-t">GET YOUR KEY</div><p>Checkout issues a licence key instantly. It arrives by email with your receipt.</p></div>
+      <div class="bs-step"><div class="bs-n">03</div><div class="bs-t">ACTIVATE</div><p>Paste it into <b>LICENSE → ACTIVATE</b> in the dashboard. Paid features unlock on the spot.</p></div>
+      <div class="bs-step"><div class="bs-n">04</div><div class="bs-t">SWITCH BRAINS</div><p>Open the <b>LLM SWITCH</b>. Run Claude, your own API key, or a fully local model.</p></div>
+    </div>
+
+    <div class="models-strip reveal">
+      <div class="ms-label">BRING ANY MODEL · ONE CLICK TO SWITCH</div>
+      <div class="ms-track"><div class="ms-row">
+        <span>Claude</span><span>OpenAI</span><span>Gemini</span><span>Groq</span><span>OpenRouter</span><span>DeepSeek</span><span>Mistral</span><span>Together</span><span>Ollama</span><span>LM Studio</span><span>vLLM</span>
+        <span aria-hidden="true">Claude</span><span aria-hidden="true">OpenAI</span><span aria-hidden="true">Gemini</span><span aria-hidden="true">Groq</span><span aria-hidden="true">OpenRouter</span><span aria-hidden="true">DeepSeek</span><span aria-hidden="true">Mistral</span><span aria-hidden="true">Together</span><span aria-hidden="true">Ollama</span><span aria-hidden="true">LM Studio</span><span aria-hidden="true">vLLM</span>
+      </div></div>
+    </div>
+
     <p class="sect-sub reveal" style="margin-top:2rem;text-align:center;">
       Multiple monetization paths coexist — subscriptions, AI credits, a plugin marketplace, professional services, on-prem licensing, and an <b>optional token ecosystem</b>. The AI platform is the product; the token is a community &amp; access layer, never a requirement.
     </p>
@@ -867,6 +917,32 @@ document.querySelectorAll("[data-intent]").forEach(a => {
   if (a.classList.contains("intent")) return;
   a.addEventListener("click", () => selectIntent(a.dataset.intent === "early-access" ? "demo" : a.dataset.intent));
 });
+
+/* checkout: docs/payments.json holds the LemonSqueezy checkout URL per plan.
+   Empty = honest waitlist button. Only https lemonsqueezy.com links are used. */
+(async () => {
+  let cfg = null;
+  try { cfg = await (await fetch("payments.json", { cache: "no-store" })).json(); } catch (e) { return; }
+  const ok = u => typeof u === "string" && /^https:\/\/[a-z0-9-]+\.lemonsqueezy\.com\/(buy|checkout)\//i.test(u);
+  let live = 0;
+  document.querySelectorAll(".plan-btn[data-plan]").forEach(b => {
+    const url = (cfg.checkout || {})[b.dataset.plan];
+    if (!ok(url)) return;
+    live++;
+    b.href = url + (url.includes("?") ? "&" : "?") + "embed=1";
+    b.removeAttribute("data-intent");
+    b.classList.add("buy", "lemonsqueezy-button");
+    b.textContent = b.dataset.plan === "team" ? "BUY TEAM" : "BUY PRO";
+    b.target = "_blank"; b.rel = "noopener";
+  });
+  if (live) {
+    document.getElementById("pay-trust").hidden = false;
+    const s = document.createElement("script");          // LemonSqueezy overlay checkout
+    s.src = "https://app.lemonsqueezy.com/js/lemon.js"; s.defer = true;
+    s.onload = () => window.createLemonSqueezy && window.createLemonSqueezy();
+    document.head.appendChild(s);
+  }
+})();
 
 /* form submit → /api/waitlist with graceful fallback */
 document.getElementById("access-form").addEventListener("submit", async (e) => {

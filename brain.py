@@ -38,6 +38,10 @@ class Brain:
         self.local_llm = local_llm  # LocalLLM (OpenAI-compatible endpoint) or None
         self.mode: str = "unknown"  # "llm" | "local-llm" | "local" | "unknown"
         self.force_local = False    # user picked a local model → route replies to it
+        self.provider = None        # llm_providers: selected custom provider client
+        self.provider_name = None
+        self.prefer_claude = False
+        self.cloud_locked = False   # unlicensed customer install: no Claude calls (licensing.py)
 
     async def probe(self) -> str:
         """Resolve brain mode: claude CLI → local LLM endpoint → templates."""
@@ -70,6 +74,10 @@ class Brain:
         timeout: float = 120.0,
         fast: bool = False,
     ) -> str:
+        if self.provider is not None:                    # operator-selected provider first
+            alt = await self.provider.chat(prompt, system=system, timeout=timeout)
+            if alt:
+                return alt
         # Forced-local: the operator explicitly picked a local model in the UI,
         # so ALL replies route through it (falls back to Claude only if it errors).
         if self.force_local and self.local_llm and self.local_llm.available:
@@ -165,6 +173,8 @@ class Brain:
         Text-only calls return at message_stop (the answer is complete there);
         tool calls (vision Read) wait for the final `result` event. Returns the
         same strings as before, including "[brain …]" error markers."""
+        if self.cloud_locked:
+            return "[brain locked: cloud AI needs a Pro licence]"
         import json as _json
         args = self._cli_args(prompt, system, allow_read)
         proc = None
@@ -244,6 +254,10 @@ class Brain:
             if on_delta and txt:
                 await on_delta(txt)
 
+        if self.provider is not None:                    # operator-selected provider first
+            r = await self.provider.chat_stream(prompt, system=system, on_delta=on_delta, timeout=timeout)
+            if r:
+                return r, f"provider:{self.provider_name}"
         llm = self.local_llm
         local_ok = bool(llm and llm.available)
         if self.force_local and local_ok:

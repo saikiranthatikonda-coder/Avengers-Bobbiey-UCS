@@ -120,8 +120,12 @@ tracks both.
 
 | Feature | Status |
 |---|---|
-| Editions (Community → Enterprise), AI credits, entitlements | **MOCK**: demo ledger in `billing.json`, no payments, nothing enforced. Real-payments design in `SAAS_PLAN.md` §3 |
-| Real payment provider (LemonSqueezy/Stripe), license keys | PLANNED |
+| Editions (Community → Enterprise), entitlements | IMPLEMENTED: enforced server-side from a licence (`licensing.py`); owner machine = all unlocked. AI-credit ledger still a local counter |
+| Licence keys (LemonSqueezy License API: activate / validate / release) | IMPLEMENTED. Operator: create the store + Pro/Team products with licence keys enabled |
+| Website checkout (`docs/payments.json` → BUY buttons + overlay) | IMPLEMENTED: honest waitlist until checkout URLs are pasted in |
+| LLM switch: Claude / Ollama / any OpenAI-compatible model, test, keys masked | IMPLEMENTED (`llm_providers.py`); cloud providers are a Pro feature on customer installs |
+| Section info: every titled section opens live data + its source | IMPLEMENTED |
+| Computer-use skill (JARVIS operates apps to fulfil commands) | PLANNED: needs Anthropic API key (computer-use tool) or an MCP desktop server; every step screenshot-confirmed, per-action approval, no credentials/payments |
 | Web3 module (off by default) | OPTIONAL |
 | Web3: chain status, gas, RPC health, on-chain balances | IMPLEMENTED (real JSON-RPC, when enabled) |
 | Web3: EIP-6963 wallet connect, governance voting, marketplace, treasury | IMPLEMENTED (persisted locally) |
