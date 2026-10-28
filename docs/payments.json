@@ -1,8 +1,10 @@
 {
-  "_readme": "UPI payments for BUCS Pro. The website draws a UPI QR for the chosen plan (1 or 12 months); buyers send their UTR + install ID to contact_email; you issue the key from the dashboard (LICENSE -> ISSUE KEY). Empty upi_id = 'opening soon'.",
+  "_readme": "UPI payments for BUCS Pro. The website shows one pre-generated QR per plan (docs/pay/, made with tools/make_upi_qr.py, which takes the UPI ID on the command line so it is never stored as text). Buyers send their UTR + install ID to contact_email; you issue the key in LICENSE -> ISSUE KEY.",
   "method": "upi",
-  "upi_id": "7330858265-2@axl",
-  "payee_name": "THATIKONDA SRI SAI KIRAN",
+  "qr": {
+    "12": "pay/bucs-12m.png",
+    "1": "pay/bucs-1m.png"
+  },
   "contact_email": "srisaikiranthatikonda@gmail.com",
   "currency": "INR",
   "prices": {

@@ -32,8 +32,14 @@ class Website(unittest.TestCase):
         import json
         cfg = json.loads((ROOT / "docs" / "payments.json").read_text(encoding="utf-8"))
         self.assertEqual((cfg["method"], cfg["currency"]), ("upi", "INR"))
-        # empty = "opening soon"; otherwise a real UPI VPA (name@bank)
-        self.assertRegex(cfg["upi_id"], r"^$|^[\w.\-]{2,256}@[a-zA-Z]\w{2,64}$")
+        # privacy: no UPI ID / payee name as text anywhere the site serves, only QR images
+        for k in ("upi_id", "payee_name", "vpa"):
+            self.assertNotIn(k, cfg)
+        self.assertNotRegex(DOCS + json.dumps(cfg), r"[\w.\-]+@(axl|ybl|ibl|okaxis|okhdfcbank|okicici|oksbi|paytm|upi)")
+        self.assertNotIn("upi://", DOCS)
+        for months in cfg["prices"]:
+            self.assertTrue((ROOT / "docs" / cfg["qr"][months]).exists())
+            self.assertEqual((ROOT / "docs" / cfg["qr"][months]).read_bytes(), (ROOT / "site" / cfg["qr"][months]).read_bytes())
         # exactly two plans, identical in payments.json, billing.py and on the page
         from billing import EDITIONS
         plans = {str(p["months"]): p["price_num"] for p in EDITIONS[0]["plans"]}

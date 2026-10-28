@@ -5,6 +5,12 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-28 — Privacy: QR-only payments; official India on the world map; alignment
+- **privacy:** the website no longer publishes the UPI ID or payee name as text (they were in the public `payments.json` and the page). It now shows only pre-generated, amount-filled QR images per plan (`docs/pay/`, made by `tools/make_upi_qr.py`, which takes the UPI ID on the command line so it is never stored in the repo). The "open UPI app" link is gone because it carried the ID in plain text. A test blocks any UPI ID, payee name or `upi://` link from the site.
+- **fix:** the world map drew India from Natural Earth's de-facto line. India is now drawn from the official boundary (same dataset as the India panel, dissolved to lon/lat: `static/geo/india_world.json`, 16 KB), and neighbours are masked underneath so no de-facto border shows through. The map now fits the panel's real shape and the inhabited band (56°S–74°N) instead of a fixed box with empty side bars. Countries show names on hover.
+- **fix:** location rows split words mid-word ("SERILINGAMPALL / Y") and cut the network name at 38 characters. Rows now wrap only at spaces, with tighter letter spacing and the full network name (IP on hover). Checked at 290/260/220 px column widths and with an automated whole-page audit for split words and clipped text.
+- **fix:** OPEN LLM SWITCH (and other text buttons) spun 120° on hover; only single-glyph icon buttons rotate now.
+
 ## 2026-10-28 — Live launch: install path replaces early access
 - **site:** early access / waitlist removed (the product is live). New **GET STARTED** section with a download button (GitHub ZIP), requirements (Windows 10/11, Python 3.11+), and five steps from install → activation screen (install ID) → UPI payment → key → ACTIVATE. The hero and nav point to it; the pricing form links back to it for anyone without an install ID.
 - **feat:** `Start BUCS.cmd` for customers. The first launch checks for Python 3.11+ (opens python.org if missing), creates the environment, installs dependencies (cleans up and explains on failure), copies `.env`, and adds a **BUCS** desktop shortcut. It no longer stops to ask for a NewsAPI key.

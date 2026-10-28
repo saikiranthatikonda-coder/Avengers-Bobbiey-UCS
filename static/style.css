@@ -2490,3 +2490,17 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 
 /* Web3 widgets stay hidden until the module is enabled (display:grid used to override [hidden]) */
 .web3-row[hidden] { display: none; }
+
+/* ═══ alignment fixes (2026-10-28) ═══ */
+/* text buttons never spin — the 120° hover spin is for single-glyph icon buttons */
+.ghost-btn.wide:hover, a.ghost-btn:hover, .lic-acts .ghost-btn:hover, .llm-acts .ghost-btn:hover { transform: none; }
+/* left-column info rows: words never split mid-word ("SERILINGAMPALL / Y"), long values wrap at spaces */
+.mini-row { align-items: flex-start; }
+.mini-label { flex: 0 0 auto; padding-top: 0.12rem; }
+.mini-value { min-width: 0; max-width: 68%; letter-spacing: 0.06em; overflow-wrap: normal; word-break: normal; hyphens: none; line-height: 1.35; }
+.loc-value { font-size: 0.64rem; }
+#isp-value { font-size: 0.64rem; }
+
+/* world map: India from the official boundary, gently highlighted as home */
+.map-continents path.india-official { fill: color-mix(in srgb, var(--stark) 16%, transparent); stroke: color-mix(in srgb, var(--stark) 80%, transparent); stroke-width: 0.8; }
+.map-continents path.india-official:hover { fill: color-mix(in srgb, var(--stark) 28%, transparent); }

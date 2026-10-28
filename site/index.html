@@ -396,7 +396,6 @@ form textarea{min-height:84px;resize:vertical}
 .pay-row span{font-family:var(--disp);font-size:.52rem;letter-spacing:.2em}
 .pay-row b{color:var(--ink);font-family:var(--mono);font-weight:400;overflow:hidden;text-overflow:ellipsis}
 .pay-row select{background:rgba(0,12,22,.8);border:1px solid var(--edge);color:var(--ink);font-family:var(--mono);font-size:.8rem;padding:.3rem .4rem;border-radius:6px}
-.pay-app{text-align:center;font-size:.6rem}
 .pay-note{color:var(--dim);font-size:.86rem;line-height:1.45}
 .pay-form{display:flex;flex-direction:column;gap:.5rem}
 .pay-form input{background:rgba(0,12,22,.75);border:1px solid var(--edge);border-radius:8px;color:var(--ink);font-family:var(--mono);font-size:.82rem;padding:.6rem .7rem;outline:none}
@@ -781,13 +780,10 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
         <div class="pay-body">
           <div class="pay-qr" id="pay-qr"><div class="pay-soon">UPI payments<br>opening soon</div></div>
           <div class="pay-info">
-            <div class="pay-row"><span>UPI ID</span><b id="pay-upi">—</b></div>
-            <div class="pay-row"><span>PAYEE</span><b id="pay-name">—</b></div>
             <div class="pay-row"><span>AMOUNT</span>
               <select id="pay-term"><option value="12">₹1,499 · 12 months</option><option value="1">₹149 · 1 month</option></select>
             </div>
-            <a class="btn primary pay-app" id="pay-open" href="#" hidden>OPEN UPI APP</a>
-            <div class="pay-note">Scan with GPay, PhonePe, Paytm or BHIM. 0% fees, paid straight to the founder.</div>
+            <div class="pay-note">Scan with GPay, PhonePe, Paytm or BHIM. The amount fills in automatically. On a phone, save the QR and use “scan from gallery”. 0% fees.</div>
           </div>
         </div>
 
@@ -895,30 +891,20 @@ document.querySelectorAll(".cap").forEach(c => {
   })();
 })();
 
-/* UPI payments: docs/payments.json holds the UPI ID, payee name and the email
-   that receives payment details. Empty UPI ID = honest "opening soon". */
+/* UPI payments: docs/payments.json lists one pre-generated QR image per plan
+   (tools/make_upi_qr.py). No UPI ID or payee name is published as text. */
 let PAY = null;
 (async () => {
   try { PAY = await (await fetch("payments.json", { cache: "no-store" })).json(); } catch (e) { return; }
-  const vpa = (PAY.upi_id || "").trim();
-  if (!/^[\w.\-]{2,256}@[a-zA-Z][\w]{2,64}$/.test(vpa)) return;
-  document.getElementById("pay-upi").textContent = vpa.replace(/\d(?=\d{4})/g, "•");
-  document.getElementById("pay-name").textContent = PAY.payee_name || "—";
-  const prices = PAY.prices || { "1": 149, "12": 1499 };
+  const qr = PAY.qr || {};
   const term = document.getElementById("pay-term");
   const draw = () => {
-    const amt = prices[term.value];
-    const uri = `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(PAY.payee_name || "BUCS")}` +
-      `&am=${amt}&cu=INR&tn=${encodeURIComponent("BUCS Pro " + term.value + "m")}`;
-    const host = document.getElementById("pay-qr"); host.innerHTML = "";
-    if (window.QRCode) new QRCode(host, { text: uri, width: 148, height: 148, correctLevel: QRCode.CorrectLevel.M });
-    const open = document.getElementById("pay-open"); open.href = uri; open.hidden = false;
+    const src = qr[term.value]; if (!src) return;
+    const host = document.getElementById("pay-qr");
+    host.innerHTML = `<img src="${src}" alt="UPI QR for BUCS Pro, ${term.options[term.selectedIndex].text}" width="148" height="148"/>`;
   };
   term.addEventListener("change", draw);
-  const s = document.createElement("script");
-  s.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
-  s.onload = draw; s.onerror = draw;
-  document.head.appendChild(s);
+  draw();
 })();
 
 document.getElementById("pay-form").addEventListener("submit", (e) => {

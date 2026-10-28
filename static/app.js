@@ -704,17 +704,46 @@ async function renderRealWorldMap() {
     const world = await r.json();
     worldFeatures = topojson.feature(world, world.objects.countries);
 
-    const w = 1000, h = 460;
-    mapProjection = d3.geoNaturalEarth1().scale(190).translate([w / 2, h / 2 + 10]);
+    // Match the viewBox to the panel's real aspect ratio so the map uses the
+    // panel's full size instead of a fixed 1000×460 box letterboxed inside it.
+    const svg = document.getElementById("world-map");
+    const box = svg.getBoundingClientRect();
+    const h = 460, w = Math.max(1000, Math.round(h * (box.width && box.height ? box.width / box.height : 1000 / 460)));
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.querySelectorAll("rect.map-bg, rect[fill='url(#map-vignette)'], #not-india rect").forEach(r => r.setAttribute("width", w));
+    svg.querySelector("#not-india")?.setAttribute("width", w);
+    [...svg.querySelectorAll(".map-grid line")].filter(l => l.getAttribute("y1") === "0")
+      .forEach((l, i) => { const x = Math.round(w * (i + 1) / 4); l.setAttribute("x1", x); l.setAttribute("x2", x); });
+    svg.querySelectorAll(".map-grid line").forEach(l => { if (l.getAttribute("x1") === "0") l.setAttribute("x2", w); });
+    // fit the inhabited band (56°S – 74°N, every longitude): all populated land
+    // stays in view (Ushuaia, Hobart, Murmansk) and only polar ice is left out
+    const band = { type: "MultiPoint", coordinates: [] };
+    for (let lon = -180; lon <= 180; lon += 5) band.coordinates.push([lon, -56], [lon, 74], [lon, 0]);
+    mapProjection = d3.geoNaturalEarth1().fitExtent([[12, 8], [w - 12, h - 8]], band);
     const path = d3.geoPath(mapProjection);
 
     continents.innerHTML = "";
     worldFeatures.features.forEach(f => {
+      if (String(f.id) === "356") return;          // India: drawn from the official boundary below
       const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
       p.setAttribute("d", path(f));
       p.setAttribute("class", "country");
+      const t = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      t.textContent = (f.properties && f.properties.name) || ""; p.appendChild(t);
       continents.appendChild(p);
     });
+    // India with its official boundary (J&K incl. PoK/Gilgit-Baltistan, Ladakh incl.
+    // Aksai Chin): static/geo/india_world.json, same dataset as the India panel.
+    // Neighbours are masked out underneath it so no de-facto line shows through.
+    const indiaHost = document.getElementById("map-india");
+    let india = null;
+    try { india = await (await fetch("/static/geo/india_world.json")).json(); } catch (e) {}
+    if (!india) india = worldFeatures.features.find(f => String(f.id) === "356");
+    if (india && indiaHost) {
+      const d = path(india);
+      document.getElementById("india-mask-path")?.setAttribute("d", d);
+      indiaHost.innerHTML = `<path class="country india-official" d="${d}"><title>India</title></path>`;
+    }
   } catch (e) {
     console.warn("world map load failed", e);
     renderFallbackContinents();
@@ -1085,7 +1114,7 @@ async function initGeo() {
         const wc = $("#weather-city"); if (wc) wc.textContent = `${weatherCity} · WEATHER`;
       }
       const isp = $("#isp-value");
-      if (isp) isp.textContent = g.isp ? `${g.isp}${g.ip ? " · " + g.ip : ""}`.slice(0, 38) : "—";
+      if (isp) { isp.textContent = g.isp || "—"; isp.title = [g.isp, g.ip].filter(Boolean).join(" · "); }
       refreshWeather(true);
     }
   } catch (e) {}
