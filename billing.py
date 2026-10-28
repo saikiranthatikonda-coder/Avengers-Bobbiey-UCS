@@ -19,8 +19,11 @@ FILE = Path(__file__).parent / "billing.json"
 # signed licence key (licensing.py). Unlicensed installs are locked.
 EDITIONS = [
     {
-        "id": "pro", "name": "BUCS Pro", "price": "₹1,499", "price_num": 1499,
+        "id": "pro", "name": "BUCS Pro", "price": "₹149", "price_num": 149,
         "period": "/month", "credits": None,
+        # the only two plans sold (must match docs/payments.json "prices")
+        "plans": [{"months": 1, "term": "1 month", "price": "₹149", "price_num": 149, "days": 31},
+                  {"months": 12, "term": "12 months", "price": "₹1,499", "price_num": 1499, "days": 366}],
         "tagline": "The complete command center, on your own machine.",
         "features": [
             "Command dashboard, HUD and 8-agent AI roster",

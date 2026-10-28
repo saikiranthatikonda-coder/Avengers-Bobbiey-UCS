@@ -5,6 +5,13 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-28 — Two plans, live UPI payments, right-column fit, Web3 hidden
+- **pricing:** exactly two plans, ₹149 for 1 month and ₹1,499 for 12 months (billing.py plans = payments.json = website, enforced by a test). The issue form offers the same two terms.
+- **payments live:** UPI ID decoded from the operator's PhonePe QR, plus payee name and contact email in `docs/payments.json`. The website draws an amount-filled UPI QR per plan and shows the UPI ID masked (it contains a phone number).
+- **fix:** agenda and world feed were squashed to one line when the right column became fixed-height. Each block now has a real share: agenda/news grow from 150 px, inbox 76 px, vision digest 84 px (scrolls), webcam 16:9, schedule summary 2 lines. Measured: it fits 1170 px with real Google data, with no overflow.
+- **fix:** the Web3 widgets now stay hidden until the module is enabled (CSS `display:grid` was overriding `[hidden]`).
+- **fix:** boot jobs (first Google sync, briefings) no longer get silently skipped when the scheduler starts later than their 6-second slot. Google now syncs within seconds of boot instead of after 5 minutes.
+
 ## 2026-10-28 — One paid plan over UPI, accurate maps, new cards, layout fixes
 - **feat:** **One plan, pay to use.** BUCS Pro ₹1,499/month (3 mo ₹4,497 · 12 mo ₹17,988). Customer installs stay locked until a key is activated: the API returns 402, pages redirect to a new `/activate` screen showing the install ID, the websocket is refused, and agents/voice/schedules don't start. Activation brings every system online instantly, with no restart.
 - **feat:** **Owner-signed licence keys** (Ed25519, verified offline, no third party, no fees). Each key carries the customer, an expiry and an optional install-ID binding. LICENSE → **ISSUE KEY** on the owner machine signs a key, logs it, and offers copy and a pre-filled email. Forged, tampered or expired keys and keys for another install are refused. LemonSqueezy removed.

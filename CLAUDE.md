@@ -269,7 +269,8 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
   endpoints must be https. API keys are stored locally, **never returned unmasked**, never
   logged/audited. Custom clients use `LocalLLM(isolated=True)` so they never inherit
   `LOCAL_LLM_KEY`/model prefs. Any provider failure falls back to the chain (never silent).
-- **One paid plan, pay-to-use (2026-10-28):** BUCS Pro ₹1,499/month (billing.EDITIONS). The
+- **One paid plan, pay-to-use (2026-10-28):** BUCS Pro, two terms only: ₹149 / 1 month, ₹1,499 / 12 months
+  (billing.EDITIONS[0]["plans"] must equal docs/payments.json "prices" — tested). The
   owner's machine is `BUCS_OWNER=1`. Customer installs are **locked** until a key is activated:
   the `licence_gate` middleware returns 402 for the API and redirects pages to `/activate`, the
   websocket is refused, and the runtime (agents, schedules, voice, TTS) does not start until

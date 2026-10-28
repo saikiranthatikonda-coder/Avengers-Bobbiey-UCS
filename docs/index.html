@@ -731,7 +731,7 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
       <div class="price-card featured solo reveal">
         <div class="pc-badge">BUCS PRO</div>
         <div class="pc-name">BUCS Pro</div>
-        <div class="pc-price">₹1,499<small>per month · per install</small></div>
+        <div class="pc-price">₹149<small>per month · or ₹1,499 for 12 months (save 16%)</small></div>
         <ul class="pc-feats">
           <li>Command dashboard, HUD and 8-agent AI roster</li>
           <li>Voice control, conversation mode and webcam vision</li>
@@ -740,7 +740,7 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
           <li>Threat intelligence, decision support and live telemetry</li>
           <li>JARVIS engineering mode, fleet nodes and audit trail</li>
         </ul>
-        <div class="pc-terms">3 months ₹4,497 · 12 months ₹17,988 · runs on your own machine</div>
+        <div class="pc-terms">Two plans: ₹149 for 1 month · ₹1,499 for 12 months · per install · runs on your own machine</div>
       </div>
 
       <div class="pay-card reveal" id="pay-card">
@@ -751,7 +751,7 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
             <div class="pay-row"><span>UPI ID</span><b id="pay-upi">—</b></div>
             <div class="pay-row"><span>PAYEE</span><b id="pay-name">—</b></div>
             <div class="pay-row"><span>AMOUNT</span>
-              <select id="pay-term"><option value="1">₹1,499 · 1 month</option><option value="3">₹4,497 · 3 months</option><option value="12">₹17,988 · 12 months</option></select>
+              <select id="pay-term"><option value="12">₹1,499 · 12 months</option><option value="1">₹149 · 1 month</option></select>
             </div>
             <a class="btn primary pay-app" id="pay-open" href="#" hidden>OPEN UPI APP</a>
             <div class="pay-note">Scan with GPay, PhonePe, Paytm or BHIM. 0% fees, paid straight to the founder.</div>
@@ -913,9 +913,9 @@ let PAY = null;
   try { PAY = await (await fetch("payments.json", { cache: "no-store" })).json(); } catch (e) { return; }
   const vpa = (PAY.upi_id || "").trim();
   if (!/^[\w.\-]{2,256}@[a-zA-Z][\w]{2,64}$/.test(vpa)) return;
-  document.getElementById("pay-upi").textContent = vpa;
+  document.getElementById("pay-upi").textContent = vpa.replace(/\d(?=\d{4})/g, "•");
   document.getElementById("pay-name").textContent = PAY.payee_name || "—";
-  const prices = PAY.prices || { "1": 1499, "3": 4497, "12": 17988 };
+  const prices = PAY.prices || { "1": 149, "12": 1499 };
   const term = document.getElementById("pay-term");
   const draw = () => {
     const amt = prices[term.value];

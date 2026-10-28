@@ -279,6 +279,11 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(sysmon.run()))
         if voice:
             tasks.append(asyncio.create_task(voice.run()))
+        # boot jobs (first Google sync, briefings) are timed "N s after boot"; if the
+        # runtime starts later than that (slow boot, licence activated later) run
+        # them late instead of silently skipping to the next interval
+        for job in scheduler.get_jobs():
+            job.modify(misfire_grace_time=None)
         scheduler.start()
         await hub.broadcast({
             "type": "system", "event": "online",

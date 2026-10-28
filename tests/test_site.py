@@ -34,10 +34,13 @@ class Website(unittest.TestCase):
         self.assertEqual((cfg["method"], cfg["currency"]), ("upi", "INR"))
         # empty = "opening soon"; otherwise a real UPI VPA (name@bank)
         self.assertRegex(cfg["upi_id"], r"^$|^[\w.\-]{2,256}@[a-zA-Z]\w{2,64}$")
-        self.assertEqual(cfg["prices"]["1"], 1499)
-        self.assertEqual(cfg["prices"]["3"], 3 * 1499)
-        self.assertEqual(cfg["prices"]["12"], 12 * 1499)
-        self.assertIn("₹4,497", DOCS); self.assertIn("₹17,988", DOCS)
+        # exactly two plans, identical in payments.json, billing.py and on the page
+        from billing import EDITIONS
+        plans = {str(p["months"]): p["price_num"] for p in EDITIONS[0]["plans"]}
+        self.assertEqual(plans, {"1": 149, "12": 1499})
+        self.assertEqual({k: int(v) for k, v in cfg["prices"].items()}, plans)
+        self.assertIn("₹149 · 1 month", DOCS); self.assertIn("₹1,499 · 12 months", DOCS)
+        self.assertEqual(DOCS.count('<option value="'), 2)
         self.assertEqual((ROOT / "site" / "payments.json").read_text(encoding="utf-8"),
                          (ROOT / "docs" / "payments.json").read_text(encoding="utf-8"))
         self.assertNotIn("lemonsqueezy", DOCS.lower())
