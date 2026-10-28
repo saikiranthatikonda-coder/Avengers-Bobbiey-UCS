@@ -17,6 +17,7 @@ Key format:  BUCS-<base64url(json payload)>.<base64url(signature)>
 import base64
 import hashlib
 import json
+import math
 import os
 import platform
 import secrets
@@ -118,7 +119,7 @@ class Licensing:
                 "licensed": bool(p) and self.edition != "community",
                 "key": (key[:9] + "…" + key[-4:]) if key else "",
                 "customer": p.get("to"), "expires_at": exp,
-                "days_left": max(0, int((exp - time.time()) // 86400)) if exp else None,
+                "days_left": max(0, math.ceil((exp - time.time()) / 86400)) if exp else None,
                 "expired": bool(exp and exp < time.time()),
                 "install_id": self.install_id,
                 "can_issue": self.owner and self.signing_key.exists(),

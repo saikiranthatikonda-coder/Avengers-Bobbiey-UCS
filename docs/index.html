@@ -290,14 +290,17 @@ h1 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 65%,#7ff7
   box-shadow:0 34px 90px rgba(0,0,0,.6);
 }
 @media(max-width:920px){.access-card{grid-template-columns:1fr;padding:2rem}}
-.intent-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1.6rem}
-.intent{
-  font-family:var(--disp);font-size:.56rem;letter-spacing:.18em;
-  border:1px solid var(--edge2);border-radius:999px;padding:.5rem 1rem;
-  color:var(--cy);background:transparent;cursor:pointer;transition:all .25s;
-}
-.intent.active,.intent:hover{background:rgba(0,217,255,.12);box-shadow:0 0 14px rgba(0,217,255,.2)}
-form .field{margin-bottom:1rem}
+.get-btns{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.4rem}
+.get-req{margin-top:1.4rem;border-top:1px solid var(--edge);padding-top:1rem;color:var(--dim);font-size:.92rem;line-height:1.6}
+.get-req .gr-t{font-family:var(--disp);font-size:.55rem;letter-spacing:.24em;color:var(--cy);margin-bottom:.3rem}
+.get-req a,.get-steps a,.pay-note a{color:var(--cy)}
+.get-req b{color:var(--ink);font-weight:600}
+.get-steps{list-style:none;display:flex;flex-direction:column;gap:.75rem;margin:0;padding:0}
+.get-steps li{display:grid;grid-template-columns:2.4rem 1fr;gap:.6rem;align-items:start;border:1px solid var(--edge);border-radius:10px;padding:.8rem .9rem;background:rgba(5,14,24,.55);color:var(--dim);font-size:.95rem;line-height:1.45;transition:border-color .3s}
+.get-steps li:hover{border-color:var(--cy)}
+.get-steps b{color:var(--ink);font-weight:600}
+.get-steps code{font-family:var(--mono);font-size:.82rem;color:var(--cy);background:rgba(0,217,255,.07);padding:0 .25rem;border-radius:3px}
+.gs-n{font-family:var(--disp);font-weight:900;font-size:1.1rem;background:linear-gradient(110deg,#c084fc,#00d9ff);-webkit-background-clip:text;background-clip:text;color:transparent}
 form label{font-family:var(--disp);font-size:.54rem;letter-spacing:.24em;color:var(--dim);display:block;margin-bottom:.4rem}
 form input,form textarea{
   width:100%;background:rgba(0,0,0,.45);border:1px solid var(--edge);border-radius:8px;
@@ -439,7 +442,7 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
     <a href="#preview">PREVIEW</a>
     <a href="#roadmap">ROADMAP</a>
     <a href="#pricing">PRICING</a>
-    <a class="nav-cta" href="#access">REQUEST EARLY ACCESS</a>
+    <a class="nav-cta" href="#get">GET BUCS</a>
   </div>
 </nav>
 
@@ -447,13 +450,13 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
 <section class="hero" id="top">
   <div class="wrap hero-grid">
     <div>
-      <div class="hero-tag"><span class="dot"></span>NOW IN ACTIVE DEVELOPMENT · HYDERABAD</div>
+      <div class="hero-tag"><span class="dot"></span>NOW AVAILABLE · BUILT IN HYDERABAD</div>
       <h1>Meet The Future Of <span class="grad">Human-AI Command Systems</span></h1>
       <p class="hero-sub">An intelligent operational command center that transforms data, systems, cameras, sensors, and AI into one unified decision-making platform.</p>
       <div class="cta-row">
-        <a class="btn primary" href="#access" data-intent="early-access">REQUEST EARLY ACCESS</a>
+        <a class="btn primary" href="#get">GET BUCS</a>
         <a class="btn ghost" href="#preview">WATCH DEMO</a>
-        <a class="btn dark" href="#access" data-intent="waitlist">JOIN WAITLIST</a>
+        <a class="btn dark" href="#pricing">SEE PRICING</a>
       </div>
       <div class="hero-stats">
         <div class="hstat"><div class="n">8+</div><div class="l">AI AGENTS</div></div>
@@ -718,6 +721,36 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
   </div>
 </section>
 
+<!-- ═══ GET STARTED ═══ -->
+<section class="access" id="get">
+  <div class="wrap">
+    <div class="access-card reveal">
+      <div>
+        <div class="eyebrow">— GET STARTED</div>
+        <h2 class="sect">Up and running in minutes.</h2>
+        <p class="sect-sub">BUCS runs on your own Windows PC. Install it, open it, and the activation screen gives you your <b>install ID</b>. Then pick a plan below, pay over UPI, and activate.</p>
+        <div class="get-btns">
+          <a class="btn primary" id="dl-zip" href="https://github.com/saikiranthatikonda-coder/Avengers-Bobbiey-UCS/archive/refs/heads/main.zip">↓ DOWNLOAD BUCS (.ZIP)</a>
+          <a class="btn ghost" href="https://github.com/saikiranthatikonda-coder/Avengers-Bobbiey-UCS" target="_blank" rel="noopener">VIEW ON GITHUB</a>
+        </div>
+        <div class="get-req">
+          <div class="gr-t">REQUIREMENTS</div>
+          <div>Windows 10 / 11 · 8 GB RAM · internet for the first setup</div>
+          <div><a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3.11+</a>: tick <b>“Add python.exe to PATH”</b> when installing</div>
+          <div>Optional: <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a> for fully local AI · a webcam and mic for vision and voice</div>
+        </div>
+      </div>
+      <ol class="get-steps">
+        <li><span class="gs-n">01</span><div><b>Install Python 3.11 or newer</b> from python.org, with “Add python.exe to PATH” ticked.</div></li>
+        <li><span class="gs-n">02</span><div><b>Download BUCS</b> and extract the ZIP, for example to <code>Documents\BUCS</code>.</div></li>
+        <li><span class="gs-n">03</span><div><b>Double-click <code>Start BUCS.cmd</code></b>. The first launch sets everything up (about 3–5 minutes), adds a <b>BUCS</b> shortcut to your desktop, and opens BUCS in your browser.</div></li>
+        <li><span class="gs-n">04</span><div><b>Copy your install ID</b> from the activation screen. It looks like <code>1A2B3-C4D5E</code>.</div></li>
+        <li><span class="gs-n">05</span><div><b>Pay below</b> with any UPI app and send the UTR + install ID. Your key arrives by email: paste it, press <b>ACTIVATE</b>, done.</div></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
 <!-- ═══ PRICING ═══ -->
 <section class="pricing" id="pricing">
   <div class="wrap">
@@ -762,7 +795,8 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
         <form class="pay-form" id="pay-form">
           <input name="email" type="email" required placeholder="your email (the key is sent here)"/>
           <input name="utr" required placeholder="UPI transaction ID / UTR (12 digits)" pattern="[A-Za-z0-9]{6,40}"/>
-          <input name="iid" placeholder="install ID from your BUCS activation screen" maxlength="11"/>
+          <input name="iid" placeholder="install ID (shown on the BUCS activation screen)" maxlength="11"/>
+          <div class="pay-note">No install ID yet? <a href="#get">Install BUCS first</a>: the activation screen shows it.</div>
           <button class="btn primary" type="submit">SEND DETAILS</button>
           <div class="form-msg" id="pay-msg"></div>
         </form>
@@ -778,35 +812,6 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
         <span>Claude</span><span>OpenAI</span><span>Gemini</span><span>Groq</span><span>OpenRouter</span><span>DeepSeek</span><span>Mistral</span><span>Together</span><span>Ollama</span><span>LM Studio</span><span>vLLM</span>
         <span aria-hidden="true">Claude</span><span aria-hidden="true">OpenAI</span><span aria-hidden="true">Gemini</span><span aria-hidden="true">Groq</span><span aria-hidden="true">OpenRouter</span><span aria-hidden="true">DeepSeek</span><span aria-hidden="true">Mistral</span><span aria-hidden="true">Together</span><span aria-hidden="true">Ollama</span><span aria-hidden="true">LM Studio</span><span aria-hidden="true">vLLM</span>
       </div></div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══ EARLY ACCESS ═══ -->
-<section class="access" id="access">
-  <div class="wrap">
-    <div class="access-card reveal">
-      <div>
-        <div class="eyebrow">— EARLY ACCESS</div>
-        <h2 class="sect">Be first on the bridge.</h2>
-        <p class="sect-sub">We're onboarding a small group of early operators, design partners and investors. Tell us who you are — we'll reach out personally.</p>
-        <div class="intent-row" id="intent-row">
-          <button class="intent active" data-intent="waitlist">JOIN WAITLIST</button>
-          <button class="intent" data-intent="demo">REQUEST DEMO</button>
-          <button class="intent" data-intent="design-partner">BECOME DESIGN PARTNER</button>
-        </div>
-      </div>
-      <form id="access-form" name="waitlist" method="POST" data-netlify="true" netlify-honeypot="bot-field">
-        <input type="hidden" name="form-name" value="waitlist"/>
-        <p style="display:none"><label>do not fill: <input name="bot-field"/></label></p>
-        <input type="hidden" name="intent" id="intent-field" value="waitlist"/>
-        <div class="field"><label>NAME</label><input name="name" required placeholder="Tony Stark"/></div>
-        <div class="field"><label>EMAIL</label><input name="email" type="email" required placeholder="tony@stark.com"/></div>
-        <div class="field"><label>ORGANIZATION</label><input name="organization" placeholder="Stark Industries"/></div>
-        <div class="field"><label>USE CASE</label><textarea name="use_case" placeholder="What would you command with it?"></textarea></div>
-        <button class="btn primary" type="submit" style="width:100%">SUBMIT REQUEST</button>
-        <div class="form-msg" id="form-msg"></div>
-      </form>
     </div>
   </div>
 </section>
@@ -890,22 +895,6 @@ document.querySelectorAll(".cap").forEach(c => {
   })();
 })();
 
-/* intent selection (incl. hero CTAs that deep-link with an intent) */
-let chosenIntent = "waitlist";
-function selectIntent(name) {
-  chosenIntent = name || "waitlist";
-  document.querySelectorAll(".intent").forEach(b =>
-    b.classList.toggle("active", b.dataset.intent === chosenIntent));
-  const fi = document.getElementById("intent-field");
-  if (fi) fi.value = chosenIntent;
-}
-document.querySelectorAll(".intent").forEach(b =>
-  b.addEventListener("click", (e) => { e.preventDefault(); selectIntent(b.dataset.intent); }));
-document.querySelectorAll("[data-intent]").forEach(a => {
-  if (a.classList.contains("intent")) return;
-  a.addEventListener("click", () => selectIntent(a.dataset.intent === "early-access" ? "demo" : a.dataset.intent));
-});
-
 /* UPI payments: docs/payments.json holds the UPI ID, payee name and the email
    that receives payment details. Empty UPI ID = honest "opening soon". */
 let PAY = null;
@@ -944,40 +933,6 @@ document.getElementById("pay-form").addEventListener("submit", (e) => {
   msg.textContent = "✓ Your email app opened with the details. Press send, and your key follows once the payment is confirmed.";
 });
 
-/* form submit → /api/waitlist with graceful fallback */
-document.getElementById("access-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const f = e.target, msg = document.getElementById("form-msg");
-  const payload = {
-    name: f.name.value.trim(), email: f.email.value.trim(),
-    organization: f.organization.value.trim(), use_case: f.use_case.value.trim(),
-    intent: chosenIntent,
-  };
-  msg.className = "form-msg"; msg.textContent = "transmitting…";
-  try {
-    // Netlify Forms: url-encoded POST back to the page
-    const body = new URLSearchParams({ "form-name": "waitlist", ...payload }).toString();
-    const r = await fetch("/", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body,
-    });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    msg.className = "form-msg ok";
-    msg.textContent = "✓ request received — welcome to the bridge, " + (payload.name.split(" ")[0] || "operator") + ".";
-    f.reset();
-  } catch (err) {
-    const to = (PAY && PAY.contact_email || "").trim();
-    if (to) {      // static hosting (GitHub Pages): hand the request to the visitor's email app
-      location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent("BUCS · " + payload.intent)}&body=${encodeURIComponent(
-        Object.entries(payload).map(([k, v]) => `${k}: ${v}`).join("\n"))}`;
-      msg.className = "form-msg ok"; msg.textContent = "✓ Your email app opened with the request. Press send.";
-    } else {
-      msg.className = "form-msg err";
-      msg.textContent = "✕ transmission failed — please try again.";
-    }
-  }
-});
 </script>
 </body>
 </html>

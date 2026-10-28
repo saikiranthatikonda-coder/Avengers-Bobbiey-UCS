@@ -45,8 +45,14 @@ class Website(unittest.TestCase):
                          (ROOT / "docs" / "payments.json").read_text(encoding="utf-8"))
         self.assertNotIn("lemonsqueezy", DOCS.lower())
 
-    def test_waitlist_form_is_netlify_handled(self):
-        self.assertIn('data-netlify="true"', DOCS)
+    def test_live_product_has_install_path_not_early_access(self):
+        low = DOCS.lower()
+        for gone in ("early access", "waitlist", "design partner"):
+            self.assertNotIn(gone, low)
+        self.assertIn('id="get"', DOCS)
+        self.assertIn("/archive/refs/heads/main.zip", DOCS)        # the download customers install from
+        self.assertIn("Start BUCS.cmd", DOCS)
+        self.assertTrue((ROOT / "Start BUCS.cmd").exists())        # ...and it really ships in the repo
 
 
 if __name__ == "__main__":

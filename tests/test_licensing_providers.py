@@ -59,7 +59,7 @@ class Licence(unittest.TestCase):
         a = lic.activate(r["key"])
         self.assertTrue(a["ok"])
         self.assertTrue(lic.paid and lic.allows("cloud_brain"))
-        self.assertEqual(a["days_left"], 30)
+        self.assertEqual(a["days_left"], 31)                              # rounds up, never "0 days" while valid
         self.assertTrue(licensing.Licensing(**self.kw).paid)              # persisted
         self.assertEqual(self.owner().issued()[0]["payment_ref"], "UTR123")
 

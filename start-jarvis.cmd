@@ -33,7 +33,7 @@ for /f "tokens=2 delims==" %%P in ('wmic process where "ExecutablePath like '%%j
 timeout /t 1 /nobreak >nul
 
 REM ---- Auto-open the dashboard once the server responds ----
-start "" /min powershell -NoProfile -WindowStyle Hidden -Command "for($i=0;$i -lt 60;$i++){try{Invoke-WebRequest -Uri 'http://127.0.0.1:8765/api/status' -UseBasicParsing -TimeoutSec 2|Out-Null;Start-Process 'http://127.0.0.1:8765';break}catch{Start-Sleep -Seconds 2}}"
+start "" /min powershell -NoProfile -WindowStyle Hidden -Command "for($i=0;$i -lt 450;$i++){try{Invoke-WebRequest -Uri 'http://127.0.0.1:8765/api/license' -UseBasicParsing -TimeoutSec 2|Out-Null;Start-Process 'http://127.0.0.1:8765';break}catch{Start-Sleep -Seconds 2}}"
 
 echo [boot] Launching server... (dashboard opens automatically when ready)
 echo [boot] To stop: press Ctrl+C in this window, or just close it.

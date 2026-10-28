@@ -5,6 +5,13 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-28 — Live launch: install path replaces early access
+- **site:** early access / waitlist removed (the product is live). New **GET STARTED** section with a download button (GitHub ZIP), requirements (Windows 10/11, Python 3.11+), and five steps from install → activation screen (install ID) → UPI payment → key → ACTIVATE. The hero and nav point to it; the pricing form links back to it for anyone without an install ID.
+- **feat:** `Start BUCS.cmd` for customers. The first launch checks for Python 3.11+ (opens python.org if missing), creates the environment, installs dependencies (cleans up and explains on failure), copies `.env`, and adds a **BUCS** desktop shortcut. It no longer stops to ask for a NewsAPI key.
+- **fix:** the launcher only opened the browser once `/api/status` answered, which is 402 on a locked customer install, so the activation screen never opened by itself. It now waits on `/api/license` (up to the full first-setup time).
+- **fix:** "days left" rounds up, so a key that is still valid never shows "0 days".
+- **verified end to end:** a copy built from exactly the downloadable files (no private files) ran as a customer, opened the activation screen with its install ID, accepted a key signed with the owner key and bound to that ID, and unlocked the dashboard and API.
+
 ## 2026-10-28 — Two plans, live UPI payments, right-column fit, Web3 hidden
 - **pricing:** exactly two plans, ₹149 for 1 month and ₹1,499 for 12 months (billing.py plans = payments.json = website, enforced by a test). The issue form offers the same two terms.
 - **payments live:** UPI ID decoded from the operator's PhonePe QR, plus payee name and contact email in `docs/payments.json`. The website draws an amount-filled UPI QR per plan and shows the UPI ID masked (it contains a phone number).

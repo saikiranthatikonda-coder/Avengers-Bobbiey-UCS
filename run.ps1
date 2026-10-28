@@ -1,20 +1,46 @@
-# JARVIS launcher
-# First-time setup is automatic: creates .venv, installs deps, copies .env.example.
+# BUCS launcher
+# First-time setup is automatic: checks Python, creates .venv, installs deps,
+# copies .env.example, adds a desktop shortcut. Then BUCS starts.
 
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
 
 if (-not (Test-Path .venv)) {
-    Write-Host "[jarvis] Creating virtual environment..." -ForegroundColor Cyan
+    # Python 3.11+ must be installed (the Microsoft Store "python" stub doesn't count)
+    $pyOk = $false
+    try { $pyOk = ((& python -c "import sys; print(sys.version_info >= (3, 11))" 2>$null) -eq "True") } catch {}
+    if (-not $pyOk) {
+        Write-Host ""
+        Write-Host "[BUCS] Python 3.11 or newer is required." -ForegroundColor Yellow
+        Write-Host "[BUCS] Install it from python.org (tick 'Add python.exe to PATH'), then run Start BUCS again." -ForegroundColor Yellow
+        Start-Process "https://www.python.org/downloads/"
+        exit 1
+    }
+    Write-Host "[BUCS] First launch: setting up (about 3-5 minutes)..." -ForegroundColor Cyan
     python -m venv .venv
     & .\.venv\Scripts\python.exe -m pip install --upgrade pip
     & .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue   # retry cleanly next launch
+        Write-Host "[BUCS] Installing dependencies failed. Check your internet connection and run Start BUCS again." -ForegroundColor Red
+        exit 1
+    }
+    # desktop shortcut "BUCS" -> Start BUCS.cmd in this folder
+    try {
+        $lnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "BUCS.lnk"
+        if (-not (Test-Path $lnk)) {
+            $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
+            $sc.TargetPath = Join-Path $PSScriptRoot "Start BUCS.cmd"
+            $sc.WorkingDirectory = $PSScriptRoot
+            $sc.Save()
+            Write-Host "[BUCS] Desktop shortcut created: BUCS" -ForegroundColor Cyan
+        }
+    } catch {}
 }
 
 if (-not (Test-Path .env)) {
-    Copy-Item .env.example .env
-    Write-Host "[jarvis] .env created from template. Add your NEWSAPI_KEY then re-run." -ForegroundColor Yellow
-    exit 1
+    Copy-Item .env.example .env          # defaults work out of the box (news needs no key)
+    Write-Host "[BUCS] .env created from the template." -ForegroundColor Cyan
 }
 
 # Read JARVIS_HOST / JARVIS_PORT from .env so editing .env controls the bind
