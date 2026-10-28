@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Activate BUCS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#02060d;--ink:#c8e6ff;--dim:#6b94b4;--edge:#0d3a5a;--cy:#00d9ff;--ok:#50fa7b;--err:#ff5555;--vio:#c084fc}
+*{box-sizing:border-box;margin:0}
+body{min-height:100vh;display:grid;place-items:center;padding:16px;background:radial-gradient(ellipse at 50% 0%,#0b2540 0%,var(--bg) 60%);color:var(--ink);font-family:'Rajdhani',system-ui,sans-serif;font-size:17px}
+.card{width:min(560px,100%);border:1px solid var(--edge);border-radius:14px;padding:2rem 1.8rem;background:linear-gradient(160deg,rgba(8,22,36,.75),rgba(3,7,14,.92));box-shadow:0 0 40px rgba(0,217,255,.08)}
+.brand{font-family:'Orbitron',sans-serif;font-weight:900;letter-spacing:.3em;font-size:.95rem;background:linear-gradient(110deg,var(--vio),var(--cy));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{font-family:'Orbitron',sans-serif;font-size:.55rem;letter-spacing:.3em;color:var(--dim);margin-top:.25rem}
+h1{font-family:'Orbitron',sans-serif;font-size:1.35rem;letter-spacing:.06em;margin:1.4rem 0 .5rem}
+p{color:var(--dim);line-height:1.45}
+.lbl{font-family:'Orbitron',sans-serif;font-size:.55rem;letter-spacing:.24em;color:var(--cy);margin:1.3rem 0 .45rem}
+.iid{display:flex;gap:.5rem;align-items:center}
+.iid code{flex:1;font-family:'Share Tech Mono',monospace;font-size:1.25rem;letter-spacing:.12em;padding:.55rem .8rem;border:1px dashed var(--edge);border-radius:8px;color:#fff}
+textarea{width:100%;min-height:96px;resize:vertical;background:rgba(0,12,22,.75);border:1px solid var(--edge);border-radius:8px;color:var(--ink);font-family:'Share Tech Mono',monospace;font-size:.82rem;padding:.6rem .7rem;outline:none}
+textarea:focus{border-color:var(--cy)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;font-family:'Orbitron',sans-serif;font-size:.62rem;letter-spacing:.2em;padding:.75rem 1.1rem;border-radius:8px;border:1px solid var(--cy);background:linear-gradient(110deg,var(--cy),#6ee7ff);color:#02141c;cursor:pointer;text-decoration:none}
+.btn.ghost{background:transparent;color:var(--cy)}
+.btn:disabled{opacity:.6;cursor:wait}
+.row{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.9rem}
+.msg{margin-top:.8rem;font-family:'Share Tech Mono',monospace;font-size:.82rem;min-height:1.2em}
+.msg.ok{color:var(--ok)} .msg.err{color:var(--err)}
+ol{color:var(--dim);padding-left:1.2rem;line-height:1.55;margin-top:.4rem}
+ol b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">AVENGERS × BOBBIEY</div>
+  <div class="sub">UNIFIED COMMAND SYSTEM</div>
+  <h1>Activate BUCS Pro</h1>
+  <p>This install needs a licence key. Paste the key you received after payment; activation is instant and works offline.</p>
+
+  <div class="lbl">YOUR INSTALL ID</div>
+  <div class="iid"><code id="iid">—</code><button class="btn ghost" id="copy" type="button">COPY</button></div>
+
+  <div class="lbl">LICENCE KEY</div>
+  <form id="f">
+    <textarea id="key" placeholder="BUCS-…" spellcheck="false" autocomplete="off" required></textarea>
+    <div class="row">
+      <button class="btn" id="go" type="submit">ACTIVATE</button>
+      <a class="btn ghost" id="buy" href="https://saikiranthatikonda-coder.github.io/Avengers-Bobbiey-UCS/#pricing" target="_blank" rel="noopener">GET A LICENCE ↗</a>
+    </div>
+    <div class="msg" id="msg"></div>
+  </form>
+
+  <div class="lbl">NO KEY YET?</div>
+  <ol>
+    <li>Pay for <b>BUCS Pro</b> over UPI on the website (scan the QR).</li>
+    <li>Send the <b>UPI transaction ID (UTR)</b> and the <b>install ID above</b> using the form on the website.</li>
+    <li>You receive your licence key by email. Paste it here.</li>
+  </ol>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+fetch("/api/license").then(r => r.json()).then(d => {
+  if (d.paid) { location.replace("/"); return; }
+  $("#iid").textContent = d.install_id || "—";
+  if (d.expired) { $("#msg").className = "msg err"; $("#msg").textContent = "Your licence has expired. Renew to get a new key."; }
+}).catch(() => {});
+$("#copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("#iid").textContent); $("#copy").textContent = "COPIED"; } catch (e) {}
+  setTimeout(() => { $("#copy").textContent = "COPY"; }, 1500);
+});
+$("#f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const m = $("#msg"); $("#go").disabled = true; m.className = "msg"; m.textContent = "verifying…";
+  try {
+    const r = await (await fetch("/api/license/activate", { method: "POST",
+      headers: { "content-type": "application/json" }, body: JSON.stringify({ key: $("#key").value }) })).json();
+    if (r.ok) {
+      m.className = "msg ok";
+      m.textContent = `Activated: ${r.days_left} days remaining. Starting all systems…`;
+      setTimeout(() => location.replace("/"), 1400);
+    } else { m.className = "msg err"; m.textContent = r.error || "activation refused"; }
+  } catch (err) { m.className = "msg err"; m.textContent = err.message; }
+  $("#go").disabled = false;
+});
+</script>
+</body>
+</html>

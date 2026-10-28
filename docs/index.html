@@ -375,27 +375,36 @@ form textarea{min-height:84px;resize:vertical}
 @keyframes pc-spin{to{--ang:360deg}}
 .price-card.featured .pc-price{background:linear-gradient(110deg,#fff,#6ee7ff);-webkit-background-clip:text;background-clip:text;color:transparent}
 .price-card.featured .pc-price small{-webkit-text-fill-color:var(--dim)}
-.plan-btn.buy{position:relative;overflow:hidden}
-.plan-btn.buy::after{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.22) 50%,transparent 70%);transform:translateX(-100%);animation:btn-shine 3.2s ease-in-out infinite}
-@keyframes btn-shine{60%,100%{transform:translateX(100%)}}
-.pay-trust{display:flex;justify-content:center;flex-wrap:wrap;gap:.6rem 1.6rem;margin-top:1.6rem;font-family:var(--mono);font-size:.74rem;color:var(--dim);letter-spacing:.04em}
-.pay-trust[hidden]{display:none}
-.buy-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem;margin-top:3rem;counter-reset:s}
-@media(max-width:920px){.buy-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:560px){.buy-steps{grid-template-columns:1fr}}
-.bs-step{position:relative;border:1px solid var(--edge);border-radius:12px;padding:1.2rem 1.1rem;background:rgba(5,14,24,.55);transition:border-color .3s,transform .3s}
-.bs-step:hover{border-color:var(--cy);transform:translateY(-3px)}
-.bs-n{font-family:var(--disp);font-weight:900;font-size:1.5rem;background:linear-gradient(110deg,#c084fc,#00d9ff);-webkit-background-clip:text;background-clip:text;color:transparent}
-.bs-t{font-family:var(--disp);font-size:.62rem;letter-spacing:.26em;color:var(--ink);margin:.35rem 0 .45rem}
-.bs-step p{color:var(--dim);font-size:.92rem;line-height:1.45}
-.bs-step b{color:var(--cy);font-weight:600}
+.plan-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:1.4rem;margin-top:2.8rem;align-items:stretch}
+@media(max-width:920px){.plan-wrap{grid-template-columns:1fr}}
+.price-card.solo{padding:2.3rem 1.8rem 1.8rem}
+.price-card.solo .pc-price{font-size:2.8rem}
+.pc-terms{font-family:var(--mono);font-size:.74rem;color:var(--dim);border-top:1px solid var(--edge);padding-top:.8rem}
+.pay-card{border:1px solid var(--edge);border-radius:14px;padding:1.6rem 1.5rem;background:linear-gradient(160deg,rgba(8,22,36,.55),rgba(3,7,14,.9));display:flex;flex-direction:column;gap:.85rem}
+.pay-head{font-family:var(--disp);font-size:.62rem;letter-spacing:.24em;color:var(--ink);display:flex;align-items:center;gap:.6rem}
+.pay-step{font-weight:900;font-size:1rem;background:linear-gradient(110deg,#c084fc,#00d9ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.pay-body{display:grid;grid-template-columns:auto 1fr;gap:1.1rem;align-items:center}
+@media(max-width:520px){.pay-body{grid-template-columns:1fr;justify-items:center}}
+.pay-qr{width:164px;height:164px;border-radius:10px;background:#fff;display:grid;place-items:center;padding:8px;box-shadow:0 0 24px rgba(0,217,255,.18)}
+.pay-qr img,.pay-qr canvas{width:148px!important;height:148px!important;image-rendering:pixelated}
+.pay-soon{font-family:var(--disp);font-size:.6rem;letter-spacing:.16em;color:#0a2236;text-align:center;line-height:1.6}
+.pay-info{display:flex;flex-direction:column;gap:.45rem;min-width:0;width:100%}
+.pay-row{display:flex;justify-content:space-between;gap:.6rem;align-items:center;font-size:.92rem;color:var(--dim)}
+.pay-row span{font-family:var(--disp);font-size:.52rem;letter-spacing:.2em}
+.pay-row b{color:var(--ink);font-family:var(--mono);font-weight:400;overflow:hidden;text-overflow:ellipsis}
+.pay-row select{background:rgba(0,12,22,.8);border:1px solid var(--edge);color:var(--ink);font-family:var(--mono);font-size:.8rem;padding:.3rem .4rem;border-radius:6px}
+.pay-app{text-align:center;font-size:.6rem}
+.pay-note{color:var(--dim);font-size:.86rem;line-height:1.45}
+.pay-form{display:flex;flex-direction:column;gap:.5rem}
+.pay-form input{background:rgba(0,12,22,.75);border:1px solid var(--edge);border-radius:8px;color:var(--ink);font-family:var(--mono);font-size:.82rem;padding:.6rem .7rem;outline:none}
+.pay-form input:focus{border-color:var(--cy)}
 .models-strip{margin-top:2.6rem;border-top:1px solid var(--edge);border-bottom:1px solid var(--edge);padding:1rem 0;overflow:hidden}
 .ms-label{font-family:var(--disp);font-size:.56rem;letter-spacing:.3em;color:var(--dim);text-align:center;margin-bottom:.7rem}
 .ms-track{overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent);mask:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent)}
 .ms-row{display:flex;gap:2.6rem;width:max-content;animation:ms-scroll 32s linear infinite}
 .ms-row span{font-family:var(--disp);font-weight:700;font-size:.95rem;letter-spacing:.12em;color:#7fa9c6;white-space:nowrap}
 @keyframes ms-scroll{to{transform:translateX(-50%)}}
-@media (prefers-reduced-motion:reduce){.ms-row,.price-card.featured::after,.plan-btn.buy::after{animation:none}}
+@media (prefers-reduced-motion:reduce){.ms-row,.price-card.featured::after{animation:none}}
 
 /* footer */
 footer{border-top:1px solid var(--edge);padding:2.2rem 4vw;display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center;position:relative;z-index:1;background:rgba(3,5,10,.7)}
@@ -703,7 +712,7 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
       <div class="phase now reveal">
         <div class="ph">PHASE 6 <span class="now-badge">IN DEVELOPMENT</span></div>
         <h4>Ecosystem &amp; Monetization</h4>
-        <p>Turning the platform into a business: subscription editions (Community → Enterprise), AI-credit metering and feature entitlements — built and running as demo licensing today, with payments switching on at the paid beta — plus an <b>optional, modular Web3 Command Center</b> that is a working subsystem, not a mock-up: live chain telemetry over JSON-RPC (block height, gas, latency, health), multi-wallet connect with real on-chain balances and network switching, functioning governance with persisted per-wallet voting, treasury reserves, and a marketplace foundation. Off by default — the AI command center stays the product; crypto is one sustainability &amp; community layer among many, never a requirement.</p>
+        <p>Turning the platform into a business: one paid plan, BUCS Pro, paid over UPI and unlocked by an owner-signed licence key that every install verifies offline. Live today. Plus an <b>optional, modular Web3 Command Center</b> that is a working subsystem, not a mock-up: live chain telemetry over JSON-RPC (block height, gas, latency, health), multi-wallet connect with real on-chain balances and network switching, functioning governance with persisted per-wallet voting, treasury reserves, and a marketplace foundation. Off by default — the AI command center stays the product; crypto is one sustainability &amp; community layer among many, never a requirement.</p>
       </div>
     </div>
   </div>
@@ -714,70 +723,53 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
   <div class="wrap">
     <div class="reveal">
       <div class="eyebrow">— PRICING</div>
-      <h2 class="sect">Free to start.<br>Scales to the enterprise.</h2>
-      <p class="sect-sub">The full command center is free forever on Community. Paid tiers add cloud AI, any-model switching, multi-operator fleets and enterprise controls. Buy once, paste your licence key into the dashboard's LICENSE panel, and the paid features unlock on the spot.</p>
-    </div>
-    <div class="price-grid four">
-      <div class="price-card reveal">
-        <div class="pc-name">COMMUNITY</div>
-        <div class="pc-price">FREE<small>forever · 1 operator</small></div>
-        <ul class="pc-feats">
-          <li>Full command dashboard + HUD</li>
-          <li>8-agent roster + orchestration</li>
-          <li>Local AI (Ollama) + telemetry</li>
-          <li>Threat intelligence</li>
-          <li>100 AI credits / month</li>
-        </ul>
-        <a class="btn ghost" href="https://github.com/saikiranthatikonda-coder/Avengers-Bobbiey-UCS" target="_blank" rel="noopener">START FREE ON GITHUB</a>
-      </div>
-      <div class="price-card reveal">
-        <div class="pc-name">PRO</div>
-        <div class="pc-price">$19<small>/month</small></div>
-        <ul class="pc-feats">
-          <li>Everything in Community</li>
-          <li>Claude cloud brain + webcam vision</li>
-          <li>LLM switch: OpenAI, Gemini, Groq, any model</li>
-          <li>Executive briefings + Knowledge Hub</li>
-          <li>Google Calendar + Gmail</li>
-          <li>2,000 AI credits / month</li>
-        </ul>
-        <a class="btn ghost plan-btn" data-plan="pro" data-intent="waitlist" href="#access">JOIN THE PRO WAITLIST</a>
-      </div>
-      <div class="price-card featured reveal">
-        <div class="pc-badge">MOST POPULAR</div>
-        <div class="pc-name">TEAM</div>
-        <div class="pc-price">$49<small>/user/month</small></div>
-        <ul class="pc-feats">
-          <li>Everything in Pro</li>
-          <li>Multi-operator + role-based command</li>
-          <li>Multi-site fleet (up to 10 nodes)</li>
-          <li>Shared team memory + audit trail</li>
-          <li>10,000 pooled AI credits / month</li>
-        </ul>
-        <a class="btn primary plan-btn" data-plan="team" data-intent="demo" href="#access">REQUEST EARLY ACCESS</a>
-      </div>
-      <div class="price-card reveal">
-        <div class="pc-name">ENTERPRISE</div>
-        <div class="pc-price">CUSTOM<small>annual contract</small></div>
-        <ul class="pc-feats">
-          <li>Everything in Team</li>
-          <li>Unlimited nodes + on-prem AI clusters</li>
-          <li>SSO / SAML · compliance export</li>
-          <li>Autonomous decision support at scale</li>
-          <li>Dedicated engineer + SLA</li>
-        </ul>
-        <a class="btn dark" data-intent="demo" href="#access">TALK TO THE FOUNDER</a>
-      </div>
-    </div>
-    <div class="pay-trust reveal" id="pay-trust" hidden>
-      <span>🔒 Secure checkout</span><span>⚡ Licence key by email in seconds</span><span>🌍 Global tax handled</span><span>↺ Cancel anytime</span>
+      <h2 class="sect">One plan. Everything included.</h2>
+      <p class="sect-sub">No tiers and no add-ons. One licence unlocks the complete command center on your machine. Pay over UPI, get your key by email, and you're live.</p>
     </div>
 
-    <div class="buy-steps reveal">
-      <div class="bs-step"><div class="bs-n">01</div><div class="bs-t">CHOOSE A PLAN</div><p>Start free forever, or pick Pro / Team when you want cloud AI and fleets.</p></div>
-      <div class="bs-step"><div class="bs-n">02</div><div class="bs-t">GET YOUR KEY</div><p>Checkout issues a licence key instantly. It arrives by email with your receipt.</p></div>
-      <div class="bs-step"><div class="bs-n">03</div><div class="bs-t">ACTIVATE</div><p>Paste it into <b>LICENSE → ACTIVATE</b> in the dashboard. Paid features unlock on the spot.</p></div>
-      <div class="bs-step"><div class="bs-n">04</div><div class="bs-t">SWITCH BRAINS</div><p>Open the <b>LLM SWITCH</b>. Run Claude, your own API key, or a fully local model.</p></div>
+    <div class="plan-wrap">
+      <div class="price-card featured solo reveal">
+        <div class="pc-badge">BUCS PRO</div>
+        <div class="pc-name">BUCS Pro</div>
+        <div class="pc-price">₹1,499<small>per month · per install</small></div>
+        <ul class="pc-feats">
+          <li>Command dashboard, HUD and 8-agent AI roster</li>
+          <li>Voice control, conversation mode and webcam vision</li>
+          <li>LLM switch: Claude, OpenAI, Gemini, Groq, local Ollama, any model</li>
+          <li>Google Calendar, Gmail and Tasks intelligence</li>
+          <li>Threat intelligence, decision support and live telemetry</li>
+          <li>JARVIS engineering mode, fleet nodes and audit trail</li>
+        </ul>
+        <div class="pc-terms">3 months ₹4,497 · 12 months ₹17,988 · runs on your own machine</div>
+      </div>
+
+      <div class="pay-card reveal" id="pay-card">
+        <div class="pay-head"><span class="pay-step">01</span> PAY WITH ANY UPI APP</div>
+        <div class="pay-body">
+          <div class="pay-qr" id="pay-qr"><div class="pay-soon">UPI payments<br>opening soon</div></div>
+          <div class="pay-info">
+            <div class="pay-row"><span>UPI ID</span><b id="pay-upi">—</b></div>
+            <div class="pay-row"><span>PAYEE</span><b id="pay-name">—</b></div>
+            <div class="pay-row"><span>AMOUNT</span>
+              <select id="pay-term"><option value="1">₹1,499 · 1 month</option><option value="3">₹4,497 · 3 months</option><option value="12">₹17,988 · 12 months</option></select>
+            </div>
+            <a class="btn primary pay-app" id="pay-open" href="#" hidden>OPEN UPI APP</a>
+            <div class="pay-note">Scan with GPay, PhonePe, Paytm or BHIM. 0% fees, paid straight to the founder.</div>
+          </div>
+        </div>
+
+        <div class="pay-head"><span class="pay-step">02</span> SEND YOUR PAYMENT DETAILS</div>
+        <form class="pay-form" id="pay-form">
+          <input name="email" type="email" required placeholder="your email (the key is sent here)"/>
+          <input name="utr" required placeholder="UPI transaction ID / UTR (12 digits)" pattern="[A-Za-z0-9]{6,40}"/>
+          <input name="iid" placeholder="install ID from your BUCS activation screen" maxlength="11"/>
+          <button class="btn primary" type="submit">SEND DETAILS</button>
+          <div class="form-msg" id="pay-msg"></div>
+        </form>
+
+        <div class="pay-head"><span class="pay-step">03</span> ACTIVATE</div>
+        <p class="pay-note">Your licence key arrives by email once the payment is confirmed (usually within a few hours). Paste it on the BUCS activation screen and press ACTIVATE.</p>
+      </div>
     </div>
 
     <div class="models-strip reveal">
@@ -787,10 +779,6 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
         <span aria-hidden="true">Claude</span><span aria-hidden="true">OpenAI</span><span aria-hidden="true">Gemini</span><span aria-hidden="true">Groq</span><span aria-hidden="true">OpenRouter</span><span aria-hidden="true">DeepSeek</span><span aria-hidden="true">Mistral</span><span aria-hidden="true">Together</span><span aria-hidden="true">Ollama</span><span aria-hidden="true">LM Studio</span><span aria-hidden="true">vLLM</span>
       </div></div>
     </div>
-
-    <p class="sect-sub reveal" style="margin-top:2rem;text-align:center;">
-      Multiple monetization paths coexist — subscriptions, AI credits, a plugin marketplace, professional services, on-prem licensing, and an <b>optional token ecosystem</b>. The AI platform is the product; the token is a community &amp; access layer, never a requirement.
-    </p>
   </div>
 </section>
 
@@ -918,31 +906,43 @@ document.querySelectorAll("[data-intent]").forEach(a => {
   a.addEventListener("click", () => selectIntent(a.dataset.intent === "early-access" ? "demo" : a.dataset.intent));
 });
 
-/* checkout: docs/payments.json holds the LemonSqueezy checkout URL per plan.
-   Empty = honest waitlist button. Only https lemonsqueezy.com links are used. */
+/* UPI payments: docs/payments.json holds the UPI ID, payee name and the email
+   that receives payment details. Empty UPI ID = honest "opening soon". */
+let PAY = null;
 (async () => {
-  let cfg = null;
-  try { cfg = await (await fetch("payments.json", { cache: "no-store" })).json(); } catch (e) { return; }
-  const ok = u => typeof u === "string" && /^https:\/\/[a-z0-9-]+\.lemonsqueezy\.com\/(buy|checkout)\//i.test(u);
-  let live = 0;
-  document.querySelectorAll(".plan-btn[data-plan]").forEach(b => {
-    const url = (cfg.checkout || {})[b.dataset.plan];
-    if (!ok(url)) return;
-    live++;
-    b.href = url + (url.includes("?") ? "&" : "?") + "embed=1";
-    b.removeAttribute("data-intent");
-    b.classList.add("buy", "lemonsqueezy-button");
-    b.textContent = b.dataset.plan === "team" ? "BUY TEAM" : "BUY PRO";
-    b.target = "_blank"; b.rel = "noopener";
-  });
-  if (live) {
-    document.getElementById("pay-trust").hidden = false;
-    const s = document.createElement("script");          // LemonSqueezy overlay checkout
-    s.src = "https://app.lemonsqueezy.com/js/lemon.js"; s.defer = true;
-    s.onload = () => window.createLemonSqueezy && window.createLemonSqueezy();
-    document.head.appendChild(s);
-  }
+  try { PAY = await (await fetch("payments.json", { cache: "no-store" })).json(); } catch (e) { return; }
+  const vpa = (PAY.upi_id || "").trim();
+  if (!/^[\w.\-]{2,256}@[a-zA-Z][\w]{2,64}$/.test(vpa)) return;
+  document.getElementById("pay-upi").textContent = vpa;
+  document.getElementById("pay-name").textContent = PAY.payee_name || "—";
+  const prices = PAY.prices || { "1": 1499, "3": 4497, "12": 17988 };
+  const term = document.getElementById("pay-term");
+  const draw = () => {
+    const amt = prices[term.value];
+    const uri = `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(PAY.payee_name || "BUCS")}` +
+      `&am=${amt}&cu=INR&tn=${encodeURIComponent("BUCS Pro " + term.value + "m")}`;
+    const host = document.getElementById("pay-qr"); host.innerHTML = "";
+    if (window.QRCode) new QRCode(host, { text: uri, width: 148, height: 148, correctLevel: QRCode.CorrectLevel.M });
+    const open = document.getElementById("pay-open"); open.href = uri; open.hidden = false;
+  };
+  term.addEventListener("change", draw);
+  const s = document.createElement("script");
+  s.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+  s.onload = draw; s.onerror = draw;
+  document.head.appendChild(s);
 })();
+
+document.getElementById("pay-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const f = e.target, msg = document.getElementById("pay-msg");
+  const to = (PAY && PAY.contact_email || "").trim();
+  if (!to) { msg.className = "form-msg err"; msg.textContent = "Payments are opening soon. Please check back shortly."; return; }
+  const term = document.getElementById("pay-term");
+  const body = `BUCS Pro payment\n\nEmail: ${f.email.value}\nUPI UTR: ${f.utr.value}\nPlan: ${term.options[term.selectedIndex].text}\nInstall ID: ${f.iid.value || "(not given)"}\n`;
+  location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent("BUCS Pro payment · UTR " + f.utr.value)}&body=${encodeURIComponent(body)}`;
+  msg.className = "form-msg ok";
+  msg.textContent = "✓ Your email app opened with the details. Press send, and your key follows once the payment is confirmed.";
+});
 
 /* form submit → /api/waitlist with graceful fallback */
 document.getElementById("access-form").addEventListener("submit", async (e) => {
@@ -967,8 +967,15 @@ document.getElementById("access-form").addEventListener("submit", async (e) => {
     msg.textContent = "✓ request received — welcome to the bridge, " + (payload.name.split(" ")[0] || "operator") + ".";
     f.reset();
   } catch (err) {
-    msg.className = "form-msg err";
-    msg.textContent = "✕ transmission failed — please try again.";
+    const to = (PAY && PAY.contact_email || "").trim();
+    if (to) {      // static hosting (GitHub Pages): hand the request to the visitor's email app
+      location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent("BUCS · " + payload.intent)}&body=${encodeURIComponent(
+        Object.entries(payload).map(([k, v]) => `${k}: ${v}`).join("\n"))}`;
+      msg.className = "form-msg ok"; msg.textContent = "✓ Your email app opened with the request. Press send.";
+    } else {
+      msg.className = "form-msg err";
+      msg.textContent = "✕ transmission failed — please try again.";
+    }
   }
 });
 </script>

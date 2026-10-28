@@ -20,55 +20,83 @@ def run(c):
 
 
 class Licence(unittest.TestCase):
+    """Owner-signed keys: issued on the owner machine, verified offline anywhere."""
+
     def setUp(self):
+        import base64
+        from cryptography.hazmat.primitives import serialization as ser
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         self.tmp = tempfile.TemporaryDirectory()
-        self.path = Path(self.tmp.name) / "license.json"
+        d = Path(self.tmp.name)
+        sk = Ed25519PrivateKey.generate()
+        (d / "signing.key").write_bytes(sk.private_bytes(ser.Encoding.PEM, ser.PrivateFormat.PKCS8, ser.NoEncryption()))
+        self.pub = base64.urlsafe_b64encode(sk.public_key().public_bytes(ser.Encoding.Raw, ser.PublicFormat.Raw)).decode().rstrip("=")
+        self.kw = dict(path=d / "license.json", public_key=self.pub, signing_key=d / "signing.key", issued=d / "issued.json")
         self.env = mock.patch.dict(os.environ, {"BUCS_OWNER": "0"}); self.env.start()
 
     def tearDown(self):
         self.env.stop(); self.tmp.cleanup()
 
-    def test_customer_starts_on_community_with_paid_features_locked(self):
-        lic = licensing.Licensing(self.path)
-        self.assertEqual(lic.edition, "community")
-        self.assertFalse(lic.allows("cloud_brain"))
-        self.assertTrue(lic.allows("telemetry"))
-
-    def test_owner_has_everything(self):
+    def owner(self):
         with mock.patch.dict(os.environ, {"BUCS_OWNER": "1"}):
-            lic = licensing.Licensing(self.path)
-        self.assertEqual(lic.edition, "enterprise")
-        self.assertTrue(all(lic.snapshot()["entitlements"].values()))
+            return licensing.Licensing(**self.kw)
 
-    def test_activation_unlocks_the_purchased_edition(self):
-        lic = licensing.Licensing(self.path)
-        ok = {"activated": True, "license_key": {"status": "active"}, "instance": {"id": "inst-1"},
-              "meta": {"product_name": "BUCS", "variant_name": "Team (monthly)", "customer_email": "buyer@example.com"}}
-        with mock.patch.object(lic, "_post", mock.AsyncMock(return_value=ok)):
-            r = run(lic.activate("ABCD-1234-EFGH-5678"))
-        self.assertTrue(r["ok"])
-        self.assertEqual(lic.edition, "team")
-        self.assertTrue(lic.allows("fleet") and not lic.allows("sso"))
-        self.assertEqual(r["key"], "ABCD…5678")                       # never echoed in full
-        self.assertEqual(licensing.Licensing(self.path).edition, "team")  # persisted
+    def test_customer_install_is_locked(self):
+        lic = licensing.Licensing(**self.kw)
+        self.assertFalse(lic.paid)
+        self.assertFalse(any(lic.snapshot()["entitlements"].values()))
+        self.assertFalse(lic.issue("a@b.c")["ok"])                     # customers can't mint keys
 
-    def test_refused_key_unlocks_nothing(self):
-        lic = licensing.Licensing(self.path)
-        with mock.patch.object(lic, "_post", mock.AsyncMock(return_value={"activated": False, "error": "license_key not found"})):
-            r = run(lic.activate("WRONG-KEY-0000"))
-        self.assertFalse(r["ok"])
-        self.assertEqual(lic.edition, "community")
+    def test_owner_has_everything_and_can_issue(self):
+        o = self.owner()
+        self.assertTrue(o.paid and o.snapshot()["can_issue"])
+        self.assertTrue(all(o.snapshot()["entitlements"].values()))
 
-    def test_offline_grace_then_honest_downgrade(self):
-        lic = licensing.Licensing(self.path)
-        lic.data = {"key": "K" * 12, "status": "active", "edition": "pro", "validated_at": time.time() - 3 * 86400}
-        self.assertEqual(lic.edition, "pro")                            # within 24 h + 7 d grace
-        lic.data["validated_at"] = time.time() - 9 * 86400
-        self.assertEqual(lic.edition, "community")
+    def test_issued_key_unlocks_a_customer_install(self):
+        r = self.owner().issue("buyer@example.com", days=31, payment_ref="UTR123")
+        self.assertTrue(r["ok"] and r["key"].startswith("BUCS-"))
+        lic = licensing.Licensing(**self.kw)
+        a = lic.activate(r["key"])
+        self.assertTrue(a["ok"])
+        self.assertTrue(lic.paid and lic.allows("cloud_brain"))
+        self.assertEqual(a["days_left"], 30)
+        self.assertTrue(licensing.Licensing(**self.kw).paid)              # persisted
+        self.assertEqual(self.owner().issued()[0]["payment_ref"], "UTR123")
 
-    def test_edition_from_product_names(self):
-        self.assertEqual(licensing.edition_from_names("BUCS", "Enterprise"), "enterprise")
-        self.assertEqual(licensing.edition_from_names("BUCS Pro", None), "pro")
+    def test_forged_or_tampered_keys_are_refused(self):
+        key = self.owner().issue("x@y.z", days=31)["key"]
+        body, sig = key[5:].split(".")
+        import base64, json
+        p = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+        p["exp"] += 10 ** 8                                               # try to extend it
+        forged = "BUCS-" + base64.urlsafe_b64encode(json.dumps(p).encode()).decode().rstrip("=") + "." + sig
+        lic = licensing.Licensing(**self.kw)
+        self.assertFalse(lic.activate(forged)["ok"])
+        self.assertFalse(lic.activate("BUCS-nonsense.zzz")["ok"])
+        other = licensing.Licensing(**{**self.kw, "public_key": licensing.PUBLIC_KEY})
+        self.assertFalse(other.activate(key)["ok"])                        # signed by a different owner
+        self.assertFalse(lic.paid)
+
+    def test_install_binding_and_expiry(self):
+        o = self.owner()
+        lic = licensing.Licensing(**self.kw)
+        wrong = o.issue("a@b.c", iid="00000-00000")["key"]
+        self.assertIn("another install", lic.activate(wrong)["error"])
+        right = o.issue("a@b.c", iid=lic.install_id)["key"]
+        self.assertTrue(lic.activate(right)["ok"])
+        with mock.patch.object(licensing.time, "time", return_value=time.time() + 40 * 86400):
+            self.assertFalse(lic.paid)                                    # expired → locked again
+            self.assertTrue(lic.snapshot()["expired"])
+
+    def test_shipped_public_key_matches_the_owner_signing_key(self):
+        key_file = Path(licensing.__file__).with_name("license_signing.key")
+        if not key_file.exists():
+            self.skipTest("signing key lives only on the owner's machine")
+        import base64
+        from cryptography.hazmat.primitives import serialization as ser
+        sk = ser.load_pem_private_key(key_file.read_bytes(), password=None)
+        pub = base64.urlsafe_b64encode(sk.public_key().public_bytes(ser.Encoding.Raw, ser.PublicFormat.Raw)).decode().rstrip("=")
+        self.assertEqual(pub, licensing.PUBLIC_KEY)
 
 
 class FakeBrain:

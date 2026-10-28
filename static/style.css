@@ -367,6 +367,13 @@ body {
   .hud-grid { grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(280px, 320px); gap: 0.8rem; }
 }
 @media (max-width: 1280px) { .hud-grid { grid-template-columns: 1fr; } }
+/* Three-column layout: the centre (stage) column alone sets the row height.
+   Side columns size-contain to it and scroll internally, so a long agenda or
+   news list never stretches the centre panel or leaves empty space in it. */
+@media (min-width: 1281px) {
+  .hud-grid > #avengers-panel, .hud-grid > #right-panel { contain: size; overflow-y: auto; overflow-x: hidden;
+    scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--accent) 35%, transparent) transparent; }
+}
 
 .panel {
   position: relative;
@@ -2335,9 +2342,10 @@ body.observer-mode .dec-btn { opacity: 0.45; }
    growing log never sizes the panel (flex-basis auto made the page grow forever) */
 #stage-panel .event-stream { flex: none; height: 190px; min-height: 0; max-height: none; contain: strict; }
 /* the live process + traffic row takes the leftover column height instead */
-#stage-panel .ops-extra-row { flex: 1 1 0; min-height: 190px; contain: size; }
+/* fills only the leftover column height, hard-capped so it can never stretch */
+#stage-panel .ops-extra-row { flex: 1 1 210px; min-height: 190px; max-height: 280px; contain: strict; }
 #stage-panel .ops-extra-row > .strip-card { display: flex; flex-direction: column; min-height: 0; height: auto; }
-@media (max-width: 1280px) { #stage-panel .ops-extra-row { flex: none; height: 230px; } }
+@media (max-width: 1280px) { #stage-panel .ops-extra-row { height: 230px; } }
 
 /* ── BUCS · ON THE WEB card (left column) ─────────────────────────── */
 .links-card { margin-top: 0.6rem; border: 1px dashed var(--panel-edge); border-radius: 6px; padding: 0.45rem 0.55rem; display: flex; flex-direction: column; gap: 0.25rem; }
@@ -2375,6 +2383,12 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 .llm-ok { color: var(--success); } .llm-bad { color: var(--error); }
 .llm-acts { display: flex; gap: 0.3rem; align-items: center; flex: 0 0 auto; }
 .llm-acts .cmd-btn[disabled] { cursor: not-allowed; opacity: 0.7; }
+.llm-acts .ghost-btn, .llm-acts .cmd-btn, .llm-acts .mr-status { height: 24px; box-sizing: border-box; display: inline-flex;
+  align-items: center; justify-content: center; line-height: 1; margin: 0; }
+.llm-acts .ghost-btn { width: auto; min-width: 24px; padding: 0 0.5rem; font-size: 0.62rem; letter-spacing: 0.12em; }
+.llm-acts .ghost-btn:hover { transform: none; }
+.llm-acts .cmd-btn { min-width: 62px; padding: 0 0.6rem; }
+.llm-acts .mr-status { min-width: 62px; padding: 0 0.5rem; }
 .llm-lock-note { border: 1px dashed var(--warn); color: var(--warn); padding: 0.4rem 0.6rem; margin: 0.3rem 0 0.5rem;
   font-size: 0.78rem; }
 .llm-lock-note a { color: var(--accent); }
@@ -2406,3 +2420,57 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 .si-src { margin-top: 0.7rem; padding-top: 0.5rem; border-top: 1px solid var(--panel-edge); font-size: 0.72rem; color: var(--text-dim); line-height: 1.45; }
 .si-src .lbl { font-family: var(--font-display); font-size: 0.6rem; letter-spacing: 0.14em; color: var(--accent); margin-right: 0.3rem; }
 .si-src code { font-family: var(--font-mono); color: var(--accent-soft); background: rgba(0, 217, 255, 0.07); padding: 0 0.25rem; }
+
+/* ═══ accurate maps: state + district lines ═══ */
+.region-states path, .region-districts path { fill: transparent; stroke: color-mix(in srgb, var(--accent) 38%, transparent);
+  stroke-width: 0.5; vector-effect: non-scaling-stroke; transition: fill 0.2s, stroke 0.2s; pointer-events: all; }
+.region-states path:hover, .region-districts path:hover { fill: color-mix(in srgb, var(--accent) 22%, transparent); stroke: var(--accent); }
+.region-ts-highlight path { fill: color-mix(in srgb, var(--stark) 35%, transparent); stroke: var(--stark); stroke-width: 1.2;
+  vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 8px var(--stark-glow)); animation: ts-pulse 2.6s ease-in-out infinite; pointer-events: none; }
+
+/* ═══ licence issuing (owner) ═══ */
+.lic-issue { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; margin: 0.3rem 0 0.4rem; }
+.lic-issue input, .lic-issue select { background: rgba(0, 12, 22, 0.7); border: 1px solid var(--panel-edge); color: var(--text);
+  font-family: var(--font-mono); font-size: 0.72rem; padding: 0.34rem 0.45rem; outline: none; min-width: 0; }
+.lic-issue input:focus, .lic-issue select:focus { border-color: var(--accent); }
+.lic-issue .cmd-btn { grid-column: 1 / -1; }
+.lic-issued-key { border: 1px solid var(--success); padding: 0.45rem; margin-bottom: 0.4rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.lik-label { font-family: var(--font-display); font-size: 0.55rem; letter-spacing: 0.16em; color: var(--success); }
+.lik-key { width: 100%; height: 54px; resize: none; background: rgba(0, 12, 22, 0.8); border: 1px solid var(--panel-edge); color: var(--text);
+  font-family: var(--font-mono); font-size: 0.64rem; padding: 0.3rem; word-break: break-all; }
+.lic-acts a.ghost-btn { width: auto; height: auto; padding: 0.3rem 0.6rem; font-size: 0.6rem; letter-spacing: 0.12em; text-decoration: none; display: inline-flex; align-items: center; }
+.lic-acts .ghost-btn:hover { transform: none; }
+.lic-issued { display: flex; flex-direction: column; gap: 0.2rem; max-height: 150px; overflow: auto; }
+.lic-row { display: grid; grid-template-columns: 1fr auto; gap: 0 0.5rem; font-size: 0.72rem; padding: 0.22rem 0.35rem; border-left: 2px solid var(--success); background: rgba(0, 20, 35, 0.35); }
+.lic-row.expired { border-left-color: var(--text-dim); opacity: 0.6; }
+.lr-who { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lr-meta { grid-column: 1; font-family: var(--font-mono); font-size: 0.62rem; color: var(--text-dim); }
+.lr-exp { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-family: var(--font-mono); font-size: 0.64rem; color: var(--success); }
+.lic-row.expired .lr-exp { color: var(--text-dim); }
+
+/* ═══ AI BRAIN ROUTER ═══ */
+.rt-routes { display: flex; flex-direction: column; gap: 0.32rem; margin: 0.35rem 0 0.2rem; min-height: 54px; }
+.rt-route { display: grid; grid-template-columns: 7.5rem 1fr auto; gap: 0.5rem; align-items: center; font-size: 0.74rem; }
+.rt-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-bar { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--panel-edge) 60%, transparent); overflow: hidden; }
+.rt-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #c084fc); box-shadow: 0 0 6px var(--accent-glow); }
+.rt-n { font-family: var(--font-mono); font-size: 0.64rem; color: var(--text-dim); }
+.rt-provs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.4rem; }
+.rt-prov { background: rgba(0, 20, 35, 0.5); border: 1px solid var(--panel-edge); color: var(--text-dim); font-family: var(--font-mono);
+  font-size: 0.66rem; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; transition: border-color 0.2s, color 0.2s; }
+.rt-prov:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.rt-prov.on { border-color: var(--success); color: var(--success); cursor: default; }
+.rt-prov:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ═══ MARKET WATCH ═══ */
+.mw-list { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.35rem; }
+.mw-row { display: grid; grid-template-columns: 3rem 1fr 1fr 4.6rem; gap: 0.4rem; align-items: center; padding: 0.3rem 0.4rem;
+  border: 1px solid var(--panel-edge); background: rgba(10, 4, 24, 0.35); font-family: var(--font-mono); font-size: 0.72rem; }
+.mw-sym { font-family: var(--font-display); font-size: 0.62rem; letter-spacing: 0.12em; color: #c084fc; }
+.mw-usd { color: var(--text); } .mw-inr { color: var(--text-dim); }
+.mw-ch { text-align: right; } .mw-ch.up { color: var(--success); } .mw-ch.down { color: var(--error); }
+
+/* side maps: title + badge wrap instead of truncating in the narrow columns */
+.side-map .panel-title { flex-wrap: wrap; row-gap: 0.25rem; }
+.side-map .panel-title > span:first-child { white-space: nowrap; }
+.lic-issued-key[hidden] { display: none; }

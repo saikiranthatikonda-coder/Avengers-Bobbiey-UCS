@@ -1,6 +1,7 @@
 import asyncio
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -42,6 +43,8 @@ class Brain:
         self.provider_name = None
         self.prefer_claude = False
         self.cloud_locked = False   # unlicensed customer install: no Claude calls (licensing.py)
+        self.route_counts: dict[str, int] = {}   # replies per route since start (AI BRAIN ROUTER card)
+        self.route_ms: dict[str, float] = {}     # last reply latency per route
 
     async def probe(self) -> str:
         """Resolve brain mode: claude CLI → local LLM endpoint → templates."""
@@ -246,6 +249,14 @@ class Brain:
     # ── streaming entry point (real-time engine) ──────────────────
     async def stream(self, prompt: str, system: str | None = None, agent: str = "jarvis",
                      on_delta=None, timeout: float = 90.0) -> tuple[str, str]:
+        t0 = time.perf_counter()
+        reply, path = await self._stream(prompt, system, agent, on_delta, timeout)
+        self.route_counts[path] = self.route_counts.get(path, 0) + 1
+        self.route_ms[path] = round((time.perf_counter() - t0) * 1000)
+        return reply, path
+
+    async def _stream(self, prompt: str, system: str | None, agent: str,
+                      on_delta, timeout: float) -> tuple[str, str]:
         """Like think(), but pushes text as it is generated. Returns (reply,
         path) with path in {"claude", "local-llm", "template"}. Same provider
         policy as think(): operator-forced local first, then Claude, then the

@@ -5,6 +5,16 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-28 — One paid plan over UPI, accurate maps, new cards, layout fixes
+- **feat:** **One plan, pay to use.** BUCS Pro ₹1,499/month (3 mo ₹4,497 · 12 mo ₹17,988). Customer installs stay locked until a key is activated: the API returns 402, pages redirect to a new `/activate` screen showing the install ID, the websocket is refused, and agents/voice/schedules don't start. Activation brings every system online instantly, with no restart.
+- **feat:** **Owner-signed licence keys** (Ed25519, verified offline, no third party, no fees). Each key carries the customer, an expiry and an optional install-ID binding. LICENSE → **ISSUE KEY** on the owner machine signs a key, logs it, and offers copy and a pre-filled email. Forged, tampered or expired keys and keys for another install are refused. LemonSqueezy removed.
+- **site:** a single plan card plus a **UPI payment panel**: scannable QR for the chosen term, an open-UPI-app link, and a "send payment details" form (email + UTR + install ID → your inbox, 0% fees). It shows "opening soon" until `docs/payments.json` has a UPI ID. The waitlist form falls back to email on GitHub Pages.
+- **feat:** **AI BRAIN ROUTER** card (which route answered, share, last latency, one-click provider switch) and **MARKET WATCH** (live BTC/ETH/SOL/POL in USD + INR from CoinGecko, cached 2 min). They fill the empty grid slots beside Web3 Command Center and Community & Events.
+- **fix:** India and Telangana maps rebuilt from real boundary data: official India boundary with 36 states/UTs and state lines, and Telangana with its 33 districts. Hover shows names.
+- **fix:** the centre column no longer stretches or leaves gaps. It alone sets the row height (side columns scroll internally); the process/traffic row fills between 190 and 280 px; the event stream stays at 190 px.
+- **fix:** LLM switch buttons (TEST clipped, pen icon spinning), empty boxes from CSS overriding `hidden`, and truncated map titles. Removed `say "hey <agent>"` from the orb on standby.
+- **test:** owner-signed key suite (issue, forge/tamper, binding, expiry, public key matches the owner key), and a customer-mode server (402, /activate, forged key, websocket refused). 136 tests.
+
 ## 2026-10-26 — LLM switch, real licensing, interactive sections, website checkout
 - **feat:** **LLM SWITCH** (click the LLM row / AI MODEL tile). Choose Auto, Claude, Ollama or **any OpenAI-compatible model** (presets: OpenAI, Anthropic, Gemini, Groq, OpenRouter, DeepSeek, Mistral, Together, LM Studio, custom). Each one gets **SAVE + TEST** (a real round-trip with measured latency), USE, edit and remove. Keys are stored locally and only ever shown masked. Failures fall back to the original chain.
 - **feat:** **Licensing** (`licensing.py`). The owner machine (`BUCS_OWNER=1`) has everything unlocked. Customer installs run Community until a LemonSqueezy licence key is activated in **LICENSE → ACTIVATE**. Cloud brains, Google sync and engineering mode are enforced server-side. Validation runs daily with a 7-day offline grace, plus re-verify and release-seat actions. The demo edition switch is now owner-only.

@@ -24,7 +24,7 @@ _VENV_PY = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/p
 PYTHON = str(_VENV_PY) if _VENV_PY.exists() else sys.executable
 
 # env the app reads — scrubbed so the operator's shell config can't leak in
-_APP_ENV_PREFIXES = ("JARVIS_", "NEWSAPI", "LOCAL_LLM", "CLAUDE_BIN")
+_APP_ENV_PREFIXES = ("JARVIS_", "NEWSAPI", "LOCAL_LLM", "CLAUDE_BIN", "BUCS_")
 
 
 def copy_app(dst: Path) -> None:
@@ -42,7 +42,10 @@ def _free_port() -> int:
 
 
 class IsolatedServer:
-    def __init__(self) -> None:
+    def __init__(self, owner: bool = True) -> None:
+        # owner=True: the owner's machine (everything unlocked). owner=False: a
+        # customer install with no licence (pay-to-use gate active).
+        self.owner = owner
         self.dir = Path(tempfile.mkdtemp(prefix="ucs-test-"))
         self.port = _free_port()
         self.base = f"http://127.0.0.1:{self.port}"
@@ -59,6 +62,7 @@ class IsolatedServer:
             "JARVIS_HOST": "127.0.0.1",
             "JARVIS_SPEEDTEST_MIN": "0",                 # never burn bandwidth in tests
             "PYTHONIOENCODING": "utf-8",
+            "BUCS_OWNER": "1" if self.owner else "0",
         })
         return env
 
@@ -74,7 +78,7 @@ class IsolatedServer:
             if self.proc.poll() is not None:
                 raise RuntimeError("server exited during boot:\n" + self.log())
             try:
-                if self.get("/api/status", timeout=3):
+                if self.get("/api/status" if self.owner else "/api/license", timeout=3):
                     return self
             except (urllib.error.URLError, ConnectionError, TimeoutError, OSError):
                 pass

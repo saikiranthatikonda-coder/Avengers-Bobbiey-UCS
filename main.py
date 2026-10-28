@@ -1,6 +1,8 @@
 import asyncio
 import os
 import time
+
+import httpx
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -79,6 +81,8 @@ def _authed(request: Request) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     hub = Hub()
+    licensing = Licensing()                   # pay-to-use gate (licensing.py)
+    state["licensing"] = licensing
 
     sysmon = SystemMonitor(hub)
     news = NewsService(api_key=os.getenv("NEWSAPI_KEY"), hub=hub)
@@ -88,7 +92,7 @@ async def lifespan(app: FastAPI):
                   local_brain=local_brain, local_llm=local_llm)
 
     tts = TTSPlayer(hub=hub)
-    if os.getenv("JARVIS_TTS", "1") != "0":
+    if os.getenv("JARVIS_TTS", "1") != "0" and licensing.paid:
         if tts.start():
             tts.warm()                    # persistent speaker ready before first reply
             await hub.broadcast({"type": "log", "level": "info",
@@ -226,17 +230,13 @@ async def lifespan(app: FastAPI):
     state["dev"] = DevAgent(state)            # JARVIS engineering mode (devagent.py)
     state["commander"] = CommanderMemory()    # long-form private operator profile
     state["providers"] = ProviderRegistry(brain, local_llm)   # LLM switch (llm_providers.py)
-    state["licensing"] = Licensing()                          # paid access (licensing.py)
-    state["providers"].gate = state["licensing"].allows       # cloud brains need a paid edition
+    state["providers"].gate = licensing.allows                # cloud brains need the paid plan
     state["providers"]._apply()
 
-    async def license_loop():                  # re-validate a customer licence daily
+    async def license_loop():                  # a licence expiring mid-run locks the brain too
         while True:
             try:
-                lic = state["licensing"]
-                if lic.data.get("key") and time.time() - lic.data.get("validated_at", 0) > 24 * 3600:
-                    await lic.validate()
-                state["providers"]._apply()          # grace expiry downgrades the brain too
+                state["providers"]._apply()
             except Exception:
                 pass
             await asyncio.sleep(3600)
@@ -265,25 +265,37 @@ async def lifespan(app: FastAPI):
                 pass
             await asyncio.sleep(15)
 
-    net_task = asyncio.create_task(net_loop())
-    sysmon_task = asyncio.create_task(sysmon.run())
-    voice_task = asyncio.create_task(voice.run()) if voice else None
-    scheduler.start()
+    tasks: list = []
 
-    await hub.broadcast({
-        "type": "system", "event": "online",
-        "msg": f"JARVIS online — brain mode: {mode.upper()}. All agents engaged.",
-    })
+    async def start_runtime() -> None:
+        """Agents, telemetry, voice and schedules. Runs at boot when licensed, or
+        the moment a customer activates a key (no restart needed)."""
+        if state.get("runtime_started"):
+            return
+        state["runtime_started"] = True
+        if os.getenv("JARVIS_TTS", "1") != "0" and not tts.enabled and tts.start():
+            tts.warm()
+        tasks.append(asyncio.create_task(net_loop()))
+        tasks.append(asyncio.create_task(sysmon.run()))
+        if voice:
+            tasks.append(asyncio.create_task(voice.run()))
+        scheduler.start()
+        await hub.broadcast({
+            "type": "system", "event": "online",
+            "msg": f"JARVIS online — brain mode: {mode.upper()}. All agents engaged.",
+        })
+    state["start_runtime"] = start_runtime
+    if licensing.paid:
+        await start_runtime()
 
     try:
         yield
     finally:
-        sysmon_task.cancel()
-        net_task.cancel()
+        for t in tasks:
+            t.cancel()
         license_task.cancel()
-        if voice_task:
-            voice_task.cancel()
-        scheduler.shutdown(wait=False)
+        if state.get("runtime_started"):
+            scheduler.shutdown(wait=False)
         tts.stop()
 
 
@@ -327,6 +339,28 @@ async def auth_gate(request: Request, call_next):
         return JSONResponse({"ok": False, "error": "authentication required"},
                             status_code=401)
     return RedirectResponse("/login")
+
+
+# Unlicensed customer installs reach only the activation page + licence API.
+LICENCE_OPEN = ("/api/license", "/api/auth/status", "/static/", "/activate", "/favicon.ico",
+                "/login", "/api/auth/login")
+
+
+@app.middleware("http")
+async def licence_gate(request: Request, call_next):
+    lic = state.get("licensing")
+    path = request.url.path
+    if lic is None or lic.paid or any(path == p or path.startswith(p) for p in LICENCE_OPEN):
+        return await call_next(request)
+    if path.startswith("/api/"):
+        return JSONResponse({"ok": False, "error": "BUCS licence required — activate a key",
+                             "licence_required": True}, status_code=402)
+    return RedirectResponse("/activate")
+
+
+@app.get("/activate")
+async def activate_page():
+    return FileResponse(STATIC / "activate.html")
 
 
 @app.get("/")
@@ -644,7 +678,10 @@ async def llm_providers():
     reg = state["providers"]
     return {"active": reg.active, "providers": reg.list(),
             "presets": {k: {kk: vv for kk, vv in v.items()} for k, v in PRESETS.items()},
-            "path": getattr(state["brain"], "provider_name", None)}
+            "path": getattr(state["brain"], "provider_name", None),
+            "usage": {"replies": dict(getattr(state["brain"], "route_counts", {})),
+                      "last_ms": dict(getattr(state["brain"], "route_ms", {})),
+                      "cloud_locked": getattr(state["brain"], "cloud_locked", False)}}
 
 
 class ProviderReq(BaseModel):
@@ -1702,18 +1739,13 @@ async def license_status():
 
 @app.post("/api/license/activate")
 async def license_activate(req: LicenseReq):
-    if not _commander():
-        return _locked()
-    res = await state["licensing"].activate(req.key)
+    lic = state["licensing"]
+    res = lic.activate(req.key)
     state["providers"]._apply()
-    await _audit("license.activate", "ok" if res.get("ok") else f"refused: {res.get('error', '')[:80]}")
-    return res
-
-
-@app.post("/api/license/validate")
-async def license_validate():
-    res = await state["licensing"].validate()
-    state["providers"]._apply()
+    if res.get("ok") and "start_runtime" in state:
+        await state["start_runtime"]()            # bring every system online now
+    if "audit" in state:
+        await _audit("license.activate", "ok" if res.get("ok") else f"refused: {res.get('error', '')[:80]}")
     return res
 
 
@@ -1721,26 +1753,66 @@ async def license_validate():
 async def license_deactivate():
     if not _commander():
         return _locked()
-    await _audit("license.deactivate", "seat released")
-    res = await state["licensing"].deactivate()
+    await _audit("license.deactivate", "licence removed from this install")
+    res = state["licensing"].deactivate()
     state["providers"]._apply()
     return res
 
 
-class EditionReq(BaseModel):
-    edition: str
+class IssueReq(BaseModel):
+    customer: str
+    days: int = 30
+    install_id: str | None = None
+    payment_ref: str | None = None
 
 
-@app.post("/api/billing/edition")
-async def billing_set_edition(req: EditionReq):
+@app.post("/api/license/issue")
+async def license_issue(req: IssueReq):
+    """Owner only: sign a licence key after confirming a UPI payment."""
     if not _commander():
         return _locked()
-    if not state["licensing"].owner:
-        return {"ok": False, "error": "editions come from a licence key — use LICENSE → Activate"}
-    res = await state["billing"].set_edition(req.edition)
+    res = state["licensing"].issue(req.customer, req.days, req.install_id, req.payment_ref)
     if res.get("ok"):
-        await _audit("billing.edition", f"edition → {req.edition} (demo)")
+        r = res["record"]
+        await _audit("license.issue", f"{r['id']} · {r['to']} · {req.days} d · ref {r['payment_ref'] or '—'}")
     return res
+
+
+@app.get("/api/license/issued")
+async def license_issued():
+    lic = state["licensing"]
+    if not lic.owner:
+        return {"ok": False, "error": "owner only"}
+    rows = lic.issued()
+    now = time.time()
+    return {"ok": True, "count": len(rows),
+            "active": sum(1 for r in rows if r.get("exp", 0) > now),
+            "issued": rows[:50]}
+
+
+# ═══ MARKET WATCH · live prices (CoinGecko public API, no key, cached 2 min) ═══
+_MARKET: dict = {"ts": 0, "data": None, "error": None}
+MARKET_IDS = {"bitcoin": "BTC", "ethereum": "ETH", "solana": "SOL", "polygon-ecosystem-token": "POL"}
+
+
+@app.get("/api/market")
+async def market_watch():
+    if time.time() - _MARKET["ts"] > 120:
+        try:
+            async with httpx.AsyncClient(timeout=12) as c:
+                r = await c.get("https://api.coingecko.com/api/v3/simple/price",
+                                params={"ids": ",".join(MARKET_IDS), "vs_currencies": "usd,inr",
+                                        "include_24hr_change": "true"})
+                r.raise_for_status()
+                raw = r.json()
+            _MARKET.update(ts=time.time(), error=None, data=[
+                {"symbol": sym, "id": cid, "usd": raw[cid].get("usd"), "inr": raw[cid].get("inr"),
+                 "change_24h": raw[cid].get("usd_24h_change")}
+                for cid, sym in MARKET_IDS.items() if cid in raw])
+        except Exception as e:
+            _MARKET.update(ts=time.time(), error=str(e)[:120])
+    return {"assets": _MARKET["data"] or [], "fetched_at": _MARKET["ts"],
+            "error": _MARKET["error"], "source": "CoinGecko public API"}
 
 
 # ═══ PHASE 6 · WEB3 COMMAND CENTER (optional, modular) ═══════════
@@ -2263,6 +2335,10 @@ async def ws_endpoint(ws: WebSocket):
                                        or AUTH.verify_api_token(token))):
             await ws.close(code=1008)
             return
+    lic = state.get("licensing")
+    if lic is not None and not lic.paid:
+        await ws.close(code=4402)                 # unlicensed customer install
+        return
     await ws.accept()
     hub: Hub = state["hub"]
     q = hub.subscribe()

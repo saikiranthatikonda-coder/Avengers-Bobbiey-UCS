@@ -360,7 +360,7 @@ function setVoiceState(state) {
     if (state === "speaking")        sub.textContent = "◉ TRANSMITTING";
     else if (state === "listening")  sub.textContent = "◉ LISTENING";
     else if (state === "processing") sub.textContent = "◉ PROCESSING";
-    else                              sub.textContent = 'say "hey <agent>"';
+    else                              sub.textContent = "";
   }
 }
 // ═══ REAL-TIME ENGINE · live command console ═══════════════════
@@ -458,7 +458,7 @@ var ConversationMode = {
     b.setAttribute("aria-pressed", on ? "true" : "false");
     b.textContent = on ? "CONVERSATION · ON" : "CONVERSATION · OFF";
     const sub = document.getElementById("voice-sublabel");
-    if (sub) sub.textContent = on ? 'say "jarvis…", then just talk' : 'say "hey <agent>"';
+    if (sub) sub.textContent = on ? 'say "jarvis…", then just talk' : "";
   },
   async load() { try { this.set((await (await fetch("/api/conversation")).json()).on); } catch (e) {} },
   async toggle() {
@@ -789,49 +789,66 @@ const INDIA_CITIES = [
   { name: "HYDERABAD", lat: 17.385, lon: 78.4867, primary: true },
 ];
 let indiaProjection = null;
+let tsProjection = null;
+
+/* Accurate India (official boundary, 28 states + 8 UTs) and Telangana
+   (33 districts), pre-projected into each panel's viewBox — static/geo/india_ts.json
+   (datta07/INDIAN-SHAPEFILES, MIT). "proj" maps lon/lat into the same space so
+   city markers sit exactly on the outlines. */
+let GEO_MAPS = null;
+const geoReady = fetch("/static/geo/india_ts.json").then(r => r.ok ? r.json() : null)
+  .then(d => { GEO_MAPS = d; renderIndiaMap(); renderTelanganaMap(); }).catch(() => {});
+
+function mercProj(p) {
+  return ([lon, lat]) => {
+    const l = lon * Math.PI / 180, f = lat * Math.PI / 180;
+    return [p.k * l + p.tx, -p.k * Math.log(Math.tan(Math.PI / 4 + f / 2)) + p.ty];
+  };
+}
+// the source still splits Warangal the pre-2021 way; show today's district names
+const TS_RENAME = { "Warangal Urban": "Hanumakonda", "Warangal Rural": "Warangal" };
+const svgEl = (tag, attrs) => {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+};
 
 function renderIndiaMap() {
   const host = document.getElementById("india-shape");
+  const statesHost = document.getElementById("india-states");
   const citiesHost = document.getElementById("india-cities");
   const arcsHost = document.getElementById("india-arcs");
   if (!host) return;
 
-  // Default: leave the inline hand-traced fallback path in place.
-  // If D3 + world data are available, replace with the real outline.
-  if (typeof d3 !== "undefined" && worldFeatures) {
-    const india = worldFeatures.features.find(
-      f => String(f.id) === "356" || (f.properties && f.properties.name === "India")
-    );
-    if (india) {
-      const w = 200, h = 240;
-      indiaProjection = d3.geoMercator().fitExtent([[16, 20], [w - 16, h - 20]], india);
-      const path = d3.geoPath(indiaProjection);
-      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      p.setAttribute("d", path(india));
-      host.innerHTML = "";
-      host.appendChild(p);
-    } else {
-      indiaProjection = null;
+  // Until the geo file loads, keep the inline fallback outline.
+  if (GEO_MAPS && GEO_MAPS.india) {
+    indiaProjection = mercProj(GEO_MAPS.india.proj);
+    host.innerHTML = "";
+    host.appendChild(svgEl("path", { d: GEO_MAPS.india.outline }));
+    if (statesHost) {
+      statesHost.innerHTML = "";
+      for (const s of GEO_MAPS.india.states) {
+        const p = svgEl("path", { d: s.d });
+        const t = svgEl("title", {}); t.textContent = s.name; p.appendChild(t);
+        statesHost.appendChild(p);
+      }
     }
   } else {
     indiaProjection = null;
   }
 
-  // Telangana highlight overlaid on India (uses same projection so it lands inside India correctly)
   renderTelanganaHighlightOnIndia();
 
   if (citiesHost) {
     citiesHost.innerHTML = "";
     for (const c of INDIA_CITIES) {
-      const proj = indiaProjection ? indiaProjection([c.lon, c.lat]) : null;
-      const [x, y] = proj && isFinite(proj[0]) ? proj : indiaFallbackProject(c.lat, c.lon);
+      const [x, y] = indiaProjection ? indiaProjection([c.lon, c.lat]) : indiaFallbackProject(c.lat, c.lon);
       const r = c.primary ? 3.5 : 2.6;
-      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      g.classList.add("region-marker"); if (c.primary) g.classList.add("primary");
+      const g = svgEl("g", { class: "region-marker" + (c.primary ? " primary" : "") });
       g.innerHTML = `
         <circle cx="${x}" cy="${y}" r="${r}" class="city-dot"/>
-        <circle cx="${x}" cy="${y}" r="${r+1.5}" class="city-ping"/>
-        <circle cx="${x}" cy="${y}" r="${r+1.5}" class="city-ping ping-2"/>
+        <circle cx="${x}" cy="${y}" r="${r + 1.5}" class="city-ping"/>
+        <circle cx="${x}" cy="${y}" r="${r + 1.5}" class="city-ping ping-2"/>
         <text x="${x + 6}" y="${y + 2}" class="city-label">${c.name}</text>`;
       citiesHost.appendChild(g);
     }
@@ -839,63 +856,34 @@ function renderIndiaMap() {
 
   if (arcsHost) {
     arcsHost.innerHTML = "";
+    const proj = c => indiaProjection ? indiaProjection([c.lon, c.lat]) : indiaFallbackProject(c.lat, c.lon);
     const hyd = INDIA_CITIES.find(c => c.primary);
-    const hp = indiaProjection ? indiaProjection([hyd.lon, hyd.lat]) : indiaFallbackProject(hyd.lat, hyd.lon);
-    if (isFinite(hp[0])) {
-      for (const c of INDIA_CITIES) {
-        if (c === hyd) continue;
-        const cp = indiaProjection ? indiaProjection([c.lon, c.lat]) : indiaFallbackProject(c.lat, c.lon);
-        if (!isFinite(cp[0])) continue;
-        const mx = (hp[0] + cp[0]) / 2;
-        const my = Math.min(hp[1], cp[1]) - Math.abs(cp[0] - hp[0]) * 0.25 - 8;
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", `M ${hp[0]} ${hp[1]} Q ${mx} ${my} ${cp[0]} ${cp[1]}`);
-        arcsHost.appendChild(path);
-      }
+    const hp = proj(hyd);
+    for (const c of INDIA_CITIES) {
+      if (c === hyd) continue;
+      const cp = proj(c);
+      const mx = (hp[0] + cp[0]) / 2;
+      const my = Math.min(hp[1], cp[1]) - Math.abs(cp[0] - hp[0]) * 0.25 - 8;
+      arcsHost.appendChild(svgEl("path", { d: `M ${hp[0]} ${hp[1]} Q ${mx} ${my} ${cp[0]} ${cp[1]}` }));
     }
   }
 }
 
 function indiaFallbackProject(lat, lon) {
-  // Bounds tuned to the inline hand-traced fallback path so cities land
-  // on the actual rendered outline (lon 68.5–97, lat 8–37).
+  // pre-load fallback only (matches the inline hand-traced path)
   const x = (lon - 68.5) * (160 / 28.5) + 20;
   const y = 240 - ((lat - 8) * (200 / 29) + 20);
   return [x, y];
 }
 
-// Telangana boundary in lat/lon, clockwise from NW. 30 points traced from the
-// real state outline: Adilabad north cap → Godavari NE edge → Bhadradri SE
-// tongue (easternmost ~81.05°E) → Khammam indent → Krishna south border →
-// Gadwal south tail (~15.85°N) → smooth Karnataka west border → Nizamabad NW.
-const TS_BOUNDARY_LATLON = [
-  [19.65, 77.95], [19.92, 78.35], [19.85, 78.85], [19.70, 79.05],
-  [19.45, 79.35], [19.30, 79.90], [18.85, 80.05], [18.75, 80.30],
-  [18.40, 80.40], [18.10, 80.70], [17.80, 80.90], [17.55, 81.05],
-  [17.20, 80.90], [16.95, 80.65], [16.75, 80.30], [16.85, 79.95],
-  [16.55, 79.70], [16.40, 79.25], [16.25, 78.90], [15.95, 78.55],
-  [15.85, 78.25], [16.10, 77.80], [16.40, 77.45], [16.95, 77.45],
-  [17.35, 77.30], [17.85, 77.45], [18.20, 77.60], [18.45, 77.85],
-  [18.85, 77.75], [19.25, 77.85]
-];
-
 function renderTelanganaHighlightOnIndia() {
   const host = document.getElementById("india-ts-highlight");
   if (!host) return;
-  const project = (lat, lon) => {
-    if (indiaProjection) {
-      try { const r = indiaProjection([lon, lat]); if (isFinite(r[0])) return r; } catch (e) {}
-    }
-    return indiaFallbackProject(lat, lon);
-  };
-  const pts = TS_BOUNDARY_LATLON.map(([lat, lon]) => {
-    const [x, y] = project(lat, lon);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  host.innerHTML = `<polygon points="${pts.join(' ')}"/>`;
+  const ts = GEO_MAPS && GEO_MAPS.india && GEO_MAPS.india.states.find(s => s.name === "Telangana");
+  host.innerHTML = ts ? `<path d="${ts.d}"><title>Telangana</title></path>` : "";
 }
 
-/* ═══ TELANGANA — refined polygon + Hyderabad pin ═══ */
+/* ═══ TELANGANA — 33 districts + Hyderabad pin ═══ */
 
 const TS_CITIES = [
   { name: "HYDERABAD",  lat: 17.385, lon: 78.4867, primary: true },
@@ -904,49 +892,32 @@ const TS_CITIES = [
   { name: "KARIMNAGAR", lat: 18.43,  lon: 79.13 },
   { name: "KHAMMAM",    lat: 17.25,  lon: 80.15 },
 ];
-// Accurate Telangana boundary as real [lat, lon] points, clockwise from the
-// north-west. Projected through tsFallbackProject (same map the cities use), so
-// the outline and the node markers always share one coordinate system.
-// Captures the real silhouette: wide tilted north cap (Adilabad), NE bulge
-// (Asifabad/Mancherial), the eastern Bhadradri tongue to the SE tip
-// (Bhadrachalam), the southern taper to a point (Gadwal/Alampur), concave west.
-const TS_BOUNDARY = [
-  [19.55, 77.80], [19.78, 78.10], [19.92, 78.55], [19.65, 78.90], [19.72, 79.35],
-  [19.45, 79.55], [19.55, 79.95], [19.10, 79.90], [18.85, 80.15], [18.45, 80.30],
-  [18.10, 80.60], [17.85, 80.95], [17.50, 81.05], [17.30, 80.80], [17.15, 80.55],
-  [16.85, 80.30], [16.55, 79.95], [16.30, 79.55], [16.10, 79.10], [16.00, 78.65],
-  [15.90, 78.20], [15.83, 77.90], [16.05, 77.60], [16.40, 77.40], [16.85, 77.30],
-  [17.30, 77.27], [17.75, 77.35], [18.20, 77.45], [18.65, 77.55], [19.10, 77.65],
-];
-function tsFallbackProject(lat, lon) {
-  // Matches the inline Telangana path projection:
-  // lon 77.27–81.05 → x 16–184, lat 15.83–19.92 → y 204–16.
-  const x = (lon - 77.27) * 44.44 + 16;
-  const y = 204 - (lat - 15.83) * 45.97;
-  return [x, y];
-}
 function renderTelanganaMap() {
-  // draw the accurate outline from real boundary coords (same projection as cities)
   const shape = document.getElementById("ts-shape");
-  if (shape) {
-    const d = TS_BOUNDARY.map((p, i) => {
-      const [x, y] = tsFallbackProject(p[0], p[1]);
-      return `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    }).join(" ") + " Z";
-    shape.setAttribute("d", d);
+  const distHost = document.getElementById("ts-districts");
+  if (!GEO_MAPS || !GEO_MAPS.telangana) return;            // inline fallback until the file loads
+  const T = GEO_MAPS.telangana;
+  tsProjection = mercProj(T.proj);
+  if (shape) shape.setAttribute("d", T.outline);
+  if (distHost) {
+    distHost.innerHTML = "";
+    for (const d of T.districts) {
+      const p = svgEl("path", { d: d.d });
+      const t = svgEl("title", {}); t.textContent = TS_RENAME[d.name] || d.name; p.appendChild(t);
+      distHost.appendChild(p);
+    }
   }
   const citiesHost = document.getElementById("ts-cities");
   if (!citiesHost) return;
   citiesHost.innerHTML = "";
   for (const c of TS_CITIES) {
-    const [x, y] = tsFallbackProject(c.lat, c.lon);
+    const [x, y] = tsProjection([c.lon, c.lat]);
     const r = c.primary ? 4 : 2.5;
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    g.classList.add("region-marker"); if (c.primary) g.classList.add("primary");
+    const g = svgEl("g", { class: "region-marker" + (c.primary ? " primary" : "") });
     g.innerHTML = `
       <circle cx="${x}" cy="${y}" r="${r}" class="city-dot"/>
-      <circle cx="${x}" cy="${y}" r="${r+2}" class="city-ping"/>
-      <circle cx="${x}" cy="${y}" r="${r+2}" class="city-ping ping-2"/>
+      <circle cx="${x}" cy="${y}" r="${r + 2}" class="city-ping"/>
+      <circle cx="${x}" cy="${y}" r="${r + 2}" class="city-ping ping-2"/>
       <text x="${x + 6}" y="${y + 2}" class="city-label">${c.name}</text>`;
     citiesHost.appendChild(g);
   }
@@ -3644,99 +3615,130 @@ $("#news-refresh").addEventListener("click", async () => {
   finally { setTimeout(() => { $("#news-refresh").disabled = false; }, 1500); }
 });
 
-/* ═══ PHASE 6 · LICENSE & MONETIZATION ═══ */
+/* ═══ PHASE 6 · LICENSE — one paid plan, UPI payments, owner-signed keys ═══ */
 const PRICING_URL = "https://saikiranthatikonda-coder.github.io/Avengers-Bobbiey-UCS/#pricing";
 const _licPost = (url, body) => fetch(url, { method: "POST",
   headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) }).then(r => r.json());
+const _fmtDate = ts => ts ? new Date(ts * 1000).toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-function renderLicence(lic) {
-  const host = $("#lic-status"), form = $("#lic-form");
-  if (!host) return;
-  const ago = lic.validated_at ? Math.round((Date.now() / 1000 - lic.validated_at) / 3600) : null;
+function renderLicence(lic, plan) {
+  const host = $("#lic-status"); if (!host) return;
+  const ed = $("#lic-edition");
+  if (ed) ed.textContent = plan ? `${plan.name.toUpperCase()} · ${plan.price}${plan.period}` : "—";
   if (lic.owner) {
-    host.innerHTML = `<div class="lic-state ok">● OWNER MODE — every feature unlocked on this machine</div>`;
-    if (form) form.hidden = true;
+    host.innerHTML = `<div class="lic-state ok">● OWNER MODE: everything unlocked; you can issue licences</div>
+      <div class="lic-meta">Customers pay over UPI on the website, then send you the UTR + install ID. Issue the key below and email it to them.</div>`;
   } else if (lic.licensed) {
-    host.innerHTML = `<div class="lic-state ok">● ${escapeHTML((lic.edition || "").toUpperCase())} LICENCE · ${escapeHTML(lic.key || "")}</div>
-      <div class="lic-meta">${escapeHTML([lic.variant || lic.product, lic.customer, ago != null ? `verified ${ago} h ago` : ""].filter(Boolean).join(" · "))}</div>
-      <div class="lic-acts"><button class="ghost-btn" data-lic="validate">RE-VERIFY</button>
-        <button class="ghost-btn" data-lic="deactivate" title="free this seat for another machine">RELEASE SEAT</button></div>`;
-    if (form) form.hidden = true;
+    host.innerHTML = `<div class="lic-state ok">● BUCS PRO · ${escapeHTML(lic.key || "")}</div>
+      <div class="lic-meta">${escapeHTML([lic.customer, `valid until ${_fmtDate(lic.expires_at)}`, `${lic.days_left} days left`].filter(Boolean).join(" · "))}</div>
+      <div class="lic-acts"><a class="cmd-btn" href="${PRICING_URL}" target="_blank" rel="noopener">RENEW ↗</a>
+        <button class="ghost-btn" data-lic="deactivate" title="remove the key from this install">REMOVE KEY</button></div>`;
   } else {
-    host.innerHTML = `<div class="lic-state">○ COMMUNITY — free forever. Cloud brains, Google sync and engineering mode need Pro.</div>
-      <div class="lic-acts"><a class="cmd-btn" href="${PRICING_URL}" target="_blank" rel="noopener">BUY A LICENCE ↗</a></div>`;
-    if (form) form.hidden = false;
+    host.innerHTML = `<div class="lic-state">○ NOT LICENSED</div>`;
   }
-  host.querySelectorAll("[data-lic]").forEach(b => b.addEventListener("click", async () => {
-    if (b.dataset.lic === "deactivate" && !confirm("Release this machine's seat? Paid features lock until you activate again.")) return;
-    b.textContent = "…";
-    const r = await _licPost(`/api/license/${b.dataset.lic}`);
-    if (!r.ok && r.error) logEvent(`<span class="tag">[license]</span> ${escapeHTML(r.error)}`, "warn");
-    refreshBilling();
-  }));
+  host.querySelector('[data-lic="deactivate"]')?.addEventListener("click", async () => {
+    if (!confirm("Remove the licence key? BUCS locks until a key is activated again.")) return;
+    await _licPost("/api/license/deactivate");
+    location.reload();
+  });
+  const own = $("#lic-owner"); if (own) own.hidden = !lic.can_issue;
 }
-$("#lic-form")?.addEventListener("submit", async (e) => {
+
+async function refreshIssued() {
+  const host = $("#lic-issued"); if (!host) return;
+  const d = await fetch("/api/license/issued").then(r => r.json()).catch(() => null);
+  if (!d || !d.ok) return;
+  $("#lic-issued-n").textContent = d.count; $("#lic-active-n").textContent = d.active;
+  const now = Date.now() / 1000;
+  host.innerHTML = d.issued.length ? d.issued.slice(0, 12).map(r => `
+    <div class="lic-row${r.exp < now ? " expired" : ""}">
+      <span class="lr-who">${escapeHTML(r.to)}</span>
+      <span class="lr-meta">${escapeHTML([r.payment_ref ? "UTR " + r.payment_ref : "", r.iid ? "ID " + r.iid : "any install"].filter(Boolean).join(" · "))}</span>
+      <span class="lr-exp">${r.exp < now ? "EXPIRED" : "→ " + _fmtDate(r.exp)}</span>
+    </div>`).join("") : `<div class="tf-empty">no licences issued yet</div>`;
+}
+
+$("#lic-issue-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const inp = $("#lic-key"); const key = inp.value.trim(); if (!key) return;
-  const host = $("#lic-status");
-  host.innerHTML = `<div class="tf-empty">verifying with the licence server…</div>`;
-  const r = await _licPost("/api/license/activate", { key }).catch(err => ({ ok: false, error: err.message }));
-  inp.value = "";
-  if (r.ok) logEvent(`<span class="tag">[license]</span> activated — ${escapeHTML((r.edition || "").toUpperCase())} edition unlocked`);
-  else logEvent(`<span class="tag">[license]</span> ${escapeHTML(r.error || "activation refused")}`, "warn");
-  refreshBilling();
+  const out = $("#lic-issued-key");
+  const body = { customer: $("#li-customer").value, payment_ref: $("#li-utr").value,
+    install_id: $("#li-iid").value || null, days: +$("#li-days").value };
+  const r = await _licPost("/api/license/issue", body).catch(err => ({ ok: false, error: err.message }));
+  out.hidden = false;
+  if (!r.ok) { out.innerHTML = `<div style="color:var(--error)">${escapeHTML(r.error || "refused")}</div>`; return; }
+  const mail = `mailto:${encodeURIComponent(body.customer)}?subject=${encodeURIComponent("Your BUCS Pro licence key")}&body=${encodeURIComponent(
+    `Thank you for your payment${body.payment_ref ? " (UTR " + body.payment_ref + ")" : ""}.\n\nYour BUCS Pro licence key (valid until ${_fmtDate(r.record.exp)}):\n\n${r.key}\n\nOpen BUCS, paste the key on the activation screen and press ACTIVATE.\n`)}`;
+  out.innerHTML = `<div class="lik-label">KEY FOR ${escapeHTML(r.record.to)} · VALID UNTIL ${_fmtDate(r.record.exp)}</div>
+    <textarea readonly class="lik-key">${escapeHTML(r.key)}</textarea>
+    <div class="lic-acts"><button class="cmd-btn" type="button" id="lik-copy">COPY KEY</button>
+      <a class="ghost-btn" href="${mail}">EMAIL IT ↗</a></div>`;
+  $("#lik-copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(r.key); $("#lik-copy").textContent = "COPIED"; } catch (err) {}
+  });
+  e.target.reset();
+  logEvent(`<span class="tag">[license]</span> issued ${escapeHTML(r.record.id)} → ${escapeHTML(r.record.to)}`);
+  refreshIssued();
 });
+
 async function refreshBilling() {
   try {
     const d = await (await fetch("/api/billing")).json();
-    const cur = d.current || {};
-    const ed = $("#lic-edition"); if (ed) ed.textContent = ((d.license || {}).edition || cur.name || "—").toUpperCase();
-    const txt = $("#lic-credit-txt"); const fill = $("#lic-credit-fill");
-    if (txt) {
-      if (cur.credits_unlimited) { txt.textContent = "UNLIMITED"; if (fill) fill.style.width = "100%"; }
-      else {
-        txt.textContent = `${cur.credits_used} / ${cur.credits_allotment}`;
-        if (fill) fill.style.width = Math.min(100, (cur.credits_used / (cur.credits_allotment || 1)) * 100) + "%";
-      }
-    }
-    const lic = d.license || {};
-    renderLicence(lic);
-    const owner = !!lic.owner;
-    const tl = $("#lic-tiers-label");
-    if (tl) tl.textContent = owner ? "EDITIONS · OWNER PREVIEW (CLICK TO SWITCH VIEW)" : "EDITIONS · CLICK TO BUY";
-    const tiers = $("#lic-tiers");
-    if (tiers) {
-      const curEd = lic.edition || cur.edition;
-      tiers.innerHTML = (d.editions || []).map(e => `
-        <div class="lic-tier${e.id === curEd ? " current" : ""}" data-ed="${e.id}" tabindex="0" role="button">
-          <div class="lic-tier-head">
-            <span class="lic-tier-name">${escapeHTML(e.name)}</span>
-            <span class="lic-tier-price">${escapeHTML(e.price)}<span class="per">${escapeHTML(e.period)}</span></span>
-            ${e.id === curEd ? '<span class="lic-tier-badge">● ACTIVE</span>' : ""}
-          </div>
-          <div class="lic-tier-tag">${escapeHTML(e.tagline)}</div>
-        </div>`).join("");
-      tiers.querySelectorAll(".lic-tier").forEach(el => el.addEventListener("click", async () => {
-        if (!owner) {            // customers buy on the website; the key arrives by email
-          if (el.dataset.ed !== "community") window.open(PRICING_URL, "_blank", "noopener");
-          return;
-        }
-        try {
-          const r = await (await fetch("/api/billing/edition", { method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ edition: el.dataset.ed }) })).json();
-          if (r.ok) logEvent(`<span class="tag">[license]</span> owner preview → ${el.dataset.ed.toUpperCase()}`);
-          else if (r.error) logEvent(`<span class="tag">[license]</span> ${escapeHTML(r.error)}`, "warn");
-        } catch (e) {}
-        refreshBilling();
-      }));
-    }
-    const paths = $("#lic-paths");
-    if (paths) paths.innerHTML = (d.monetization_paths || []).map(p =>
-      `<span class="lic-path">${escapeHTML(p)}</span>`).join("");
+    renderLicence(d.license || {}, (d.editions || [])[0]);
+    if ((d.license || {}).can_issue) refreshIssued();
   } catch (e) {}
 }
 refreshBilling(); setInterval(refreshBilling, 60000);
+
+/* ═══ AI BRAIN ROUTER — which brain answers, real route usage ═══ */
+const ROUTE_NAMES = { claude: "Claude", "local-llm": "Local LLM", template: "Rule templates", offline: "Offline" };
+async function refreshRouter() {
+  const routes = $("#rt-routes"), provs = $("#rt-provs"); if (!routes) return;
+  const d = await fetch("/api/llm/providers").then(r => r.json()).catch(() => null);
+  if (!d) return;
+  const act = (d.providers || []).find(p => p.active);
+  $("#rt-active").textContent = act ? act.name.toUpperCase().slice(0, 26) : "—";
+  const u = d.usage || {}, rep = u.replies || {};
+  const total = Object.values(rep).reduce((a, b) => a + b, 0);
+  routes.innerHTML = total ? Object.entries(rep).sort((a, b) => b[1] - a[1]).map(([k, n]) => {
+    const name = k.startsWith("provider:") ? k.slice(9) : (ROUTE_NAMES[k] || k);
+    const pct = Math.round(n / total * 100);
+    return `<div class="rt-route"><span class="rt-name">${escapeHTML(name)}</span>
+      <span class="rt-bar"><i style="width:${pct}%"></i></span>
+      <span class="rt-n">${n} · ${pct}%${u.last_ms && u.last_ms[k] != null ? ` · ${u.last_ms[k]} ms` : ""}</span></div>`;
+  }).join("") : `<div class="tf-empty">no replies yet this session: ask JARVIS anything</div>`;
+  provs.innerHTML = (d.providers || []).map(p => `
+    <button class="rt-prov${p.active ? " on" : ""}" data-id="${escapeHTML(p.id)}" ${p.locked ? "disabled" : ""}
+      title="${escapeHTML(p.name)}${p.health ? (p.health.ok ? " · ✓ " + p.health.latency_ms + " ms" : " · last test failed") : ""}">
+      ${p.health ? (p.health.ok ? "●" : "○") : "◌"} ${escapeHTML(p.name.split(" (")[0])}</button>`).join("");
+}
+$("#rt-provs")?.addEventListener("click", async (e) => {
+  const b = e.target.closest(".rt-prov"); if (!b || b.classList.contains("on")) return;
+  b.textContent = "…";
+  const r = await _licPost("/api/llm/active", { id: b.dataset.id });
+  if (!r.ok) logEvent(`<span class="tag">[llm]</span> ${escapeHTML(r.error || "switch refused")}`, "warn");
+  refreshRouter();
+});
+$("#rt-open")?.addEventListener("click", () => openModelManager());
+refreshRouter(); setInterval(refreshRouter, 15000);
+
+/* ═══ MARKET WATCH — live prices (server-cached CoinGecko) ═══ */
+async function refreshMarket() {
+  const host = $("#mw-list"); if (!host || !host.offsetParent) return;      // only while on screen
+  const d = await fetch("/api/market").then(r => r.json()).catch(() => null);
+  if (!d) return;
+  const age = d.fetched_at ? Math.round(Date.now() / 1000 - d.fetched_at) : null;
+  $("#mw-age").textContent = age == null ? "—" : age < 90 ? `${age}s AGO` : `${Math.round(age / 60)} MIN AGO`;
+  if (!d.assets.length) { host.innerHTML = `<div class="tf-empty">${escapeHTML(d.error ? "price feed unreachable: " + d.error : "no data")}</div>`; return; }
+  const money = (v, cur) => v == null ? "—" : v.toLocaleString(cur === "INR" ? "en-IN" : "en-US",
+    { style: "currency", currency: cur, maximumFractionDigits: v < 10 ? 3 : 0 });
+  host.innerHTML = d.assets.map(a => {
+    const ch = a.change_24h, up = ch >= 0;
+    return `<div class="mw-row"><span class="mw-sym">${escapeHTML(a.symbol)}</span>
+      <span class="mw-usd">${money(a.usd, "USD")}</span><span class="mw-inr">${money(a.inr, "INR")}</span>
+      <span class="mw-ch ${up ? "up" : "down"}">${ch == null ? "—" : (up ? "▲ " : "▼ ") + Math.abs(ch).toFixed(2) + "%"}</span></div>`;
+  }).join("");
+}
+refreshMarket(); setInterval(refreshMarket, 60000);
 
 /* ═══════════════════════════════════════════════════════════════
    PHASE 6 · WEB3 COMMAND CENTER — functional subsystem
@@ -3858,6 +3860,7 @@ async function refreshWeb3() {
     const btn = $("#btn-web3-toggle");
     if (btn) { btn.textContent = on ? "◈ WEB3 ENABLED" : "◇ ENABLE WEB3"; btn.classList.toggle("on", on); }
     const row = $("#web3-row"); if (row) row.hidden = !on;
+    if (on) refreshMarket();
     const mini = $("#web3-wallet-mini");
     if (mini) mini.innerHTML = !on
       ? '<div class="tf-empty">enable the module, then connect a wallet</div>'
@@ -5095,11 +5098,20 @@ const SECTION_INFO = {
       ["COLLABS", d.collabs_total], ["PREEMPTIONS", d.preemptions_total], ["CYCLES", d.cycles]],
     list: d => (d.directives || []).map(x => `P${x.priority} · ${x.agent} — ${x.title}`) },
   "LIVE OPERATIONS": { about: "Today's meeting load and the current mission.", ...AGENDA },
-  "LICENSE & MONETIZATION": { about: "Your edition and what it unlocks.", api: "/api/license",
-    source: "licensing.py — LemonSqueezy licence API (activate/validate), re-verified daily with a 7-day offline grace.",
-    stats: d => [["EDITION", (d.edition || "").toUpperCase()], ["MODE", d.owner ? "OWNER" : d.licensed ? "LICENSED" : "COMMUNITY"], ["KEY", d.key || "—"],
-      ["VERIFIED", _siAgo(d.validated_at)]],
+  "LICENSE & MONETIZATION": { about: "BUCS Pro licence status. On the owner machine: issue keys after a UPI payment.", api: "/api/license",
+    source: "licensing.py — Ed25519-signed keys verified offline on every install; the signing key never leaves the owner's machine.",
+    stats: d => [["PLAN", d.paid ? "BUCS PRO" : "NOT LICENSED"], ["MODE", d.owner ? "OWNER" : d.licensed ? "LICENSED" : "LOCKED"], ["KEY", d.key || "—"],
+      ["DAYS LEFT", d.owner ? "∞" : d.days_left], ["INSTALL ID", d.install_id]],
     list: d => Object.entries(d.entitlements || {}).map(([k, v]) => `${v ? "✓" : "🔒"} ${k.replace(/_/g, " ")}`) },
+  "AI BRAIN ROUTER": { about: "Which AI answers your commands, how often each route was used this session, and one-click switching.",
+    api: "/api/llm/providers", source: "brain.py route counters (every streamed reply) + llm_providers.py registry and its last real health test.",
+    stats: d => [["ACTIVE", ((d.providers || []).find(p => p.active) || {}).name], ["PROVIDERS", (d.providers || []).length],
+      ["REPLIES", Object.values(d.usage?.replies || {}).reduce((a, b) => a + b, 0)], ["CLOUD", d.usage?.cloud_locked ? "LOCKED" : "ALLOWED"]],
+    list: d => Object.entries(d.usage?.replies || {}).map(([k, n]) => `${k} — ${n} replies · last ${d.usage.last_ms?.[k] ?? "—"} ms`) },
+  "MARKET WATCH": { about: "Live BTC, ETH, SOL and POL prices in USD and INR with 24-hour change.", api: "/api/market",
+    source: "CoinGecko public API (no key), fetched by the server and cached for 2 minutes.",
+    stats: d => [["ASSETS", (d.assets || []).length], ["FETCHED", _siAgo(d.fetched_at)], ["STATUS", d.error ? "ERROR" : "OK"]],
+    list: d => (d.assets || []).map(a => `${a.symbol} · $${a.usd} · ₹${a.inr} · ${a.change_24h == null ? "—" : a.change_24h.toFixed(2) + "%"}`) },
   "KNOWLEDGE HUB": { about: "Everything BUCS can search, by source.", api: "/api/knowledge/stats",
     source: "knowledge.py — indexes memory facts, observations, insights, agent output, incidents, calendar, email and news.",
     stats: d => [["TOTAL", d.total], ...Object.entries(d.sources || {}).map(([k, v]) => [k.toUpperCase(), v])] },

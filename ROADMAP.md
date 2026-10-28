@@ -120,11 +120,14 @@ tracks both.
 
 | Feature | Status |
 |---|---|
-| Editions (Community → Enterprise), entitlements | IMPLEMENTED: enforced server-side from a licence (`licensing.py`); owner machine = all unlocked. AI-credit ledger still a local counter |
-| Licence keys (LemonSqueezy License API: activate / validate / release) | IMPLEMENTED. Operator: create the store + Pro/Team products with licence keys enabled |
-| Website checkout (`docs/payments.json` → BUY buttons + overlay) | IMPLEMENTED: honest waitlist until checkout URLs are pasted in |
+| One paid plan (BUCS Pro ₹1,499/mo), pay-to-use gate (402 + /activate, runtime starts on activation) | IMPLEMENTED |
+| Licence keys: owner-signed Ed25519, offline verify, expiry + install binding, ISSUE KEY panel | IMPLEMENTED |
+| UPI payments on the website (QR, term picker, UTR + install-ID mail) | IMPLEMENTED. Operator: fill `upi_id`, `payee_name`, `contact_email` in `docs/payments.json` |
+| Automatic key delivery (webhook from a payment gateway) | PLANNED: needs a gateway + a small serverless function |
 | LLM switch: Claude / Ollama / any OpenAI-compatible model, test, keys masked | IMPLEMENTED (`llm_providers.py`); cloud providers are a Pro feature on customer installs |
 | Section info: every titled section opens live data + its source | IMPLEMENTED |
+| AI BRAIN ROUTER card (route usage, latency, one-click switch) + MARKET WATCH (CoinGecko) | IMPLEMENTED |
+| Accurate India (official boundary, 36 states/UTs) + Telangana (33 districts) maps | IMPLEMENTED (`static/geo/india_ts.json`) |
 | Computer-use skill (JARVIS operates apps to fulfil commands) | PLANNED: needs Anthropic API key (computer-use tool) or an MCP desktop server; every step screenshot-confirmed, per-action approval, no credentials/payments |
 | Web3 module (off by default) | OPTIONAL |
 | Web3: chain status, gas, RPC health, on-chain balances | IMPLEMENTED (real JSON-RPC, when enabled) |

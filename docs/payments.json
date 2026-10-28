@@ -1,10 +1,13 @@
 {
-  "_readme": "Checkout links for the pricing buttons. Paste a LemonSqueezy checkout URL (https://<store>.lemonsqueezy.com/buy/<variant-id>) per plan and push: the site turns the plan's button into a real BUY button. Leave a plan empty and its button stays an honest waitlist link. Licence keys are issued by LemonSqueezy at checkout and activated in the dashboard's LICENSE panel.",
-  "provider": "lemonsqueezy",
-  "currency": "USD",
-  "checkout": {
-    "pro": "",
-    "team": ""
-  },
-  "enterprise_contact": "#access"
+  "_readme": "UPI payments for BUCS Pro. Fill upi_id (e.g. yourname@okhdfcbank), payee_name and contact_email, then push. The website draws a UPI QR for the chosen term; buyers send their UTR + install ID to contact_email; you issue the key from the dashboard (LICENSE -> ISSUE KEY). Empty upi_id = 'opening soon'.",
+  "method": "upi",
+  "upi_id": "",
+  "payee_name": "",
+  "contact_email": "",
+  "currency": "INR",
+  "prices": {
+    "1": 1499,
+    "3": 4497,
+    "12": 17988
+  }
 }

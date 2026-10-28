@@ -43,3 +43,6 @@ web3_analytics.json
 
 # migration restore backups (never commit)
 .restore-backup/
+license_signing.key
+licences_issued.json
+licences_issued.json.tmp

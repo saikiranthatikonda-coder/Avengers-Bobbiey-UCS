@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=7.1" />
+  <link rel="stylesheet" href="/static/style.css?v=7.2" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -316,7 +316,7 @@
           </div>
           <div class="orb-label-stack">
             <div class="orb-label" id="voice-label">STANDBY</div>
-            <div class="orb-sublabel" id="voice-sublabel">say "hey &lt;agent&gt;"</div>
+            <div class="orb-sublabel" id="voice-sublabel"></div>
           </div>
         </div>
 
@@ -1162,21 +1162,34 @@
     <div class="bs-card" id="license-card">
       <div class="bs-head">
         <div class="bs-title">LICENSE &amp; MONETIZATION</div>
-        <div class="bs-sub">EDITION: <span id="lic-edition">—</span> · AI CREDITS</div>
-      </div>
-      <div class="lic-credits">
-        <div class="lic-credit-row"><span>AI CREDITS THIS CYCLE</span><span id="lic-credit-txt">—</span></div>
-        <div class="lic-credit-bar"><div id="lic-credit-fill"></div></div>
+        <div class="bs-sub">PLAN: <span id="lic-edition">—</span></div>
       </div>
       <div class="lic-status" id="lic-status"><div class="tf-empty">checking licence…</div></div>
-      <form class="mem-add-form" id="lic-form" hidden>
-        <input type="password" id="lic-key" placeholder="paste your licence key from the purchase email…" maxlength="120" autocomplete="off"/>
-        <button type="submit" class="cmd-btn">ACTIVATE</button>
-      </form>
-      <div class="intel-divider" id="lic-tiers-label">EDITIONS · CLICK TO BUY</div>
-      <div class="lic-tiers" id="lic-tiers"></div>
-      <div class="lic-paths-label">ALSO AVAILABLE</div>
-      <div class="lic-paths" id="lic-paths"></div>
+      <div id="lic-owner" hidden>
+        <div class="intel-divider">ISSUE A LICENCE · AFTER YOU SEE THE UPI PAYMENT</div>
+        <form class="lic-issue" id="lic-issue-form" autocomplete="off">
+          <input id="li-customer" placeholder="customer email" maxlength="80" required/>
+          <input id="li-utr" placeholder="UPI UTR / payment ref" maxlength="40"/>
+          <input id="li-iid" placeholder="install ID (e.g. 1A2B3-C4D5E)" maxlength="11"/>
+          <select id="li-days"><option value="31">1 month</option><option value="92">3 months</option><option value="366">12 months</option></select>
+          <button type="submit" class="cmd-btn">ISSUE KEY</button>
+        </form>
+        <div class="lic-issued-key" id="lic-issued-key" hidden></div>
+        <div class="intel-divider">ISSUED · <span id="lic-issued-n">0</span> · <span id="lic-active-n">0</span> ACTIVE</div>
+        <div class="lic-issued" id="lic-issued"><div class="tf-empty">no licences issued yet</div></div>
+      </div>
+    </div>
+
+    <!-- AI BRAIN ROUTER — which model answers, live route usage + health -->
+    <div class="bs-card" id="router-card">
+      <div class="bs-head">
+        <div class="bs-title">AI BRAIN ROUTER</div>
+        <div class="bs-sub">ACTIVE: <span id="rt-active">—</span></div>
+      </div>
+      <div class="rt-routes" id="rt-routes"><div class="tf-empty">no replies yet this session</div></div>
+      <div class="intel-divider">PROVIDERS · ONE-CLICK SWITCH</div>
+      <div class="rt-provs" id="rt-provs"></div>
+      <button class="ghost-btn wide" id="rt-open" type="button">OPEN LLM SWITCH</button>
     </div>
 
     <div class="bs-card" id="web3-toggle-card">
@@ -1304,16 +1317,25 @@
       <div class="w3-comm-news" id="w3-comm-news"></div>
     </div>
 
+
+    <!-- MARKET WATCH — live prices, CoinGecko public API -->
+    <div class="bs-card" id="w3-market-watch">
+      <div class="bs-head">
+        <div class="bs-title">MARKET WATCH</div>
+        <div class="bs-sub">LIVE · USD / INR · <span id="mw-age">—</span></div>
+      </div>
+      <div class="mw-list" id="mw-list"><div class="tf-empty">fetching prices…</div></div>
+    </div>
   </section>
 
   <!-- ═══ MAP ROW ═══════════════════════════════════════ -->
   <section class="map-row">
 
-    <!-- INDIA — accurate hand-traced outline + Telangana highlight -->
+    <!-- INDIA — official boundary + state lines (static/geo/india_ts.json) -->
     <section class="panel corners side-map india-panel">
       <h2 class="panel-title">
         <span>INDIA · NATIONAL GRID</span>
-        <span class="title-badge">28 STATES</span>
+        <span class="title-badge">36 STATES/UTs</span>
       </h2>
       <div class="side-map-stage">
         <svg viewBox="0 0 200 240" class="side-map-svg" preserveAspectRatio="xMidYMid meet">
@@ -1333,6 +1355,7 @@
           <g id="india-shape" class="region-shape-host">
             <path d="M 51 20 L 73 30 L 87 37 L 85 65 L 107 82 L 129 89 L 152 82 L 180 82 L 169 89 L 163 110 L 152 110 L 135 120 L 132 120 L 132 127 L 124 134 L 107 151 L 86 186 L 71 220 L 62 210 L 55 189 L 50 170 L 44 144 L 42 130 L 26 120 L 20 110 L 28 99 L 31 82 L 51 61 Z"/>
           </g>
+          <g id="india-states" class="region-states"></g>
           <g id="india-ts-highlight" class="region-ts-highlight"></g>
           <g id="india-arcs" class="region-arcs"></g>
           <g id="india-cities" class="region-cities"></g>
@@ -1406,11 +1429,10 @@
             <line x1="66" y1="0" x2="66" y2="220"/>
             <line x1="133" y1="0" x2="133" y2="220"/>
           </g>
-          <!-- Telangana outline — accurate boundary generated by renderTelanganaMap()
-               from real [lat,lon] points (TS_BOUNDARY) via the same projection the
-               node markers use, so shape + nodes always align. Static d below is a
-               pre-JS fallback; JS overwrites it with the accurate path on load. -->
+          <!-- Telangana outline + 33 districts from static/geo/india_ts.json
+               (renderTelanganaMap); the static d below is a pre-load fallback. -->
           <path id="ts-shape" class="region-shape" d="M 64 16 L 184 125 L 44 204 L 16 136 Z"/>
+          <g id="ts-districts" class="region-districts"></g>
           <g id="ts-cities" class="region-cities"></g>
           <g class="region-scan"><line class="scan-line" x1="0" y1="0" x2="200" y2="0"/></g>
         </svg>
@@ -1472,6 +1494,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=7.1"></script>
+  <script src="/static/app.js?v=7.2"></script>
 </body>
 </html>

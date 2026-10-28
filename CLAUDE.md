@@ -269,16 +269,21 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
   endpoints must be https. API keys are stored locally, **never returned unmasked**, never
   logged/audited. Custom clients use `LocalLLM(isolated=True)` so they never inherit
   `LOCAL_LLM_KEY`/model prefs. Any provider failure falls back to the chain (never silent).
-- **Licensing:** `BUCS_OWNER=1` in `.env` = the owner's machine (everything unlocked). Customer
-  installs start on Community; a LemonSqueezy licence key (License API: activate/validate/
-  deactivate, no secret in the app) unlocks the edition named by the product/variant.
-  Re-validated daily, 7-day offline grace, then an honest drop to Community.
-- **Gates (server-side):** cloud brains (`brain.cloud_locked` stops every Claude call; cloud
-  providers locked → local only), Google sync, engineering mode, demo edition switch (owner only).
-  `ProviderRegistry.gate = licensing.allows`; call `providers._apply()` after any licence change.
-- Website checkout: `docs/payments.json` (LemonSqueezy checkout URL per plan; empty = waitlist
-  button). Keep `site/` mirrored. Never invent a checkout URL. Only the operator can create
-  the store/products.
+- **One paid plan, pay-to-use (2026-10-28):** BUCS Pro ₹1,499/month (billing.EDITIONS). The
+  owner's machine is `BUCS_OWNER=1`. Customer installs are **locked** until a key is activated:
+  the `licence_gate` middleware returns 402 for the API and redirects pages to `/activate`, the
+  websocket is refused, and the runtime (agents, schedules, voice, TTS) does not start until
+  `start_runtime()` runs on activation. No restart is needed.
+- **Keys:** Ed25519-signed `BUCS-<payload>.<sig>`, verified offline against `licensing.PUBLIC_KEY`.
+  The private `license_signing.key` and the `licences_issued.json` log are **owner-only,
+  gitignored, PROTECTED. Never print, copy or commit them.** Losing the key file means no new
+  keys can be issued, and changing PUBLIC_KEY invalidates every key ever issued. A key carries
+  customer, expiry and an optional install-ID binding (`licensing.install_id()`).
+- **Payments:** UPI (0% fee). `docs/payments.json` holds `upi_id`, `payee_name`,
+  `contact_email` and `prices`; the site draws the UPI QR and mails UTR + install ID. The owner
+  issues the key in LICENSE → ISSUE KEY. An empty `upi_id` shows "opening soon". Never invent
+  a UPI ID or email. Keep `site/` mirrored.
+- Gates also apply on paid installs when a licence expires mid-run (`providers._apply()` hourly).
 
 ### 7. Local Startup (verified from launcher scripts)
 

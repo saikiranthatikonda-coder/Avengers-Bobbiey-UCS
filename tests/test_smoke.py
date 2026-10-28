@@ -147,19 +147,50 @@ class Decisions(unittest.TestCase):
 
 
 class Billing(unittest.TestCase):
-    def test_editions_and_demo_edition_switch(self):
+    def test_single_paid_plan_and_owner_unlocked(self):
         b = SERVER.get("/api/billing")
-        ids = {e["id"] for e in b["editions"]}
-        self.assertIn("community", ids)
-        self.assertEqual(b["current"]["id"] if "id" in b["current"] else "community", "community")
-        target = next(i for i in ids if i != "community")
-        # customer install (no BUCS_OWNER): a demo switch must NOT mint a paid edition
-        r = SERVER.post("/api/billing/edition", {"edition": target})
-        self.assertFalse(r.get("ok"))
-        self.assertIn("licence", r.get("error", ""))
-        lic = SERVER.get("/api/license")
-        self.assertEqual((lic["owner"], lic["edition"]), (False, "community"))
-        self.assertFalse(lic["entitlements"]["cloud_brain"])
+        self.assertEqual([e["id"] for e in b["editions"]], ["pro"])
+        lic = b["license"]
+        self.assertTrue(lic["owner"] and lic["paid"])
+        self.assertTrue(all(lic["entitlements"].values()))
+        self.assertFalse(lic["can_issue"])          # the signing key never leaves the owner's repo dir
+        self.assertFalse(SERVER.post("/api/license/issue", {"customer": "a@b.c"}).get("ok"))
+
+
+class CustomerGate(unittest.TestCase):
+    """A customer install without a licence: nothing but the activation page."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = IsolatedServer(owner=False).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def test_locked_until_activated(self):
+        import urllib.error
+        lic = self.srv.get("/api/license")
+        self.assertFalse(lic["paid"])
+        self.assertRegex(lic["install_id"], r"^[0-9A-F]{5}-[0-9A-F]{5}$")
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            self.srv.get("/api/status")
+        self.assertEqual(cm.exception.code, 402)
+        page = self.srv.get("/")                       # redirected to the activation page
+        self.assertIn("Activate BUCS Pro", page)
+        self.assertIn("YOUR INSTALL ID", page)
+        r = self.srv.post("/api/license/activate", {"key": "BUCS-forged.key"})
+        self.assertFalse(r["ok"])
+        self.assertFalse(self.srv.get("/api/license")["paid"])
+
+    def test_websocket_refused(self):
+        import websockets
+
+        async def go():
+            async with websockets.connect(f"ws://127.0.0.1:{self.srv.port}/ws") as ws:
+                await ws.recv()
+        with self.assertRaises(Exception):
+            asyncio.run(go())
 
 
 class Web3(unittest.TestCase):
