@@ -1,14 +1,14 @@
 {
   "kind": "bucs-release",
-  "version": "7.5.3",
+  "version": "7.5.4",
   "date": "2026-10-29",
-  "commit": "5e1b4ba",
+  "commit": "379ea24",
   "notes": [
-    "Cleaner header: single-line Stark Industries × Bobbiey logo",
-    "The status, version and shutdown bar now spans the header, level with the Unified Command System banner"
+    "The Stark Industries × Bobbiey logo now has the shimmering colour motion",
+    "The header stays on one line when you zoom in: no more clock dropping to a second row"
   ],
-  "url": "releases/bucs-7.5.3.zip",
-  "sha256": "d49a2e59ab8eb6eadc09a4eb398746d625aacdea6d5eb7992ce40225a406614e",
-  "size": 441470,
-  "sig": "ey0aBOgHeWhNQtR60WQ4Y8fTc8ffyvY5XhTvWGAtOvMCd_EvkfnxYnGLEYAHdhET8lNGLwYQVkihvPQOH6-6Cw"
+  "url": "releases/bucs-7.5.4.zip",
+  "sha256": "1997471d4a157cdd5f82bb1c03f3bc1b93339adbccd55351cedafa5ba3450c4d",
+  "size": 442489,
+  "sig": "6jIrxUYPyOkM_NLbVe495YMbIEkN9824Kox5Aww79NSTBLj4QYiIMg5SHaoM-TRa1noaZdZwFTcqCeDesVvaBw"
 }
