@@ -1,0 +1,15 @@
+{
+  "kind": "bucs-release",
+  "version": "7.5.0",
+  "date": "2026-10-29",
+  "commit": "605d4d5",
+  "notes": [
+    "One-click shutdown button in the dashboard header (and on the activation screen)",
+    "In-app updates: BUCS tells you when a new version is out and installs it with one click",
+    "Updates are signature-checked, keep your data and roll back automatically if anything fails"
+  ],
+  "url": "releases/bucs-7.5.0.zip",
+  "sha256": "ac10b1f595f767f6dc9fca3ce694ef8125bcbcf9131ed3af6de58fbe8b9d61f8",
+  "size": 439496,
+  "sig": "55IvD42wa7zojCbx4o3DmHdi98iDgDfHI7D6w_IeJx2lFPnuSGm3eRHYl1BGKUzI_4-xig5Q8fIPqwLpbuFSAA"
+}
