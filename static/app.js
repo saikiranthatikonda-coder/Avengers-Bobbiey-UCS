@@ -5316,3 +5316,15 @@ $("#sys-power")?.addEventListener("click", async () => {
   try { ws && ws.close(); } catch (e) {}
   sysOverlay("⏻", "BUCS is shut down", "Everything stopped cleanly. You can close this tab.<br>To start again, double-click <b>BUCS</b> on your desktop.");
 });
+
+/* mini system module: the two status tags reflect real state, not decoration */
+function refreshSysMod() {
+  const ch = $("#sm-channel"), tm = $("#sm-telemetry"); if (!ch || !tm) return;
+  const linkUp = !!(ws && ws.readyState === 1);
+  const fresh = linkUp && Date.now() - wsLastMsg < 6000;
+  ch.classList.toggle("ok", linkUp);
+  ch.title = linkUp ? "Live link to BUCS: connected (local WebSocket)" : "Live link to BUCS: reconnecting…";
+  tm.classList.toggle("ok", fresh);
+  tm.title = fresh ? "Telemetry streaming: last update " + Math.round((Date.now() - wsLastMsg) / 1000) + " s ago" : "Telemetry: waiting for data";
+}
+setInterval(refreshSysMod, 1500); refreshSysMod();

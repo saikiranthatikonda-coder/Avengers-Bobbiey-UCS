@@ -32,7 +32,7 @@ ol b{color:var(--ink);font-weight:600}
 </head>
 <body>
 <main class="card">
-  <div class="brand">AVENGERS × BOBBIEY</div>
+  <div class="brand">STARK INDUSTRIES × BOBBIEY = AVENGERS</div>
   <div class="sub">UNIFIED COMMAND SYSTEM</div>
   <h1>Activate BUCS Pro</h1>
   <p>This install needs a licence key. Paste the key you received after payment; activation is instant and works offline.</p>
@@ -68,7 +68,7 @@ fetch("/api/license").then(r => r.json()).then(d => {
 $("#off").addEventListener("click", async () => {
   if (!confirm("Shut down BUCS? Start it again from the BUCS desktop shortcut.")) return;
   try { await fetch("/api/system/shutdown", { method: "POST" }); } catch (e) {}
-  document.querySelector("main").innerHTML = '<div class="brand">AVENGERS × BOBBIEY</div><h1>BUCS is shut down</h1><p>You can close this tab. To start again, double-click <b style="color:#c8e6ff">BUCS</b> on your desktop.</p>';
+  document.querySelector("main").innerHTML = '<div class="brand">STARK INDUSTRIES × BOBBIEY = AVENGERS</div><h1>BUCS is shut down</h1><p>You can close this tab. To start again, double-click <b style="color:#c8e6ff">BUCS</b> on your desktop.</p>';
 });
 $("#copy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($("#iid").textContent); $("#copy").textContent = "COPIED"; } catch (e) {}

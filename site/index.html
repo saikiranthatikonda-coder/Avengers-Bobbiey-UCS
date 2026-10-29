@@ -58,13 +58,17 @@ nav.scrolled{border-bottom-color:var(--edge);background:rgba(4,6,12,.88)}
   -webkit-background-clip:text;background-clip:text;color:transparent;
   filter:drop-shadow(0 0 14px rgba(0,217,255,.35));}
 .logo small{font-size:.55rem;letter-spacing:.3em;display:block;color:var(--dim);-webkit-text-fill-color:var(--dim);margin-top:2px}
+.logo{display:inline-flex;flex-direction:column;gap:3px;white-space:nowrap;line-height:1}
+.lg-terms{font-size:.56rem;letter-spacing:.2em;font-weight:700;-webkit-text-fill-color:var(--dim);color:var(--dim)}
+.lg-stark{-webkit-text-fill-color:#ff9d3c}.lg-bob{-webkit-text-fill-color:#6ee7ff}
+.lg-av{font-size:1.15rem;letter-spacing:.24em}
 .nav-links{display:flex;gap:2rem;align-items:center}
 .nav-links a{color:var(--dim);text-decoration:none;font-family:var(--disp);font-size:.62rem;letter-spacing:.22em;transition:color .25s}
 .nav-links a:hover{color:var(--cy)}
 .nav-cta{
   font-family:var(--disp);font-size:.6rem;letter-spacing:.2em;font-weight:700;
   color:#02141c;background:linear-gradient(110deg,var(--cy),#6ee7ff);
-  padding:.55rem 1.1rem;border-radius:6px;text-decoration:none;
+  padding:.55rem 1.1rem;border-radius:6px;text-decoration:none;white-space:nowrap;
   box-shadow:0 0 18px rgba(0,217,255,.35);transition:transform .25s,box-shadow .25s;
 }
 .nav-cta:hover{transform:translateY(-1px);box-shadow:0 0 28px rgba(0,217,255,.55)}
@@ -350,6 +354,11 @@ form textarea{min-height:84px;resize:vertical}
 .boot-log{font-family:var(--mono);font-size:.72rem;color:var(--dim);min-height:1.4em;letter-spacing:.06em}
 .boot-log b{color:var(--grn)}
 
+.hero-brand{color:var(--dim);font-size:1.02rem;line-height:1.5;margin:-.4rem 0 1.1rem;max-width:620px}
+.hero-brand b{font-family:var(--disp);font-weight:700;letter-spacing:.06em;font-size:.86rem}
+.hb-stark{color:#ff9d3c}.hb-bob{color:#6ee7ff}
+.hb-av{background:linear-gradient(110deg,#c084fc,#00d9ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+
 /* pricing */
 .pricing{padding:6.5rem 0;background:linear-gradient(180deg,transparent,rgba(7,12,22,.7) 18%,rgba(7,12,22,.7) 82%,transparent)}
 .price-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.2rem;margin-top:2.8rem;align-items:stretch}
@@ -432,7 +441,7 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
 <div class="grid-layer"></div>
 
 <nav id="nav">
-  <a class="logo" href="#top">AVENGERS × BOBBIEY<small>UNIFIED COMMAND SYSTEM</small></a>
+  <a class="logo" href="#top" title="Stark Industries × Bobbiey = Avengers: a collaboration that puts the power of the Avengers AI agents in your hands, so people and AI work as one team."><span class="lg-terms"><span class="lg-stark">STARK INDUSTRIES</span> × <span class="lg-bob">BOBBIEY</span></span><span class="lg-av">= AVENGERS</span></a>
   <div class="nav-links">
     <a href="#vision">VISION</a>
     <a href="#why">WHY</a>
@@ -450,6 +459,7 @@ footer .fr{font-family:var(--mono);font-size:.66rem;color:var(--dim)}
   <div class="wrap hero-grid">
     <div>
       <div class="hero-tag"><span class="dot"></span>NOW AVAILABLE · BUILT IN HYDERABAD</div>
+      <p class="hero-brand"><b class="hb-stark">Stark Industries</b> × <b class="hb-bob">Bobbiey</b> = <b class="hb-av">Avengers</b>: a collaboration that puts the power of the Avengers AI agents in your hands, so people and AI work as one team.</p>
       <h1>Meet The Future Of <span class="grad">Human-AI Command Systems</span></h1>
       <p class="hero-sub">An intelligent operational command center that transforms data, systems, cameras, sensors, and AI into one unified decision-making platform.</p>
       <div class="cta-row">

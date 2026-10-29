@@ -5,6 +5,10 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-29 — v7.5.2 · New brand mark + system module
+- **brand:** the logo is now the equation **STARK INDUSTRIES × BOBBIEY = AVENGERS**: the collaboration that puts the power of the Avengers AI agents in people's hands, so people and AI work as one team. It is used in the dashboard (hover shows the positioning), on the activation screen, and on the website (nav logo + a positioning line in the hero).
+- **ui:** a new HUD module between the logo and the centre banner holds **SECURE CHANNEL** and **LIVE TELEMETRY** as real live indicators (green while the dashboard's live link is connected and telemetry is streaming, amber otherwise), the version/update pill, and ⏻ shutdown. The banner subline is removed; it reads just UNIFIED COMMAND SYSTEM. Compact labels below 1560 px; checked at 1920/1366/1280 with nothing clipped.
+
 ## 2026-10-29 — v7.5.1 · Header layout
 - **ui:** the version/update pill and the ⏻ shutdown button moved into the empty space between the AVENGERS title and the UNIFIED COMMAND SYSTEM banner, centred in that gap (measured: 40/42 px clearance at 1366 px, 158/127 px at 1920 px).
 
