@@ -5,6 +5,10 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-29 — v7.5.4 · Shimmering logo, one-line header at every zoom
+- **brand:** STARK INDUSTRIES × BOBBIEY now uses the shimmering gradient motion the AVENGERS title had, slightly larger (0.98rem at 1920 px, 1.1rem on wide screens).
+- **fix:** zooming in (a narrower page) wrapped the right-hand header group and pushed the clock onto a second line, making the header taller. The header now stays one 70 px row from 2200 px to 1100 px (measured at 8 widths). It compacts in steps instead of wrapping: CONVERSATION → CONV, a dot-only link pill (status on hover), smaller theme buttons, the header temperature hidden ≤1450 px (the weather card still shows it), the volume slider hidden ≤1300 px (mute stays), and a narrower banner. With the banner hidden (≤1100 px) the header switches to two columns, so the right group stays on the right.
+
 ## 2026-10-29 — v7.5.3 · Header row
 - **ui:** dashboard logo is a single line, **STARK INDUSTRIES × BOBBIEY** (the "= AVENGERS" row is removed; the positioning stays in the logo's hover text). The system module is now one row that fills the whole gap between the logo and the UNIFIED COMMAND SYSTEM box, at exactly the same height and top edge (40 px): live status on the left, version + ⏻ on the right. Labels adapt by width (full ≥2100 px, SECURE · LIVE at standard widths, dots with hover names on laptops). Measured at 2200/1920/1600/1366/1280 px: equal heights, nothing clipped, ⏻ always inside.
 

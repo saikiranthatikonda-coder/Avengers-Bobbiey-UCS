@@ -456,7 +456,8 @@ var ConversationMode = {
   set(on) {
     const b = document.getElementById("conv-toggle"); if (!b) return;
     b.setAttribute("aria-pressed", on ? "true" : "false");
-    b.textContent = on ? "CONVERSATION · ON" : "CONVERSATION · OFF";
+    const st = on ? "ON" : "OFF";
+    b.innerHTML = `<span class="cv-full">CONVERSATION · ${st}</span><span class="cv-short">CONV · ${st}</span>`;
     const sub = document.getElementById("voice-sublabel");
     if (sub) sub.textContent = on ? 'say "jarvis…", then just talk' : "";
   },
@@ -468,7 +469,7 @@ var ConversationMode = {
     logEvent(`<span class="tag">[voice]</span> conversation mode ${on ? "ON — just talk to JARVIS; background voices muted (still shown here)" : "OFF — wake words + all agent voices"}`);
   },
 };
-document.addEventListener("click", e => { if (e.target && e.target.id === "conv-toggle") ConversationMode.toggle(); });
+document.addEventListener("click", e => { if (e.target && e.target.closest && e.target.closest("#conv-toggle")) ConversationMode.toggle(); });
 setTimeout(() => ConversationMode.load(), 500);
 
 // ═══ JARVIS · ENGINEERING panel (devagent.py events: {"type":"dev"}) ═══
@@ -5326,5 +5327,7 @@ function refreshSysMod() {
   ch.title = linkUp ? "Live link to BUCS: connected (local WebSocket)" : "Live link to BUCS: reconnecting…";
   tm.classList.toggle("ok", fresh);
   tm.title = fresh ? "Telemetry streaming: last update " + Math.round((Date.now() - wsLastMsg) / 1000) + " s ago" : "Telemetry: waiting for data";
+  const sp = $("#status-pill"), stx = $("#status-text");
+  if (sp && stx) sp.title = "Dashboard link: " + stx.textContent;
 }
 setInterval(refreshSysMod, 1500); refreshSysMod();
