@@ -3383,6 +3383,7 @@ let wsLastMsg = 0;
 let wsReconnecting = false;
 
 function scheduleReconnect(reason) {
+  if (window._bucsStopping) return;    // shut down / updating: the overlay owns the screen
   if (wsReconnecting) return;          // dedup: never stack reconnects
   wsReconnecting = true;
   $("#status-pill").classList.add("offline");
@@ -3612,6 +3613,8 @@ function handle(msg) {
       logEvent(`<span class="tag">[sys]</span> ${escapeHTML(msg.msg)}`, msg.level || "info"); break;
     case "system":
       logEvent(`<span class="tag">[sys]</span> ${escapeHTML(msg.msg)}`); break;
+    case "update":
+      renderVersion(msg); break;
   }
 }
 
@@ -5234,3 +5237,82 @@ function initSectionInfo() {
   });
 }
 initSectionInfo();
+
+
+/* ═══ SYSTEM · version, in-app updates, shutdown (updater.py) ═══ */
+function sysOverlay(glyph, title, text) {
+  window._bucsStopping = true;
+  $("#sys-glyph").textContent = glyph; $("#sys-title").textContent = title; $("#sys-text").innerHTML = text;
+  $("#sys-overlay").hidden = false;
+}
+let _sysVer = null;
+function renderVersion(v) {
+  _sysVer = { ...(_sysVer || {}), ...v };
+  const pill = $("#sys-version"); if (!pill) return;
+  const fv = $("#footer-ver"); if (fv && _sysVer.version) fv.textContent = "v" + _sysVer.version;
+  if (_sysVer.available && !_sysVer.managed_by_git) {
+    pill.textContent = `UPDATE → v${_sysVer.latest}`; pill.classList.add("update");
+    pill.title = "A new BUCS version is available: click to see what's new and update";
+  } else {
+    pill.textContent = "v" + (_sysVer.version || "—"); pill.classList.remove("update");
+    pill.title = "BUCS version: click to check for updates";
+  }
+}
+async function refreshVersion() {
+  try { renderVersion(await (await fetch("/api/system/version")).json()); } catch (e) {}
+}
+refreshVersion(); setInterval(refreshVersion, 10 * 60 * 1000);
+
+async function openUpdates() {
+  openCustomModal("BUCS UPDATES", "SIGNED RELEASES · VERIFIED BEFORE INSTALL", null,
+    '<div style="color:var(--text-dim);font-style:italic">checking for updates…</div>');
+  let v = {};
+  try { v = await (await fetch("/api/system/update/check", { method: "POST" })).json(); renderVersion(v); } catch (e) {}
+  const notes = (v.notes || []).map(n => `<div class="mb-row">• ${escapeHTML(n)}</div>`).join("");
+  let html = `<div class="mb-grid">
+      <div class="mb-stat"><span class="lbl">INSTALLED</span><span class="val">v${escapeHTML(v.version || "—")}</span></div>
+      <div class="mb-stat"><span class="lbl">LATEST</span><span class="val">${v.latest ? "v" + escapeHTML(v.latest) : "—"}</span></div>
+      <div class="mb-stat"><span class="lbl">CHECKED</span><span class="val">${v.checked_at ? new Date(v.checked_at * 1000).toLocaleTimeString() : "—"}</span></div></div>`;
+  if (v.error) html += `<div class="mb-row" style="color:var(--warn)">Couldn't check for updates: ${escapeHTML(v.error)}</div>`;
+  if (v.managed_by_git) {
+    html += `<div class="mb-row">This is the owner's development copy (a git checkout). It updates with <b>git pull</b>, not in-app.${v.available ? ` A newer release (v${escapeHTML(v.latest)}) is published.` : ""}</div>`;
+  } else if (v.available) {
+    html += `<div class="model-section">— WHAT'S NEW IN v${escapeHTML(v.latest)}${v.date ? " · " + escapeHTML(v.date) : ""}</div><div class="mb-list">${notes || '<div class="mb-row">Improvements and fixes.</div>'}</div>
+      <div class="mb-row">BUCS downloads the update, checks its signature, backs up the current version and restarts (about a minute). Your licence, settings and memory are kept. If the new version doesn't start, it rolls back automatically.</div>
+      <div class="lic-acts"><button class="cmd-btn" id="upd-go">UPDATE &amp; RESTART</button></div>`;
+  } else if (!v.error) {
+    html += `<div class="mb-row" style="color:var(--success)">✓ You're on the latest version.</div>`;
+  }
+  $("#modal-body").innerHTML = html;
+  $("#upd-go")?.addEventListener("click", async (e) => {
+    e.target.disabled = true; e.target.textContent = "DOWNLOADING…";
+    const r = await fetch("/api/system/update/apply", { method: "POST" }).then(x => x.json()).catch(err => ({ ok: false, error: err.message }));
+    if (!r.ok) { e.target.disabled = false; e.target.textContent = "RETRY"; logEvent(`<span class="tag">[update]</span> ${escapeHTML(r.error || "update failed")}`, "warn"); return; }
+    $("#tool-modal").hidden = true;
+    sysOverlay("⟳", `Updating to v${r.to}`, "Installing and restarting. This page reloads by itself when BUCS is back.");
+    waitForReturn(r.to);
+  });
+}
+async function waitForReturn(expect) {
+  await new Promise(res => setTimeout(res, 4000));
+  for (let i = 0; i < 180; i++) {           // up to ~6 min (dependency installs on slow links)
+    try {
+      const v = await (await fetch("/api/system/version", { cache: "no-store" })).json();
+      if (v.version) {
+        if (expect && v.version !== expect) $("#sys-text").innerHTML = `BUCS came back on v${escapeHTML(v.version)}: the update was rolled back. Reloading…`;
+        setTimeout(() => location.reload(), 1200); return;
+      }
+    } catch (e) {}
+    await new Promise(res => setTimeout(res, 2000));
+  }
+  $("#sys-text").innerHTML = "BUCS hasn't come back yet. Check the BUCS window, or start it again from the desktop shortcut.";
+}
+makeInteractive($("#sys-version"), openUpdates, "BUCS version and updates");
+
+$("#sys-power")?.addEventListener("click", async () => {
+  if (!confirm("Shut down BUCS?\n\nAgents, voice and schedules stop and the BUCS window closes. Start it again any time from the BUCS desktop shortcut.")) return;
+  const r = await fetch("/api/system/shutdown", { method: "POST" }).then(x => x.json()).catch(() => ({ ok: true }));
+  if (r.ok === false) { logEvent(`<span class="tag">[sys]</span> ${escapeHTML(r.error || "shutdown refused")}`, "warn"); return; }
+  try { ws && ws.close(); } catch (e) {}
+  sysOverlay("⏻", "BUCS is shut down", "Everything stopped cleanly. You can close this tab.<br>To start again, double-click <b>BUCS</b> on your desktop.");
+});

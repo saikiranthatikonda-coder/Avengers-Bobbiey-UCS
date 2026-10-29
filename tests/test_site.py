@@ -51,6 +51,18 @@ class Website(unittest.TestCase):
                          (ROOT / "docs" / "payments.json").read_text(encoding="utf-8"))
         self.assertNotIn("lemonsqueezy", DOCS.lower())
 
+    def test_published_release_is_signed_and_matches_its_package(self):
+        import hashlib, json
+        import updater
+        rel = ROOT / "docs" / "releases.json"
+        if not rel.exists():
+            self.skipTest("no release published yet")
+        m = json.loads(rel.read_text(encoding="utf-8"))
+        self.assertTrue(updater.verify_manifest(m), "releases.json signature must verify against PUBLIC_KEY")
+        pkg = (ROOT / "docs" / m["url"]).read_bytes()
+        self.assertEqual((hashlib.sha256(pkg).hexdigest(), len(pkg)), (m["sha256"], m["size"]))
+        self.assertEqual(rel.read_text(encoding="utf-8"), (ROOT / "site" / "releases.json").read_text(encoding="utf-8"))
+
     def test_live_product_has_install_path_not_early_access(self):
         low = DOCS.lower()
         for gone in ("early access", "waitlist", "design partner"):

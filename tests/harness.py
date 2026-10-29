@@ -31,6 +31,7 @@ def copy_app(dst: Path) -> None:
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
     for py in ROOT.glob("*.py"):
         shutil.copy2(py, dst / py.name)
+    shutil.copy2(ROOT / "VERSION", dst / "VERSION")
     for d in ("static", "web3mod"):
         shutil.copytree(ROOT / d, dst / d, ignore=ignore)
 

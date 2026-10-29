@@ -46,6 +46,7 @@ ol b{color:var(--ink);font-weight:600}
     <div class="row">
       <button class="btn" id="go" type="submit">ACTIVATE</button>
       <a class="btn ghost" id="buy" href="https://saikiranthatikonda-coder.github.io/Avengers-Bobbiey-UCS/#pricing" target="_blank" rel="noopener">GET A LICENCE ↗</a>
+      <button class="btn ghost" id="off" type="button" title="Stop BUCS on this computer">⏻ SHUT DOWN</button>
     </div>
     <div class="msg" id="msg"></div>
   </form>
@@ -64,6 +65,11 @@ fetch("/api/license").then(r => r.json()).then(d => {
   $("#iid").textContent = d.install_id || "—";
   if (d.expired) { $("#msg").className = "msg err"; $("#msg").textContent = "Your licence has expired. Renew to get a new key."; }
 }).catch(() => {});
+$("#off").addEventListener("click", async () => {
+  if (!confirm("Shut down BUCS? Start it again from the BUCS desktop shortcut.")) return;
+  try { await fetch("/api/system/shutdown", { method: "POST" }); } catch (e) {}
+  document.querySelector("main").innerHTML = '<div class="brand">AVENGERS × BOBBIEY</div><h1>BUCS is shut down</h1><p>You can close this tab. To start again, double-click <b style="color:#c8e6ff">BUCS</b> on your desktop.</p>';
+});
 $("#copy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($("#iid").textContent); $("#copy").textContent = "COPIED"; } catch (e) {}
   setTimeout(() => { $("#copy").textContent = "COPY"; }, 1500);

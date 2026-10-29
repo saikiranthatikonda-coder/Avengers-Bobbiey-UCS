@@ -37,6 +37,7 @@ from devagent import DevAgent
 from commander_memory import CommanderMemory
 from llm_providers import PRESETS, ProviderRegistry
 from licensing import Licensing
+from updater import Updater, request_exit
 import agents as agents_mod
 from orchestrator import Orchestrator
 from productivity import Productivity
@@ -293,6 +294,20 @@ async def lifespan(app: FastAPI):
     if licensing.paid:
         await start_runtime()
 
+    updater = Updater()
+    state["updater"] = updater
+
+    async def update_loop():
+        await asyncio.sleep(25)
+        updater.mark_healthy()                 # booted cleanly → disarm automatic rollback
+        await asyncio.sleep(35)
+        while True:                            # look for a newer signed release twice a day
+            snap = await updater.check()
+            if snap.get("available"):
+                await hub.broadcast({"type": "update", **snap})
+            await asyncio.sleep(12 * 3600)
+    tasks.append(asyncio.create_task(update_loop()))
+
     try:
         yield
     finally:
@@ -348,7 +363,7 @@ async def auth_gate(request: Request, call_next):
 
 # Unlicensed customer installs reach only the activation page + licence API.
 LICENCE_OPEN = ("/api/license", "/api/auth/status", "/static/", "/activate", "/favicon.ico",
-                "/login", "/api/auth/login")
+                "/login", "/api/auth/login", "/api/system/")
 
 
 @app.middleware("http")
@@ -1731,6 +1746,59 @@ async def team_memory_endpoint():
 @app.get("/api/billing")
 async def billing_endpoint():
     return {**state["billing"].snapshot(), "license": state["licensing"].snapshot()}
+
+
+# ═══ SYSTEM · version, updates, shutdown (updater.py) ═══
+
+def _host_only(request: Request) -> bool:
+    return _is_loopback(request.client.host if request.client else "")
+
+
+def _exit_soon(reason: str) -> None:
+    """Flag the launcher (shutdown = close, restart = relaunch), then stop uvicorn
+    the same way Ctrl+C does, so the lifespan shuts every subsystem down cleanly."""
+    import signal
+    request_exit(Path(__file__).parent, reason)
+    asyncio.get_running_loop().call_later(0.8, signal.raise_signal, signal.SIGINT)
+
+
+@app.get("/api/system/version")
+async def system_version():
+    up = state.get("updater")
+    return up.snapshot() if up else {"version": "unknown"}
+
+
+@app.post("/api/system/update/check")
+async def system_update_check(request: Request):
+    if not _host_only(request):
+        return JSONResponse({"ok": False, "error": "updates are managed on the host machine"}, status_code=403)
+    return await state["updater"].check()
+
+
+@app.post("/api/system/update/apply")
+async def system_update_apply(request: Request):
+    if not _host_only(request):
+        return JSONResponse({"ok": False, "error": "updates are managed on the host machine"}, status_code=403)
+    res = await state["updater"].apply()
+    if "audit" in state:
+        await _audit("system.update", f"{res.get('from')} → {res.get('to')}" if res.get("ok") else f"refused: {res.get('error')}")
+    if res.get("ok"):
+        await state["hub"].broadcast({"type": "system", "event": "restarting",
+                                      "msg": f"Updating BUCS {res['from']} → {res['to']} — restarting"})
+        _exit_soon("restart")
+    return res
+
+
+@app.post("/api/system/shutdown")
+async def system_shutdown(request: Request):
+    if not _host_only(request):
+        return JSONResponse({"ok": False, "error": "BUCS can only be shut down from this computer"}, status_code=403)
+    if "audit" in state:
+        await _audit("system.shutdown", "shut down from the dashboard")
+    if "hub" in state:
+        await state["hub"].broadcast({"type": "system", "event": "shutdown", "msg": "BUCS is shutting down"})
+    _exit_soon("shutdown")
+    return {"ok": True}
 
 
 class LicenseReq(BaseModel):

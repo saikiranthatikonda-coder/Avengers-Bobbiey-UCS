@@ -128,6 +128,8 @@ tracks both.
 | Section info: every titled section opens live data + its source | IMPLEMENTED |
 | AI BRAIN ROUTER card (route usage, latency, one-click switch) + MARKET WATCH (CoinGecko) | IMPLEMENTED |
 | Accurate India (official boundary, 36 states/UTs) + Telangana (33 districts) maps | IMPLEMENTED (`static/geo/india_ts.json`) |
+| One-click shutdown (dashboard + activation screen) | IMPLEMENTED |
+| Signed in-app updates: release tool, update prompt, verify → backup → apply → restart, auto-rollback | IMPLEMENTED (E2E-verified with the real launcher) |
 | Computer-use skill (JARVIS operates apps to fulfil commands) | PLANNED: needs Anthropic API key (computer-use tool) or an MCP desktop server; every step screenshot-confirmed, per-action approval, no credentials/payments |
 | Web3 module (off by default) | OPTIONAL |
 | Web3: chain status, gas, RPC health, on-chain balances | IMPLEMENTED (real JSON-RPC, when enabled) |

@@ -286,6 +286,21 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
   a UPI ID or email. Keep `site/` mirrored.
 - Gates also apply on paid installs when a licence expires mid-run (`providers._apply()` hourly).
 
+### 6f. Versions, in-app updates, shutdown (updater.py, tools/release.py, 2026-10-29)
+
+- `VERSION` is the product version (semver). Every customer-facing change ships as a release:
+  1. bump `VERSION`, update CHANGELOG, commit with tests green;
+  2. `python tools/release.py --notes "…" --notes "…"` (owner machine: signs with license_signing.key);
+  3. `git add docs site && git commit -m "release vX.Y.Z" && git push` → Pages publishes
+     `releases.json` + `releases/bucs-X.Y.Z.zip`. Installs see the update within 12 h.
+- Installs verify the Ed25519 signature (PUBLIC_KEY) and SHA-256 before touching files, back up
+  every replaced file to `.update/backup-<old>/`, never write user data (`updater.PRESERVE`),
+  then restart via `run.ps1`. If the new version exits before `mark_healthy()` (25 s), run.ps1
+  restores the backup automatically. **Never ship a release without the E2E path working.**
+- A git checkout (this repo) is never modified by the updater; it shows "managed by git".
+- Shutdown: `POST /api/system/shutdown` (loopback only) → `.update/shutdown.flag` + SIGINT →
+  graceful lifespan shutdown → run.ps1 exits 99 → start-jarvis.cmd closes the window.
+
 ### 7. Local Startup (verified from launcher scripts)
 
 **Start the main application (Windows):**

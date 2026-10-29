@@ -39,6 +39,8 @@ echo [boot] Launching server... (dashboard opens automatically when ready)
 echo [boot] To stop: press Ctrl+C in this window, or just close it.
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0run.ps1"
+REM 99 = shut down from the dashboard: close this window, nothing to read
+if "%ERRORLEVEL%"=="99" exit
 
 echo.
 echo ============================================================

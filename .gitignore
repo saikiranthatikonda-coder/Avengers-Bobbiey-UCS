@@ -48,3 +48,4 @@ licences_issued.json
 licences_issued.json.tmp
 tools/guide/*.png
 tools/guide/chrome-profile/
+.update/

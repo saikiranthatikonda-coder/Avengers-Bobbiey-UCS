@@ -5,6 +5,14 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-29 — v7.5.0 · One-click shutdown + signed in-app updates
+- **feat:** **⏻ shutdown** in the dashboard header (and on the activation screen for locked installs). It confirms, then stops BUCS the same way Ctrl+C does (agents, voice, schedules and TTS shut down through the lifespan), and the launcher window closes by itself. Host machine only.
+- **feat:** **in-app updates.** A `vX.Y.Z` pill in the header turns into **UPDATE → vX.Y.Z** when a newer signed release is published (checked at boot and every 12 h, or on demand). **UPDATE & RESTART** downloads the package, verifies the owner's Ed25519 signature and SHA-256, backs up every file it replaces, never touches user data (licence, settings, memory, tokens), and restarts. If the new version fails to start, the launcher **rolls back automatically**.
+- **feat:** `tools/release.py` publishes a release: it builds the package from the committed version (`git archive`, app files only, ~440 KB), signs the manifest, and writes `docs/releases.json` + `docs/releases/`. `VERSION` file added (7.5.0); the footer now shows the real version.
+- **fix (caught by E2E):** `BUCS_UPDATE_URL` was read before `.env` loaded, so it was ignored. It is now read when the updater starts.
+- **verified end to end** with a separate install run by the real `run.ps1`: 7.5.0 → 7.5.1 (back in 6 s, `.env` and licence kept), a deliberately broken 7.5.2 rolled back to 7.5.1 in 3.5 s, and dashboard shutdown exited the launcher with code 99.
+- **test:** `tests/test_updater.py` (signature/tamper, version order, package install keeps user data + backs up, checksum and path-traversal refusal, git checkout untouched, rollback disarm, real server shutdown).
+
 ## 2026-10-29 — First-customer install guide
 - **docs:** one-page A4 **BUCS Install & Activate** guide (`docs/BUCS-Install-Guide.pdf`) with real screenshots: download, Python + PATH, `Start BUCS.cmd` (incl. the SmartScreen "More info → Run anyway" step and the `Avengers-Bobbiey-UCS-main` folder name), install ID, UPI payment, activation, troubleshooting, and what's included. It uses an example install ID, never a real one. Linked from the site's Get Started section; regenerate with `tools/guide/`.
 

@@ -64,4 +64,37 @@ if ($host_ -eq "0.0.0.0") {
 } else {
     Write-Host "[jarvis] Booting on http://${host_}:$port" -ForegroundColor Cyan
 }
-& .\.venv\Scripts\python.exe -m uvicorn main:app --host $host_ --port $port
+# Server loop. The dashboard can ask the launcher (via .update\*.flag) to:
+#   restart  - relaunch after an in-app update (updater.py)
+#   shutdown - stop and close the window (exit code 99, see start-jarvis.cmd)
+# If an update was applied but the new version exits before it marks itself
+# healthy (.updateerify.json still present), the previous files are restored.
+$upd = Join-Path $PSScriptRoot ".update"
+while ($true) {
+    & .\.venv\Scripts\python.exe -m uvicorn main:app --host $host_ --port $port
+    $restartFlag  = Join-Path $upd "restart.flag"
+    $shutdownFlag = Join-Path $upd "shutdown.flag"
+    $verify       = Join-Path $upd "verify.json"
+    if (Test-Path $restartFlag) {
+        Remove-Item $restartFlag -Force
+        Write-Host "[BUCS] Restarting into the updated version..." -ForegroundColor Cyan
+        $req = $null
+        if (Test-Path $verify) { $req = (Get-Content $verify -Raw | ConvertFrom-Json).requirements_changed }
+        if ($req) { & .\.venv\Scripts\python.exe -m pip install -q -r requirements.txt }
+        continue
+    }
+    if (Test-Path $shutdownFlag) {
+        Remove-Item $shutdownFlag -Force
+        Write-Host "[BUCS] Shut down from the dashboard." -ForegroundColor Cyan
+        exit 99
+    }
+    if (Test-Path $verify) {
+        $v = Get-Content $verify -Raw | ConvertFrom-Json
+        Write-Host "[BUCS] Version $($v.to) failed to start - rolling back to $($v.from)..." -ForegroundColor Yellow
+        Copy-Item -Path (Join-Path $v.backup "*") -Destination $PSScriptRoot -Recurse -Force
+        foreach ($f in $v.created) { Remove-Item (Join-Path $PSScriptRoot $f) -Force -ErrorAction SilentlyContinue }
+        Remove-Item $verify -Force
+        continue
+    }
+    break
+}
