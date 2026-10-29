@@ -5,6 +5,9 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-29 — v7.5.1 · Header layout
+- **ui:** the version/update pill and the ⏻ shutdown button moved into the empty space between the AVENGERS title and the UNIFIED COMMAND SYSTEM banner, centred in that gap (measured: 40/42 px clearance at 1366 px, 158/127 px at 1920 px).
+
 ## 2026-10-29 — v7.5.0 · One-click shutdown + signed in-app updates
 - **feat:** **⏻ shutdown** in the dashboard header (and on the activation screen for locked installs). It confirms, then stops BUCS the same way Ctrl+C does (agents, voice, schedules and TTS shut down through the lifespan), and the launcher window closes by itself. Host machine only.
 - **feat:** **in-app updates.** A `vX.Y.Z` pill in the header turns into **UPDATE → vX.Y.Z** when a newer signed release is published (checked at boot and every 12 h, or on demand). **UPDATE & RESTART** downloads the package, verifies the owner's Ed25519 signature and SHA-256, backs up every file it replaces, never touches user data (licence, settings, memory, tokens), and restarts. If the new version fails to start, the launcher **rolls back automatically**.
