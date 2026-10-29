@@ -1,15 +1,13 @@
 {
   "kind": "bucs-release",
-  "version": "7.5.0",
+  "version": "7.5.1",
   "date": "2026-10-29",
-  "commit": "605d4d5",
+  "commit": "40ffac7",
   "notes": [
-    "One-click shutdown button in the dashboard header (and on the activation screen)",
-    "In-app updates: BUCS tells you when a new version is out and installs it with one click",
-    "Updates are signature-checked, keep your data and roll back automatically if anything fails"
+    "Version and shutdown button moved next to the AVENGERS title for easier reach"
   ],
-  "url": "releases/bucs-7.5.0.zip",
-  "sha256": "ac10b1f595f767f6dc9fca3ce694ef8125bcbcf9131ed3af6de58fbe8b9d61f8",
-  "size": 439496,
-  "sig": "55IvD42wa7zojCbx4o3DmHdi98iDgDfHI7D6w_IeJx2lFPnuSGm3eRHYl1BGKUzI_4-xig5Q8fIPqwLpbuFSAA"
+  "url": "releases/bucs-7.5.1.zip",
+  "sha256": "76a5d6b072bc82ae7d4fdba7d3826c7bb34ba0b2a85647ca6e15ca339a9f6d0e",
+  "size": 439690,
+  "sig": "HHoDeXrKrmV86ZfechOMtalkhRYKbJCuSmx840h0gix0MRqzGeA8viIpH_hiBs9hkdJ3x0EI8zYinE-KbsEoBw"
 }
