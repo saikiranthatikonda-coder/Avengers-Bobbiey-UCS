@@ -1,14 +1,14 @@
 {
   "kind": "bucs-release",
-  "version": "7.5.2",
+  "version": "7.5.3",
   "date": "2026-10-29",
-  "commit": "d78cf69",
+  "commit": "5e1b4ba",
   "notes": [
-    "New logo: Stark Industries × Bobbiey = Avengers",
-    "New header module: live Secure Channel / Live Telemetry indicators, version and shutdown in one place"
+    "Cleaner header: single-line Stark Industries × Bobbiey logo",
+    "The status, version and shutdown bar now spans the header, level with the Unified Command System banner"
   ],
-  "url": "releases/bucs-7.5.2.zip",
-  "sha256": "ba64d26276f85cec1d52d9d7db408bfdb464aa2cc358ae08325644cc4b24d325",
-  "size": 440912,
-  "sig": "Rq6auC6XXWS2W1Alv-IYkJv012PytUC3uwm5ylQlBRWTZEJDcDUdYgvaHgFjVAAzxnajKINyd8ULQ3t7AakKBw"
+  "url": "releases/bucs-7.5.3.zip",
+  "sha256": "d49a2e59ab8eb6eadc09a4eb398746d625aacdea6d5eb7992ce40225a406614e",
+  "size": 441470,
+  "sig": "ey0aBOgHeWhNQtR60WQ4Y8fTc8ffyvY5XhTvWGAtOvMCd_EvkfnxYnGLEYAHdhET8lNGLwYQVkihvPQOH6-6Cw"
 }
