@@ -5,6 +5,9 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-29 — v7.5.3 · Header row
+- **ui:** dashboard logo is a single line, **STARK INDUSTRIES × BOBBIEY** (the "= AVENGERS" row is removed; the positioning stays in the logo's hover text). The system module is now one row that fills the whole gap between the logo and the UNIFIED COMMAND SYSTEM box, at exactly the same height and top edge (40 px): live status on the left, version + ⏻ on the right. Labels adapt by width (full ≥2100 px, SECURE · LIVE at standard widths, dots with hover names on laptops). Measured at 2200/1920/1600/1366/1280 px: equal heights, nothing clipped, ⏻ always inside.
+
 ## 2026-10-29 — v7.5.2 · New brand mark + system module
 - **brand:** the logo is now the equation **STARK INDUSTRIES × BOBBIEY = AVENGERS**: the collaboration that puts the power of the Avengers AI agents in people's hands, so people and AI work as one team. It is used in the dashboard (hover shows the positioning), on the activation screen, and on the website (nav logo + a positioning line in the hero).
 - **ui:** a new HUD module between the logo and the centre banner holds **SECURE CHANNEL** and **LIVE TELEMETRY** as real live indicators (green while the dashboard's live link is connected and telemetry is streaming, amber otherwise), the version/update pill, and ⏻ shutdown. The banner subline is removed; it reads just UNIFIED COMMAND SYSTEM. Compact labels below 1560 px; checked at 1920/1366/1280 with nothing clipped.
