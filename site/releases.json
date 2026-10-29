@@ -1,13 +1,14 @@
 {
   "kind": "bucs-release",
-  "version": "7.5.1",
+  "version": "7.5.2",
   "date": "2026-10-29",
-  "commit": "40ffac7",
+  "commit": "d78cf69",
   "notes": [
-    "Version and shutdown button moved next to the AVENGERS title for easier reach"
+    "New logo: Stark Industries × Bobbiey = Avengers",
+    "New header module: live Secure Channel / Live Telemetry indicators, version and shutdown in one place"
   ],
-  "url": "releases/bucs-7.5.1.zip",
-  "sha256": "76a5d6b072bc82ae7d4fdba7d3826c7bb34ba0b2a85647ca6e15ca339a9f6d0e",
-  "size": 439690,
-  "sig": "HHoDeXrKrmV86ZfechOMtalkhRYKbJCuSmx840h0gix0MRqzGeA8viIpH_hiBs9hkdJ3x0EI8zYinE-KbsEoBw"
+  "url": "releases/bucs-7.5.2.zip",
+  "sha256": "ba64d26276f85cec1d52d9d7db408bfdb464aa2cc358ae08325644cc4b24d325",
+  "size": 440912,
+  "sig": "Rq6auC6XXWS2W1Alv-IYkJv012PytUC3uwm5ylQlBRWTZEJDcDUdYgvaHgFjVAAzxnajKINyd8ULQ3t7AakKBw"
 }
