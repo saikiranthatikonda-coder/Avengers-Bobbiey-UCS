@@ -5,6 +5,9 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-29 — First-customer install guide
+- **docs:** one-page A4 **BUCS Install & Activate** guide (`docs/BUCS-Install-Guide.pdf`) with real screenshots: download, Python + PATH, `Start BUCS.cmd` (incl. the SmartScreen "More info → Run anyway" step and the `Avengers-Bobbiey-UCS-main` folder name), install ID, UPI payment, activation, troubleshooting, and what's included. It uses an example install ID, never a real one. Linked from the site's Get Started section; regenerate with `tools/guide/`.
+
 ## 2026-10-28 — Privacy: QR-only payments; official India on the world map; alignment
 - **privacy:** the website no longer publishes the UPI ID or payee name as text (they were in the public `payments.json` and the page). It now shows only pre-generated, amount-filled QR images per plan (`docs/pay/`, made by `tools/make_upi_qr.py`, which takes the UPI ID on the command line so it is never stored in the repo). The "open UPI app" link is gone because it carried the ID in plain text. A test blocks any UPI ID, payee name or `upi://` link from the site.
 - **fix:** the world map drew India from Natural Earth's de-facto line. India is now drawn from the official boundary (same dataset as the India panel, dissolved to lon/lat: `static/geo/india_world.json`, 16 KB), and neighbours are masked underneath so no de-facto border shows through. The map now fits the panel's real shape and the inhabited band (56°S–74°N) instead of a fixed box with empty side bars. Countries show names on hover.
