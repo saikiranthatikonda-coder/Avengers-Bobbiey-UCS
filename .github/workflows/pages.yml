@@ -22,7 +22,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Guard website claims
+      - name: Install release-check dependencies
+        run: python3 -m pip install --quiet httpx cryptography
+
+      - name: Guard website claims + verify the signed release
         run: python3 -m unittest tests.test_site -v
 
       - name: Stamp build
