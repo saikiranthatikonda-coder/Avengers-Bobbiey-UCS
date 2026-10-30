@@ -1,14 +1,16 @@
 {
   "kind": "bucs-release",
-  "version": "7.7.0",
+  "version": "7.8.0",
   "date": "2026-10-30",
-  "commit": "758b3d6",
+  "commit": "eb48a60",
   "notes": [
-    "Self-healing: BUCS now checks itself every 30 s, repairs what it safely can and explains problems using your AI",
-    "Faster connectivity panel and no more stuck background probes"
+    "Agent Commerce Market Radar inside Project Trillion (owner-only, read-only): live evidence on where AI agents pay, with sources",
+    "Revenue Opportunity Pipeline: save, model, approve and track opportunities (estimates kept apart from real money)",
+    "Website Extraction: agents can pay per request in USDC once the owner enables it; failed requests are never charged",
+    "Security: DNS-rebinding protection for Website Extraction"
   ],
-  "url": "releases/bucs-7.7.0.zip",
-  "sha256": "e2ab332d677f1f66c061b24936ed30a0841005c33fbe2008e1c658b41751453f",
-  "size": 486172,
-  "sig": "k_RqzKBwavMXnFmChB0a6xYSwwLiNmJgryFzz3Gp--969TNEZindblA5MfyAaZfRWUPKkFgkRSynPUzczMa7Bw"
+  "url": "releases/bucs-7.8.0.zip",
+  "sha256": "b497a3a8e82494ad36b5c1003ea0f2f1071553b7ad5099bfbb1e870b7ab19e04",
+  "size": 526562,
+  "sig": "BZm_ha-oRBUI2Jl-vMLGJscphHI8ZbwEyXE4ACaDJToQvFCCTDTVyLeQeYAqKdWGYYdI8qU-i51cGVK8NkOQDA"
 }
