@@ -132,13 +132,29 @@ class Brain:
         Read tool, but in headless -p mode it only does so if explicitly told —
         so we command the Read up front and allow the tool. Retries once if the
         model claims it got no image."""
+        # Security: the CLI may Read ONE file — a private copy of this frame in its
+        # isolated working folder — via a path-scoped permission rule. No
+        # permission bypass, so a prompt (or text held up to the webcam) can't
+        # make it open anything else on the PC.
+        import shutil
+        import uuid
+        BRAIN_CWD.mkdir(parents=True, exist_ok=True)
+        name = f"frame-{uuid.uuid4().hex[:12]}.jpg"
+        local = BRAIN_CWD / name
+        shutil.copyfile(image_path, local)
         full = (
-            f"Use your Read tool to open the image file at this exact path: {image_path}\n"
+            f"Use your Read tool to open the image file at this exact path: {local}\n"
             "Look at the actual image contents, then answer:\n" + prompt
         )
+        try:
+            return await self._see_loop(full, name, timeout)
+        finally:
+            local.unlink(missing_ok=True)
+
+    async def _see_loop(self, full: str, name: str, timeout: float) -> str:
+        reply = ""
         for attempt in range(2):
-            reply = await self._llm_call(full, system=None, timeout=timeout,
-                                         allow_read=True)
+            reply = await self._claude_stream(full, None, timeout, allow_read=name)
             low = (reply or "").lower()
             if reply and not reply.startswith("[") and not any(
                 s in low for s in ("no image", "not attached", "cannot read",
@@ -150,10 +166,10 @@ class Brain:
     def _cli_args(self, prompt: str, system: str | None, allow_read: bool) -> list[str]:
         args: list[str] = [self.claude_bin, "-p"]
         if allow_read:
-            # headless mode blocks the Read tool behind a permission prompt, so
-            # image analysis silently fails; bypass lets it read the one local
-            # frame we wrote. --tools Read keeps the bypass to that one tool.
-            args += ["--tools", "Read", "--dangerously-skip-permissions"]
+            # Read only, and only the single frame file named by allow_read
+            # (relative to BRAIN_CWD): a path-scoped rule, never a bypass.
+            rule = f"Read(./{allow_read})" if isinstance(allow_read, str) else "Read(./frame.jpg)"
+            args += ["--tools", "Read", "--allowedTools", rule]
         else:
             # text replies are pure reasoning over the context we pass in; with
             # tools on, the CLI tries (blocked) shell commands and stalls ~30s.

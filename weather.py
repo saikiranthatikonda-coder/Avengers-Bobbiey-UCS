@@ -1,5 +1,6 @@
 """Open-Meteo client. Free, no key. Defaults to Hyderabad."""
 
+import asyncio
 import time
 
 import httpx
@@ -41,6 +42,8 @@ class WeatherService:
                  city: str = "Hyderabad", hub=None) -> None:
         self.lat, self.lon, self.city, self.hub = lat, lon, city, hub
         self._cache: dict[str, tuple[dict, float]] = {}
+        self._inflight: dict[str, asyncio.Future] = {}
+        self._stale: dict[str, tuple[dict, float]] = {}
 
     async def get(self, lat: float | None = None, lon: float | None = None) -> dict | None:
         use_lat = float(lat) if lat is not None else self.lat
@@ -49,9 +52,25 @@ class WeatherService:
         cached = self._cache.get(key)
         if cached and time.time() < cached[1]:
             return cached[0]
-
+        # the dashboard asks 2-3 times at load (IP geo, then GPS) — share one upstream call
+        if key in self._inflight:
+            return await asyncio.shield(self._inflight[key])
+        fut = asyncio.get_running_loop().create_future()
+        self._inflight[key] = fut
         try:
-            async with httpx.AsyncClient(timeout=10) as c:
+            res = await self._fetch(use_lat, use_lon, lat, lon, key, cached)
+            fut.set_result(res)
+            return res
+        except Exception as e:                   # never leave waiters hanging
+            fut.set_result({"error": str(e)})
+            return {"error": str(e)}
+        finally:
+            self._inflight.pop(key, None)
+
+    async def _fetch(self, use_lat, use_lon, lat, lon, key, cached):
+        try:
+            # connect fast, total well under the dashboard's own 15 s limit
+            async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0)) as c:
                 r = await c.get(
                     "https://api.open-meteo.com/v1/forecast",
                     params={
@@ -71,10 +90,11 @@ class WeatherService:
                     "type": "log", "level": "warn",
                     "msg": f"weather fetch failed ({key}): {e}",
                 })
-            # serve stale cache if we have one
-            if cached:
-                return cached[0]
-            return {"error": str(e)}
+            # serve the last good reading (marked stale) rather than an error
+            last = cached or self._stale.get(key)
+            if last:
+                return {**last[0], "stale": True}
+            return {"error": "weather service unreachable — retrying shortly"}
 
         code = int(data.get("weather_code") or 0)
         result = {
@@ -90,6 +110,7 @@ class WeatherService:
             "glyph": WMO_GLYPH.get(code, "◐"),
             "fetched_at": time.time(),
         }
-        # 5-minute cache per coord pair
+        # 5-minute cache per coord pair; the last good reading is kept for outages
         self._cache[key] = (result, time.time() + 300)
+        self._stale[key] = (result, 0)
         return result

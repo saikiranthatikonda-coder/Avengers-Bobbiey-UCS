@@ -970,7 +970,16 @@ function setWeatherState(state, message) {
   if (message != null) $("#weather-label").textContent = message;
 }
 
+let _weatherBusy = false, _weatherQueued = false;
 async function refreshWeather(force = false) {
+  if (_weatherBusy) { _weatherQueued = true; return; }   // one at a time; a newer location re-runs after
+  _weatherBusy = true;
+  try { await _refreshWeather(force); } finally {
+    _weatherBusy = false;
+    if (_weatherQueued) { _weatherQueued = false; refreshWeather(true); }
+  }
+}
+async function _refreshWeather(force = false) {
   setWeatherState("loading", "acquiring signal…");
   $("#weather-update").textContent = "FETCHING…";
   try {
@@ -979,7 +988,7 @@ async function refreshWeather(force = false) {
       url += `?lat=${userLat.toFixed(4)}&lon=${userLon.toFixed(4)}`;
     }
     const ctl = new AbortController();
-    const timeout = setTimeout(() => ctl.abort(), 12000);
+    const timeout = setTimeout(() => ctl.abort(), 15000);   // server gives up at ~8 s, so this never fires first
     const r = await fetch(url, { signal: ctl.signal, cache: force ? "no-store" : "default" });
     clearTimeout(timeout);
     const d = await r.json();
@@ -996,7 +1005,7 @@ async function refreshWeather(force = false) {
     $("#weather-humid").textContent = d.humidity ?? "--";
     $("#weather-wind").textContent  = d.wind_kmh != null ? Math.round(d.wind_kmh) : "--";
     $("#weather-feels").textContent = d.feels_c != null ? Math.round(d.feels_c) : "--";
-    $("#weather-update").textContent = "OK · " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+    $("#weather-update").textContent = (d.stale ? "CACHED · " : "OK · ") + new Date((d.fetched_at || Date.now() / 1000) * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
     $("#hw-glyph").textContent = d.glyph || "◐";
     $("#hw-temp").textContent = d.temp_c != null ? `${Math.round(d.temp_c)}°` : "--°";
     if (d.city) {
@@ -4399,7 +4408,7 @@ async function refreshCluster() {
           const r = await (await fetch("/api/cluster/route", { method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ node_id: el.dataset.node || null }) })).json();
-          if (r.ok) logEvent(`<span class="tag">[cluster]</span> inference routed ${r.remote ? "to " + r.node : "back to local"}`);
+          if (r.ok) logEvent(`<span class="tag">[cluster]</span> inference routed ${r.remote ? "to " + escapeHTML(String(r.node)) : "back to local"}`);
           else if (r.error) logEvent(`<span class="tag">[cluster]</span> ${escapeHTML(r.error)}`, "warn");
         } catch (e) {}
         refreshCluster(); refreshLocalAI();
@@ -4542,9 +4551,16 @@ async function refreshEnterprise() {
         || '<div class="tf-empty">no operators registered</div>';
       ops.querySelectorAll(".ent-opchip").forEach(ch => ch.addEventListener("click", async () => {
         try {
-          await fetch("/api/operator", { method: "POST",
+          let r = await (await fetch("/api/operator", { method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ name: ch.dataset.name }) });
+            body: JSON.stringify({ name: ch.dataset.name }) })).json();
+          if (!r.ok && /PIN/.test(r.error || "")) {
+            const pin = prompt("Commander PIN for " + ch.dataset.name + ":");
+            if (pin) r = await (await fetch("/api/operator", { method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ name: ch.dataset.name, pin }) })).json();
+          }
+          if (!r.ok && r.error) logEvent(`<span class="tag">[rbac]</span> ${escapeHTML(r.error)}`, "warn");
         } catch (e) {}
         refreshEnterprise();
       }));
@@ -4771,8 +4787,8 @@ async function refreshFleet() {
         openCustomModal(n.name + (n.is_local ? " · LOCAL HOST" : ""),
           `${n.platform} · ${n.status.toUpperCase()}`, null,
           `<div class="mb-grid">
-            <div class="mb-stat"><span class="lbl">CPU</span><span class="val">${n.cpu}% · ${n.cpu_cores} cores</span></div>
-            <div class="mb-stat"><span class="lbl">MEMORY</span><span class="val">${n.mem}% of ${n.mem_total_gb}G</span></div>
+            <div class="mb-stat"><span class="lbl">CPU</span><span class="val">${escapeHTML(String(n.cpu))}% · ${escapeHTML(String(n.cpu_cores))} cores</span></div>
+            <div class="mb-stat"><span class="lbl">MEMORY</span><span class="val">${escapeHTML(String(n.mem))}% of ${escapeHTML(String(n.mem_total_gb))}G</span></div>
             <div class="mb-stat"><span class="lbl">GPU</span><span class="val">${n.gpu == null ? "N/A" : Math.round(n.gpu) + "%"}</span></div>
             <div class="mb-stat"><span class="lbl">UPTIME</span><span class="val">${humanUptime(n.uptime_min)}</span></div>
           </div>

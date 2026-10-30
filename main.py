@@ -49,6 +49,7 @@ from threats import ThreatEngine
 from tts import TTSPlayer
 from voice import VoiceLoop
 from weather import WeatherService
+from atomicio import atomic_write_text
 
 load_dotenv()
 
@@ -359,6 +360,57 @@ async def auth_gate(request: Request, call_next):
         return JSONResponse({"ok": False, "error": "authentication required"},
                             status_code=401)
     return RedirectResponse("/login")
+
+
+# ═══ Browser-origin guard ═══════════════════════════════════════════
+# Loopback is trusted, so a web page open in the owner's browser must not be
+# able to act as "the local user":
+#   * Host allowlist (loopback clients): defeats DNS rebinding (evil.com → 127.0.0.1).
+#   * State-changing requests from another origin are refused (CSRF), using the
+#     browser's own Origin / Sec-Fetch-Site headers. Non-browser clients (fleet
+#     nodes, scripts, tests) send neither and are unaffected.
+#   * Cross-site reads of /api are refused too.
+LOCAL_HOSTNAMES = {"127.0.0.1", "localhost", "::1"}
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def _hostname(netloc: str) -> str:
+    netloc = (netloc or "").strip().lower()
+    if netloc.startswith("["):                            # [::1]:8765
+        return netloc[1:netloc.find("]")] if "]" in netloc else netloc
+    return netloc.rsplit(":", 1)[0] if netloc.count(":") == 1 else netloc
+
+
+def _extra_hosts() -> set[str]:
+    return {h.strip().lower() for h in os.getenv("JARVIS_ALLOWED_HOSTS", "").split(",") if h.strip()}
+
+
+def _origin_problem(method: str, host: str, origin: str | None, fetch_site: str | None,
+                    client_is_loopback: bool, is_api: bool) -> str | None:
+    """Why this browser request must be refused, or None if it's fine."""
+    if client_is_loopback and _hostname(host) not in LOCAL_HOSTNAMES | _extra_hosts():
+        return "unexpected Host header"
+    if origin and origin != "null":
+        from urllib.parse import urlsplit
+        if urlsplit(origin).netloc.lower() != (host or "").lower():
+            if method not in SAFE_METHODS or is_api:
+                return "cross-origin request"
+    elif origin == "null" and method not in SAFE_METHODS:
+        return "opaque-origin request"
+    if fetch_site in ("cross-site", "same-site") and (method not in SAFE_METHODS or is_api):
+        return "cross-site request"
+    return None
+
+
+@app.middleware("http")
+async def origin_guard(request: Request, call_next):
+    client = request.client.host if request.client else ""
+    why = _origin_problem(request.method, request.headers.get("host", ""), request.headers.get("origin"),
+                          request.headers.get("sec-fetch-site"), _is_loopback(client),
+                          request.url.path.startswith("/api/"))
+    if why:
+        return JSONResponse({"ok": False, "error": f"refused: {why}"}, status_code=403)
+    return await call_next(request)
 
 
 # Unlicensed customer installs reach only the activation page + licence API.
@@ -897,22 +949,25 @@ async def network_speedtest():
 
 
 def _scan_processes() -> list[dict]:
-    """Synchronous psutil sweep — MUST run in an executor, never on the loop."""
-    import psutil
-    agg: dict[str, dict] = {}
-    for p in psutil.process_iter(["name", "cpu_percent", "memory_info"]):
-        try:
-            info = p.info
-            name = (info.get("name") or "?").replace(".exe", "")[:26]
-            mem = info.get("memory_info")
-            a = agg.setdefault(name, {"name": name, "cpu": 0.0, "mem_mb": 0.0, "count": 0})
-            a["cpu"] += info.get("cpu_percent") or 0.0
-            a["mem_mb"] += (mem.rss / 1048576) if mem else 0.0
-            a["count"] += 1
-        except Exception:
-            continue
-    SKIP = {"System Idle Process", "System", "Registry", "?", "smss", "Memory Compression"}
-    return [r for r in agg.values() if r["name"] not in SKIP]
+    """One-call process snapshot (procscan.py) — ~10 ms instead of ~2 s of psutil."""
+    import procscan
+    return procscan.snapshot()
+
+
+# One shared snapshot for every caller: however many dashboards poll, the
+# machine is scanned at most once per PROC_TTL seconds (and never concurrently).
+PROC_TTL = 4.0
+_proc_cache = {"ts": 0.0, "rows": None}
+_proc_lock = asyncio.Lock()
+
+
+async def _proc_rows() -> list[dict]:
+    async with _proc_lock:
+        if _proc_cache["rows"] is None or time.time() - _proc_cache["ts"] > PROC_TTL:
+            loop = asyncio.get_running_loop()
+            _proc_cache["rows"] = await loop.run_in_executor(None, _scan_processes)
+            _proc_cache["ts"] = time.time()
+        return [dict(r) for r in _proc_cache["rows"]]
 
 
 _gpu_cache = {"ts": 0.0, "pct": None}
@@ -939,7 +994,7 @@ async def processes_endpoint():
     """Top processes by CPU and memory, aggregated by name (chrome ×40 → one row)."""
     import time as _t
     loop = asyncio.get_running_loop()
-    rows = await loop.run_in_executor(None, _scan_processes)
+    rows = await _proc_rows()
     for r in rows:
         r["cpu"] = round(r["cpu"], 1)
         r["mem_mb"] = round(r["mem_mb"], 1)
@@ -1163,7 +1218,7 @@ def _load_notes() -> list[dict]:
 
 def _save_notes(notes: list[dict]) -> None:
     import json as _json
-    NOTES_FILE.write_text(_json.dumps(notes, indent=1, ensure_ascii=False),
+    atomic_write_text(NOTES_FILE, _json.dumps(notes, indent=1, ensure_ascii=False),
                           encoding="utf-8")
 
 
@@ -1291,7 +1346,8 @@ async def vision_analyze(req: VisionReq):
             "person) | WHO: MULTIPLE (more than one person) | WHO: NONE (nobody "
             "visible). Then give the observation sentence on the next line.")
 
-    prompt = req.prompt or (
+    # the prompt is always built server-side; a client-supplied prompt is ignored
+    prompt = (
         "You are JARVIS observing your operator through their webcam feed. "
         f"In ONE concise, warm butler-style sentence, {lens}. "
         "Do NOT state the person's name or identity — presence and activity only. "
@@ -1574,13 +1630,23 @@ class WaitlistReq(BaseModel):
     intent: str | None = "waitlist"
 
 
+_wl_rate: list[float] = []
+
+
 @app.post("/api/waitlist")
 async def waitlist_endpoint(req: WaitlistReq):
     import json as _json
     import time as _time
-    entry = req.model_dump()
-    entry["ts"] = _time.time()
-    with open(ROOT / "waitlist.jsonl", "a", encoding="utf-8") as f:
+    # public endpoint: bounded field sizes, a per-minute cap and a file-size cap
+    now = _time.time()
+    _wl_rate[:] = [t for t in _wl_rate if now - t < 60]
+    path = ROOT / "waitlist.jsonl"
+    if len(_wl_rate) >= 20 or (path.exists() and path.stat().st_size > 5_000_000):
+        return {"ok": False, "error": "too many requests, try again later"}
+    _wl_rate.append(now)
+    entry = {k: (str(v)[:300] if v is not None else None) for k, v in req.model_dump().items()}
+    entry["ts"] = now
+    with open(path, "a", encoding="utf-8") as f:
         f.write(_json.dumps(entry) + "\n")
     await state["hub"].broadcast({
         "type": "log", "level": "info",
@@ -1607,7 +1673,7 @@ def _load_operators() -> list[dict]:
 
 def _save_operators(ops: list[dict]) -> None:
     import json as _json
-    OPERATORS_FILE.write_text(_json.dumps(ops, indent=1), encoding="utf-8")
+    atomic_write_text(OPERATORS_FILE, _json.dumps(ops, indent=1), encoding="utf-8")
 
 
 def _commander() -> bool:
@@ -1648,10 +1714,9 @@ class RoleReq(BaseModel):
 async def role_endpoint(req: RoleReq):
     role = req.role if req.role in ("commander", "observer") else "observer"
     if role == "commander":
-        pin = os.getenv("JARVIS_PIN")
-        if pin and (req.pin or "") != pin:
-            await _audit("role.denied", "bad PIN on commander elevation")
-            return {"ok": False, "error": "PIN incorrect — command remains locked"}
+        refused = await _pin_check(req.pin, "commander elevation")
+        if refused:
+            return refused
     state["rbac"]["role"] = role
     await _audit("role.switch", f"session role → {role}")
     await state["hub"].broadcast({"type": "log", "level": "warn" if role == "observer" else "info",
@@ -1685,6 +1750,29 @@ async def operators_add(req: OperatorReq):
 
 class ActiveOpReq(BaseModel):
     name: str
+    pin: str | None = None
+
+
+# Commander elevation PIN (JARVIS_PIN): constant-time compare + lockout after
+# repeated failures, shared by role switching and operator switching.
+_pin_fail = {"n": 0, "until": 0.0}
+
+
+async def _pin_check(pin: str | None, what: str) -> dict | None:
+    import hmac
+    want = os.getenv("JARVIS_PIN")
+    if not want:
+        return None
+    if time.time() < _pin_fail["until"]:
+        return {"ok": False, "error": f"too many wrong PINs, try again in {int(_pin_fail['until'] - time.time())} s"}
+    if hmac.compare_digest((pin or "").encode(), want.encode()):
+        _pin_fail["n"] = 0
+        return None
+    _pin_fail["n"] += 1
+    if _pin_fail["n"] >= 5:
+        _pin_fail.update(n=0, until=time.time() + 60)
+    await _audit("role.denied", f"bad PIN on {what}")
+    return {"ok": False, "error": "PIN incorrect — command remains locked"}
 
 
 @app.post("/api/operator")
@@ -1693,6 +1781,10 @@ async def operator_switch(req: ActiveOpReq):
     match = next((o for o in ops if o["name"].lower() == req.name.strip().lower()), None)
     if not match:
         return {"ok": False, "error": "unknown operator"}
+    if match["role"] == "commander" and state["rbac"].get("role") != "commander":
+        refused = await _pin_check(req.pin, "operator switch")      # no PIN bypass via operator switch
+        if refused:
+            return refused
     state["rbac"]["operator"] = match["name"]
     state["rbac"]["role"] = match["role"]
     await _audit("operator.switch", f"active operator → {match['name']} ({match['role']})")
@@ -2098,8 +2190,9 @@ async def fleet_endpoint():
 @app.post("/api/fleet/report")
 async def fleet_report(report: dict, request: Request):
     """A node agent pushes its telemetry here. Token-gated (crosses machines)."""
+    import hmac
     token = request.headers.get("x-fleet-token", "")
-    if token != state.get("fleet_token"):
+    if not hmac.compare_digest(token.encode(), str(state.get("fleet_token") or "").encode()):
         return {"ok": False, "error": "invalid fleet token"}
     if not isinstance(report, dict) or not report.get("node_id"):
         return {"ok": False, "error": "bad report"}
@@ -2401,6 +2494,11 @@ async def ws_endpoint(ws: WebSocket):
     # same perimeter as HTTP: loopback trusted; remote needs the session
     # cookie (sent automatically by the logged-in browser) or ?token=
     client = ws.client.host if ws.client else ""
+    why = _origin_problem("GET", ws.headers.get("host", ""), ws.headers.get("origin"),
+                          ws.headers.get("sec-fetch-site"), _is_loopback(client), True)
+    if why:                                     # a foreign page can't listen in on the live feed
+        await ws.close(code=1008)
+        return
     if not _is_loopback(client):
         cookie = ws.cookies.get("bucs_session", "")
         token = ws.query_params.get("token", "")

@@ -22,6 +22,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
+from atomicio import atomic_write_text
 
 MEMORY_FILE = Path(__file__).parent / "operator_memory.json"
 
@@ -69,7 +70,7 @@ class OperatorMemory:
     def save(self) -> None:
         try:
             self.data["stats"]["updated"] = time.time()
-            MEMORY_FILE.write_text(
+            atomic_write_text(MEMORY_FILE, 
                 json.dumps(self.data, indent=2, ensure_ascii=False),
                 encoding="utf-8")
         except Exception:

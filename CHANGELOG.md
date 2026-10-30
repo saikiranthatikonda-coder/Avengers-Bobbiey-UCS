@@ -5,6 +5,21 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-30 — v7.6.0 · Security hardening, 200× faster process monitor, weather fix
+- **fix (root cause of "weather: timeout"):** the PROCESS MONITOR re-scanned every process on every request with psutil, which is O(n²) on Windows (~2 s of CPU per sweep on 358 processes). Each open dashboard polled it every 6 s, so the server sat at 100% of a core and even trivial requests took ~7 s; weather was just the panel that reported it. New `procscan.py` reads all processes in one `NtQuerySystemInformation` call (**10 ms**, verified against psutil), and one shared snapshot serves every viewer (≤1 scan / 4 s). Part of the load came from ~20 leftover headless Chrome instances started by our own screenshot scripts; those were closed.
+- **weather:** identical requests share one upstream call; server timeout (8 s) now sits under the dashboard's (15 s); an outage shows the last good reading marked CACHED instead of "timeout"; a newer GPS location queues a refresh instead of being dropped.
+- **security (independent review, every finding verified before fixing):**
+  - **Browser-origin guard:** web pages open in the owner's browser can no longer act as the local user (CSRF), DNS rebinding is blocked by a Host allowlist, and foreign pages can't read the live WebSocket feed. `JARVIS_ALLOWED_HOSTS` adds extra host names.
+  - **Vision:** the Claude CLI may Read only a private copy of the current frame (path-scoped permission rule; `--dangerously-skip-permissions` removed); client-supplied vision prompts are ignored. Verified live: it still describes the frame and refuses any other file.
+  - **Engineering mode:** commander-only on every route (API, chat, voice); a fix that touches `tests/`, `.git/`, `.github/` or `tools/` is fully reverted and nothing runs; git hooks disabled for its commits/pushes; deleted protected files are restored; ship/undo no longer block the server.
+  - **LLM providers:** a stored API key no longer follows a base-URL change.
+  - **Fleet:** node reports rebuilt from a strict schema (stored XSS, crash on bad types, SSRF via the Ollama port); dashboard escapes those fields; constant-time fleet-token check.
+  - **PIN:** operator switching can no longer bypass the commander PIN; constant-time compare + lockout after 5 wrong tries.
+  - **Browser open:** only http(s) web URLs; a URL can never become a browser switch, local path or custom protocol.
+  - **Data integrity:** 14 user-data writes (auth, memory, notes, operators, billing, productivity, team memory, web3…) are now crash-safe (temp file + atomic replace).
+  - **Waitlist:** public endpoint size- and rate-capped.
+- **test:** `tests/test_security.py` (origin guard on a live server, WebSocket origin, fleet sanitising, provider key, URL opening, weather coalescing/outage, scanner speed) + engineering-mode lock/refusal tests. 147 tests.
+
 ## 2026-10-29 — v7.5.4 · Shimmering logo, one-line header at every zoom
 - **brand:** STARK INDUSTRIES × BOBBIEY now uses the shimmering gradient motion the AVENGERS title had, slightly larger (0.98rem at 1920 px, 1.1rem on wide screens).
 - **fix:** zooming in (a narrower page) wrapped the right-hand header group and pushed the clock onto a second line, making the header taller. The header now stays one 70 px row from 2200 px to 1100 px (measured at 8 widths). It compacts in steps instead of wrapping: CONVERSATION → CONV, a dot-only link pill (status on hover), smaller theme buttons, the header temperature hidden ≤1450 px (the weather card still shows it), the volume slider hidden ≤1300 px (mute stays), and a narrower banner. With the banner hidden (≤1100 px) the header switches to two columns, so the right group stays on the right.

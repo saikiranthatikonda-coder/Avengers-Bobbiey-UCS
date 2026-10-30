@@ -21,6 +21,7 @@ import json
 import secrets
 import time
 from pathlib import Path
+from atomicio import atomic_write_text
 
 FILE = Path(__file__).parent / "auth.json"
 
@@ -47,7 +48,7 @@ class AuthManager:
 
     def _save(self) -> None:
         try:
-            FILE.write_text(json.dumps(self.data, indent=1), encoding="utf-8")
+            atomic_write_text(FILE, json.dumps(self.data, indent=1), encoding="utf-8")
         except Exception:
             pass
 

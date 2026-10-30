@@ -125,8 +125,10 @@ class ProviderRegistry:
         if pid in ("auto", "claude", "ollama"):
             pid += "-custom"
         existing = next((p for p in self.custom if p["id"] == pid), None)
+        keep_key = existing and existing.get("base_url") == base_url     # a key never follows a URL change
         entry = {"id": pid, "name": (name or pid).strip()[:40], "base_url": base_url, "model": model.strip()[:120],
-                 "api_key": (api_key.strip() if api_key else (existing or {}).get("api_key", "")), "added": time.time()}
+                 "api_key": (api_key.strip() if api_key else (existing.get("api_key", "") if keep_key else "")),
+                 "added": time.time()}
         if existing:
             self.custom[self.custom.index(existing)] = entry
         else:

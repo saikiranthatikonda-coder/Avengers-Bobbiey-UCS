@@ -19,6 +19,7 @@ import json
 import time
 from collections import deque
 from pathlib import Path
+from atomicio import atomic_write_text
 
 FILE = Path(__file__).parent / "team_memory.json"
 MAX_ENTRIES = 200
@@ -37,7 +38,7 @@ class TeamMemory:
 
     def _save(self) -> None:
         try:
-            FILE.write_text(json.dumps(list(self.entries), ensure_ascii=False,
+            atomic_write_text(FILE, json.dumps(list(self.entries), ensure_ascii=False,
                                        indent=0), encoding="utf-8")
         except Exception:
             pass

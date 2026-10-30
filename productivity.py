@@ -14,6 +14,7 @@ import json
 import time
 from datetime import date
 from pathlib import Path
+from atomicio import atomic_write_text
 
 FILE = Path(__file__).parent / "productivity.json"
 FOCUS_TARGET_MIN = 120          # daily deep-work target used by the score
@@ -54,7 +55,7 @@ class Productivity:
 
     def _save(self) -> None:
         try:
-            FILE.write_text(json.dumps(self.state, indent=1), encoding="utf-8")
+            atomic_write_text(FILE, json.dumps(self.state, indent=1), encoding="utf-8")
         except Exception:
             pass
 

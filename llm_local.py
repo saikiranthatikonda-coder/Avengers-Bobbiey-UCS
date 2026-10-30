@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 import httpx
+from atomicio import atomic_write_text
 
 PREF_FILE = Path(__file__).parent / "model_pref.json"
 
@@ -53,7 +54,7 @@ class LocalLLM:
         if force_local is not None:
             self.pref_force_local = force_local
         try:
-            PREF_FILE.write_text(json.dumps({
+            atomic_write_text(PREF_FILE, json.dumps({
                 "model": self.model,
                 "force_local": self.pref_force_local,
             }), encoding="utf-8")

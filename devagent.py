@@ -38,6 +38,11 @@ PROTECTED = [".env", "credentials.json", "token.json", "auth.json", "fleet_token
              "license_signing.key", "licences_issued.json"]
 DIAG_TOOLS = "Read,Grep,Glob"
 APPLY_TOOLS = "Read,Grep,Glob,Edit,Write"
+# A fix may never touch what runs automatically afterwards (the test suite, git
+# internals/hooks, CI, release tooling): changes there are reverted and the job
+# is refused before anything executes.
+FORBIDDEN_PREFIXES = ("tests/", ".git/", ".github/", "tools/")
+_NO_HOOKS = str(Path(__file__).resolve().parent / ".update" / "no-hooks")   # empty dir → git runs no hooks
 
 DIAG_PROMPT = """You are JARVIS's engineering subroutine working INSIDE the Bobbiey UCS
 repository (read CLAUDE.md for the rules). The operator reported, from the live dashboard:
@@ -70,7 +75,8 @@ When done, reply with: CHANGED: <files> and RESULT: <one sentence>."""
 
 
 def _git(*args, timeout=30) -> str:
-    r = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, timeout=timeout,
+    os.makedirs(_NO_HOOKS, exist_ok=True)
+    r = subprocess.run(["git", "-c", f"core.hooksPath={_NO_HOOKS}", *args], cwd=ROOT, capture_output=True, text=True, timeout=timeout,
                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     return r.stdout
 
@@ -183,7 +189,15 @@ class DevAgent:
         return (final if isinstance(final, str) and final.strip() else "".join(text)).strip()
 
     # ── 1. diagnose ───────────────────────────────────────────────
+    def _commander(self) -> bool:
+        """Engineering actions are commander-only, however they arrive (API, chat, voice)."""
+        return self.state.get("rbac", {}).get("role") == "commander"
+
+    _LOCKED = {"ok": False, "error": "OBSERVER role: engineering mode is locked. Switch to COMMANDER."}
+
     async def diagnose(self, request: str) -> dict:
+        if not self._commander():
+            return dict(self._LOCKED)
         if self.lock.locked():
             return {"ok": False, "error": "an engineering job is already running"}
         async with self.lock:
@@ -215,6 +229,8 @@ class DevAgent:
 
     # ── 2-3. apply + verify ───────────────────────────────────────
     async def apply(self) -> dict:
+        if not self._commander():
+            return dict(self._LOCKED)
         if not self.job or self.job.get("stage") != "proposed":
             return {"ok": False, "error": "no approved proposal to apply — ask me to diagnose first"}
         if self.lock.locked():
@@ -233,12 +249,23 @@ class DevAgent:
                 result = "[error] apply timed out"
             restored = []
             for p, data in backup.items():
-                if (ROOT / p).read_bytes() != data:
-                    (ROOT / p).write_bytes(data); restored.append(p)
+                f = ROOT / p
+                if not f.exists() or f.read_bytes() != data:      # modified OR deleted
+                    f.write_bytes(data); restored.append(p)
             after = _porcelain()
             changed = sorted(f for f in after if after.get(f) != before.get(f))
             clean_before = [f for f in changed if f not in before]
+            forbidden = [f for f in changed if f.replace("\\", "/").startswith(FORBIDDEN_PREFIXES)]
             job.update(changed=changed, revertable=clean_before, restored=restored, result=result)
+            if forbidden:
+                # never run tests (code) the change itself wrote: revert everything it did
+                job["stage"] = "applied"
+                await asyncio.to_thread(self._revert, job)
+                job.update(stage="refused", tests={"ok": False, "summary": "refused: change touched " + ", ".join(forbidden[:5])})
+                await self._emit("refused", forbidden=forbidden)
+                await self._audit("dev.refused", "touched " + ", ".join(forbidden[:5]))
+                self._close()
+                return {"ok": False, "error": "the change touched protected areas (" + ", ".join(forbidden[:5]) + ") and was reverted"}
             await self._emit("testing", changed=changed)
             tests = await self._tests()
             job.update(stage="applied", tests=tests, diffstat=_git("diff", "--stat", "--", *changed)[-1500:] if changed else "")
@@ -263,10 +290,7 @@ class DevAgent:
         return {"ok": proc.returncode == 0, "summary": " | ".join(t for t in tail if t.strip())[-400:]}
 
     # ── 4. keep / undo / ship ─────────────────────────────────────
-    async def undo(self) -> dict:
-        job = self.job
-        if not job or job.get("stage") != "applied":
-            return {"ok": False, "error": "nothing to undo"}
+    def _revert(self, job) -> tuple[list, list]:
         tracked = set(_git("ls-files", "--", *job["revertable"]).split()) if job["revertable"] else set()
         restore = [f for f in job["revertable"] if f in tracked]
         new = [f for f in job["revertable"] if f not in tracked]
@@ -277,6 +301,15 @@ class DevAgent:
                 (ROOT / f).unlink()
             except OSError:
                 pass
+        return restore, new
+
+    async def undo(self) -> dict:
+        if not self._commander():
+            return dict(self._LOCKED)
+        job = self.job
+        if not job or job.get("stage") != "applied":
+            return {"ok": False, "error": "nothing to undo"}
+        restore, new = await asyncio.to_thread(self._revert, job)   # git off the event loop
         skipped = [f for f in job["changed"] if f not in job["revertable"]]
         job["stage"] = "undone"
         await self._emit("undone", reverted=restore + new, skipped=skipped)
@@ -293,6 +326,8 @@ class DevAgent:
         return {"ok": True}
 
     async def ship(self) -> dict:
+        if not self._commander():
+            return dict(self._LOCKED)
         job = self.job
         if not job or job.get("stage") != "applied":
             return {"ok": False, "error": "nothing applied to ship"}
@@ -301,15 +336,23 @@ class DevAgent:
         files = [f for f in job["changed"] if f not in PROTECTED]
         if not files:
             return {"ok": False, "error": "no files to ship"}
-        _git("add", "--", *files)
         msg = f"fix: {job['summary'][:68]}\n\nApplied from the BUCS dashboard (JARVIS engineering mode).\nRequest: {job['request'][:200]}"
-        subprocess.run(["git", "-c", "user.name=Sai", "-c", "user.email=saikiran.thatikonda@t-hub.co",
-                        "commit", "-q", "-m", msg, "--", *files], cwd=ROOT, timeout=60,
-                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        sha = _git("rev-parse", "--short", "HEAD").strip()
-        push = subprocess.run(["git", "push", "origin", "HEAD"], cwd=ROOT, capture_output=True, text=True,
-                              timeout=120, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+        def _commit_and_push():
+            # hooks disabled (core.hooksPath → empty dir): nothing written by a fix runs here
+            _git("add", "--", *files)
+            subprocess.run(["git", "-c", f"core.hooksPath={_NO_HOOKS}", "-c", "user.name=Sai",
+                            "-c", "user.email=saikiran.thatikonda@t-hub.co",
+                            "commit", "-q", "-m", msg, "--", *files], cwd=ROOT, timeout=60,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            sha_ = _git("rev-parse", "--short", "HEAD").strip()
+            push_ = subprocess.run(["git", "-c", f"core.hooksPath={_NO_HOOKS}", "push", "origin", "HEAD"],
+                                   cwd=ROOT, capture_output=True, text=True, timeout=120,
+                                   env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            return sha_, push_
+
+        sha, push = await asyncio.to_thread(_commit_and_push)       # never block the event loop
         job["stage"] = "shipped"
         await self._emit("shipped", commit=sha, pushed=push.returncode == 0)
         await self._audit("dev.ship", f"{sha} pushed={push.returncode == 0}")

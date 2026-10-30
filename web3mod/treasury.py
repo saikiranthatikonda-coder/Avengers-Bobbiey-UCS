@@ -10,6 +10,7 @@ the ledger is real even before a token exists.
 import json
 import time
 from pathlib import Path
+from atomicio import atomic_write_text
 
 FILE = Path(__file__).resolve().parent.parent / "treasury.json"
 
@@ -27,7 +28,7 @@ class TreasuryService:
 
     def _save(self) -> None:
         try:
-            FILE.write_text(json.dumps({"movements": self.movements[:60]}, indent=1),
+            atomic_write_text(FILE, json.dumps({"movements": self.movements[:60]}, indent=1),
                             encoding="utf-8")
         except Exception:
             pass

@@ -22,6 +22,7 @@ import uuid
 from collections import deque
 from datetime import datetime
 from pathlib import Path
+from atomicio import atomic_write_text
 
 FILE = Path(__file__).parent / "decisions.json"
 
@@ -59,7 +60,7 @@ class DecisionEngine:
 
     def _save(self) -> None:
         try:
-            FILE.write_text(json.dumps({"autonomy": self.autonomy}),
+            atomic_write_text(FILE, json.dumps({"autonomy": self.autonomy}),
                             encoding="utf-8")
         except Exception:
             pass

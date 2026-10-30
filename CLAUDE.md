@@ -286,6 +286,20 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
   a UPI ID or email. Keep `site/` mirrored.
 - Gates also apply on paid installs when a licence expires mid-run (`providers._apply()` hourly).
 
+### 6g. Security invariants (2026-10-30, keep them true)
+
+- `origin_guard` middleware: loopback requests need a local Host; cross-origin / cross-site
+  browser requests to /api (and every unsafe method) are refused; the WebSocket checks Origin.
+  Never add CORS headers or exempt endpoints from it.
+- The Claude CLI never gets `--dangerously-skip-permissions`. Vision uses a path-scoped
+  `--allowedTools "Read(./frame-<id>.jpg)"` inside BRAIN_CWD; prompts are server-built.
+- Engineering mode: commander-only inside DevAgent itself; changes to tests/.git/.github/tools
+  are reverted before anything runs; git runs with hooks disabled.
+- Untrusted input (fleet reports, provider URLs, URLs to open) is rebuilt/validated server-side
+  AND escaped in the dashboard. User data is written with `atomicio.atomic_write_text`.
+- Anything that can take >50 ms (process scans, subprocess, git) runs off the event loop and,
+  if polled by the UI, behind a shared cache.
+
 ### 6f. Versions, in-app updates, shutdown (updater.py, tools/release.py, 2026-10-29)
 
 - `VERSION` is the product version (semver). Every customer-facing change ships as a release:

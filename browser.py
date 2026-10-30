@@ -31,7 +31,13 @@ def _find_browser() -> tuple[str | None, str | None]:
 
 
 def open_url(url: str, fullscreen: bool = False, app_mode: bool = True) -> dict:
-    """Open a URL in a real browser window. Chrome/Edge preferred for fullscreen + app mode."""
+    """Open a URL in a real browser window. Chrome/Edge preferred for fullscreen + app mode.
+    Only http(s) web URLs: never a local path, custom protocol or a browser switch."""
+    import re
+    from urllib.parse import urlsplit
+    url = (url or "").strip()
+    if not re.match(r"^https?://", url, re.I) or not urlsplit(url).netloc or any(c in url for c in '\r\n"'):
+        return {"opened": False, "error": "only http:// or https:// web addresses can be opened"}
     kind, exe = _find_browser()
     if not exe:
         webbrowser.open(url, new=2)
@@ -43,7 +49,7 @@ def open_url(url: str, fullscreen: bool = False, app_mode: bool = True) -> dict:
     if app_mode:
         args.append(f"--app={url}")
     else:
-        args.append(url)
+        args += ["--", url]                     # "--": the URL can never be read as a switch
 
     flags = 0
     if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):

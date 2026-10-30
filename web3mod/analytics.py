@@ -8,6 +8,7 @@ fills as the platform runs — nothing is back-filled or invented).
 import json
 import time
 from pathlib import Path
+from atomicio import atomic_write_text
 
 FILE = Path(__file__).resolve().parent.parent / "web3_analytics.json"
 MAX_POINTS = 240
@@ -26,7 +27,7 @@ class AnalyticsService:
 
     def _save(self) -> None:
         try:
-            FILE.write_text(json.dumps({"portfolio": self.portfolio[-MAX_POINTS:],
+            atomic_write_text(FILE, json.dumps({"portfolio": self.portfolio[-MAX_POINTS:],
                                         "events": self.events[:60]}, indent=0),
                             encoding="utf-8")
         except Exception:

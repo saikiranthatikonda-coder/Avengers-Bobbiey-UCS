@@ -14,6 +14,7 @@ import json
 import time
 import uuid
 from pathlib import Path
+from atomicio import atomic_write_text
 
 FILE = Path(__file__).resolve().parent.parent / "governance.json"
 
@@ -76,7 +77,7 @@ class GovernanceService:
 
     def _save(self) -> None:
         try:
-            FILE.write_text(json.dumps(
+            atomic_write_text(FILE, json.dumps(
                 {"proposals": self.proposals, "votes": self.votes}, indent=1),
                 encoding="utf-8")
         except Exception:

@@ -11,6 +11,7 @@ platform can activate them once that pipeline exists.
 import json
 import time
 from pathlib import Path
+from atomicio import atomic_write_text
 
 FILE = Path(__file__).resolve().parent.parent / "marketplace.json"
 
@@ -47,7 +48,7 @@ class MarketplaceService:
 
     def _save(self) -> None:
         try:
-            FILE.write_text(json.dumps({"installed": self.installed,
+            atomic_write_text(FILE, json.dumps({"installed": self.installed,
                                         "published": self.published,
                                         "counts": self.counts}, indent=1),
                             encoding="utf-8")

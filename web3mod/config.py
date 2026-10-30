@@ -9,6 +9,7 @@ instead of the configured demo figures.
 import copy
 import json
 from pathlib import Path
+from atomicio import atomic_write_text
 
 FILE = Path(__file__).resolve().parent.parent / "web3_config.json"
 
@@ -93,7 +94,7 @@ class ConfigService:
 
     def save(self) -> None:
         try:
-            FILE.write_text(json.dumps(self.data, indent=1), encoding="utf-8")
+            atomic_write_text(FILE, json.dumps(self.data, indent=1), encoding="utf-8")
         except Exception:
             pass
 

@@ -40,7 +40,8 @@ class DevAgentFlow(unittest.TestCase):
         (self.root / "dirty.py").write_text("operator's uncommitted work\n")   # pre-existing change
         self.p = mock.patch.object(devagent, "ROOT", self.root); self.p.start()
         self.hub = FakeHub()
-        self.dev = devagent.DevAgent({"hub": self.hub})
+        self.state = {"hub": self.hub, "rbac": {"role": "commander"}}
+        self.dev = devagent.DevAgent(self.state)
 
     def tearDown(self):
         self.p.stop(); self.tmp.cleanup()
@@ -92,6 +93,39 @@ class DevAgentFlow(unittest.TestCase):
         r = self.run_(self.dev.ship())
         self.assertFalse(r["ok"])
         self.assertIn("tests are failing", r["error"])
+
+    def test_observer_cannot_drive_engineering_mode_by_any_route(self):
+        self.state["rbac"]["role"] = "observer"
+        for r in (self._diagnose("SUMMARY: s\nPROPOSED FIX: f\nRISK: low"),
+                  self.run_(self.dev.apply()), self.run_(self.dev.ship()), self.run_(self.dev.undo())):
+            self.assertFalse(r["ok"]); self.assertIn("OBSERVER", r["error"])
+
+    def test_a_fix_that_writes_tests_is_reverted_and_never_executed(self):
+        self._diagnose("SUMMARY: s\nPROPOSED FIX: change app.py\nRISK: low")
+        (self.root / "tests").mkdir()
+
+        async def fake_cli(*a, **k):
+            (self.root / "app.py").write_text("x = 9\n")
+            (self.root / "tests" / "test_evil.py").write_text("import os; os.system('calc')\n")
+            return "done"
+        tests_run = mock.AsyncMock(return_value={"ok": True, "summary": "OK"})
+        with mock.patch.object(self.dev, "_run_cli", fake_cli), mock.patch.object(self.dev, "_tests", tests_run):
+            r = self.run_(self.dev.apply())
+        self.assertFalse(r["ok"])
+        self.assertIn("tests/", r["error"])
+        tests_run.assert_not_called()                                          # nothing it wrote ran
+        self.assertFalse((self.root / "tests" / "test_evil.py").exists())
+        self.assertEqual((self.root / "app.py").read_text().strip(), "x = 1")  # whole change reverted
+
+    def test_deleted_protected_file_is_restored(self):
+        self._diagnose("SUMMARY: s\nPROPOSED FIX: change app.py\nRISK: low")
+
+        async def fake_cli(*a, **k):
+            (self.root / ".env").unlink(); (self.root / "app.py").write_text("x = 4\n"); return "done"
+        with mock.patch.object(self.dev, "_run_cli", fake_cli), \
+             mock.patch.object(self.dev, "_tests", mock.AsyncMock(return_value={"ok": True, "summary": "OK"})):
+            self.run_(self.dev.apply())
+        self.assertEqual((self.root / ".env").read_text(), "SECRET=keep-me\n")
 
     def test_none_needed_is_not_fixable(self):
         r = self._diagnose("SUMMARY: works as designed.\nPROPOSED FIX: none needed — config only\nRISK: low")
