@@ -65,7 +65,8 @@ LOOPBACK = ("127.0.0.1", "::1", "localhost")
 
 # paths a remote client may reach WITHOUT a session (login surface + public
 # marketing page; static assets are needed by the login page itself)
-PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/status", "/commerce/v1/",
+PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/status", "/commerce/v1/", "/commerce/mcp", "/x402/v1/",
+                "/.well-known/x402",
                 "/static/", "/landing", "/api/waitlist", "/favicon.ico")
 
 

@@ -311,6 +311,17 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
   out or changes payout details; never show money figures not derived from the ledger; keep test
   and live ledgers separate (`commerce_test.db` / `commerce_live.db` are private, gitignored,
   PROTECTED). New services ship as `available` only with a working, tested executor.
+- x402 (`commerce/x402.py`): verify → deliver → settle; a failed delivery is NEVER settled. USDC is
+  booked in its own currency (never mixed with INR). Only `external` payers are customers:
+  internal tests, marketplace verification purchases and self-transfers are classified at read
+  time (`ledger.buyer_stats`) and never counted as demand or revenue from customers.
+- Market radar (`commerce/radar.py`) is read-only: public sources only, honest User-Agent, polite
+  pacing, never buys or submits anything. Keep every figure tagged with its source; never sum
+  across sources; mainnet only; listing farms and single-payer endpoints are not demand; "EST."
+  values are estimates. Listings to directories are prepared, never submitted, by BUCS.
+- The pipeline (`commerce/pipeline.py`) holds owner ESTIMATES only; schema changes there are
+  additive with a DB backup first. A converted opportunity is a draft until an executor + tests exist.
+- Website extraction must connect only to the IP it vetted (`_PinnedBackend`: DNS-rebinding safe).
 
 ### 6f. Versions, in-app updates, shutdown (updater.py, tools/release.py, 2026-10-29)
 

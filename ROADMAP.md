@@ -133,6 +133,9 @@ tracks both.
 | Security hardening (origin guard, scoped vision, engineering lock, atomic writes) | IMPLEMENTED (v7.6.0, independent review) |
 | Self-healing autonomic core (checks, safe repairs, AI diagnosis, guarded self-restart) | IMPLEMENTED (v7.7.0) |
 | Project Trillion phase 1–3 (catalogue, ledger, Razorpay, website.extract, owner dashboard) | BUILT: needs Razorpay test keys + public hosting decision (PROJECT_TRILLION.md) |
+| Trillion: Agent Commerce Market Radar + Revenue Opportunity Pipeline | IMPLEMENTED (v7.8.0; TRILLION_MARKET_REPORT.md) |
+| Trillion: x402 USDC seller + MCP discovery + payer classification | BUILT (v7.8.0): needs wallet address, public HTTPS host, mainnet facilitator (owner decisions) |
+| Trillion services 2–3: x402 Seller Due Diligence, Domain Intelligence | PLANNED (evidence in the market report) |
 | Computer-use skill (JARVIS operates apps to fulfil commands) | PLANNED: needs Anthropic API key (computer-use tool) or an MCP desktop server; every step screenshot-confirmed, per-action approval, no credentials/payments |
 | Web3 module (off by default) | OPTIONAL |
 | Web3: chain status, gas, RPC health, on-chain balances | IMPLEMENTED (real JSON-RPC, when enabled) |

@@ -28,6 +28,9 @@ from . import catalog
 from .executors import EXECUTORS, ExecutionError
 from .gateways import GatewayError, gateway
 from .ledger import Ledger
+from . import x402 as X
+from . import pipeline as P
+from . import radar as RADAR
 
 _ledgers: dict[str, Ledger] = {}
 _rate: dict[str, list[float]] = {}
@@ -81,6 +84,40 @@ class EnableReq(BaseModel):
     enabled: bool
 
 
+class OpportunityReq(BaseModel):
+    title: str
+    category: str | None = None
+    evidence: dict = {}
+    competitors: list = []
+    price_usd: float | None = None
+    cost_usd: float | None = None
+    monthly_requests: int | None = None
+    fixed_monthly_usd: float | None = None
+    notes: str = ""
+
+
+class DecisionReq(BaseModel):
+    decision: str
+    note: str = ""
+
+
+class ConvertReq(BaseModel):
+    service_id: str
+
+
+class ListingReq(BaseModel):
+    directory: str
+    service_id: str
+    listing_url: str = ""
+    status: str = "prepared"
+    detail: dict = {}
+
+
+class WalletLabelReq(BaseModel):
+    address: str
+    label: str
+
+
 class RefundReq(BaseModel):
     payment_id: str
     amount_paise: int
@@ -115,7 +152,8 @@ def build_router(state: dict, is_owner_session, audit) -> APIRouter:
             L.set_order(o["id"], "order.delivered", status="delivered", result_json=json.dumps(result), error=None)
         except Exception as e:
             # paid but not delivered: flagged for the owner to refund (refunds are a human decision)
-            L.set_order(o["id"], "order.failed_after_payment", status="failed", error=str(e)[:300])
+            msg = f"{e.code}: {e}" if isinstance(e, ExecutionError) else str(e)
+            L.set_order(o["id"], "order.failed_after_payment", status="failed", error=msg[:300])
         return L.order(o["id"])
 
     async def confirm_payment(gw, L: Ledger, order: dict, payment_id: str) -> dict:
@@ -293,6 +331,141 @@ def build_router(state: dict, is_owner_session, audit) -> APIRouter:
         rows = L.db.execute("SELECT * FROM orders WHERE customer_id=? ORDER BY created_at DESC LIMIT 100", (c["id"],)).fetchall()
         return {"ok": True, "orders": [public_order(dict(x)) for x in rows]}
 
+    # ═══ x402: agents pay per request in USDC (settle only after successful delivery) ═══
+    X402_PRICES_USD = {"website.extract": 0.01}
+
+    def x402_price(L, sid: str) -> float:
+        return float((L.get_setting("x402_prices", {}) or {}).get(sid, X402_PRICES_USD.get(sid, 0.01)))
+
+    def resource_url(request: Request, sid: str, cfg) -> str:
+        base = cfg.public_base or str(request.base_url).rstrip("/")
+        return f"{base}/x402/v1/{sid}"
+
+    @r.api_route("/x402/v1/{sid}", methods=["GET", "POST"])
+    async def x402_call(sid: str, request: Request):
+        if not owner_install():
+            return _err(404, "not found")
+        cfg = X.X402Config()
+        if not cfg.enabled:
+            return _err(503, "x402 payments are not enabled on this server yet")
+        L = ledger_for(cfg.mode)
+        pub = next((x for x in catalog.public(L) if x["id"] == sid), None)
+        svc = catalog.get(sid)
+        if not svc or not pub or not pub["available"] or sid not in EXECUTORS:
+            return _err(404, "that service is not available")
+        inp = dict(request.query_params)
+        if request.method == "POST":
+            try:
+                inp = {**inp, **(await request.json())}
+            except Exception:
+                return _err(400, "body must be JSON")
+        bad = catalog.validate(svc, inp)
+        if bad:
+            return _err(422, bad)
+        price = x402_price(L, sid)
+        req = cfg.requirements(resource_url(request, sid, cfg), price, svc["description"], svc.get("output_schema"))
+        try:
+            got = X.read_payment(request.headers)
+        except ValueError as e:
+            body, hdr = X.challenge(req, str(e)); return JSONResponse(body, 402, headers=hdr)
+        if not got:
+            body, hdr = X.challenge(req); return JSONResponse(body, 402, headers=hdr)
+        version, payload = got
+        v = await X.facilitator(cfg, "verify", version, payload, req)
+        if not v.get("isValid"):
+            body, hdr = X.challenge(req, "payment not valid: " + str(v.get("invalidReason") or "rejected"))
+            return JSONResponse(body, 402, headers=hdr)
+        payer = str(v.get("payer") or "").lower()
+        try:                                                         # deliver first …
+            result = await asyncio.wait_for(EXECUTORS[sid](inp), 60)
+        except ExecutionError as e:                                  # … a failure is never settled: no charge
+            return JSONResponse({"ok": False, "charged": False, "error": e.as_dict()}, 422)
+        except Exception as e:
+            return JSONResponse({"ok": False, "charged": False, "error": {"code": "INTERNAL", "message": str(e)[:200]}}, 500)
+        st = await X.facilitator(cfg, "settle", version, payload, req)   # … then take the money
+        if not st.get("success"):
+            body, hdr = X.challenge(req, "settlement failed: " + str(st.get("errorReason") or "unknown"))
+            return JSONResponse(body, 402, headers=hdr)
+        tx = str(st.get("transaction") or "")
+        order, _, _ = L.create_order(sid, f"wallet:{payer}" if payer else None, inp, req["atomic"], f"x402:{tx}", currency="USDC")
+        L.set_order(order["id"], "order.awaiting_payment", status="awaiting_payment", gateway="x402", gateway_order_id=f"x402:{tx}")
+        L.record_payment({"id": tx, "amount": req["atomic"], "currency": "USDC", "status": "captured", "method": f"x402 {cfg.network}",
+                          "fee": 0, "payer": payer, "network": st.get("network") or cfg.network}, order["id"])
+        L.set_order(order["id"], "order.paid", status="paid")
+        L.set_order(order["id"], "order.delivered", status="delivered", result_json=json.dumps(result))
+        resp = {"success": True, "transaction": tx, "network": st.get("network") or cfg.network, "payer": payer}
+        return JSONResponse(result, 200, headers={"PAYMENT-RESPONSE": X.b64json(resp), "X-PAYMENT-RESPONSE": X.b64json(resp)})
+
+    # ═══ discovery: MCP server + well-known manifest (agents find BUCS, then pay over x402) ═══
+    def manifest(request: Request) -> dict:
+        cfg = X.X402Config()
+        L = ledger_for(cfg.mode if cfg.enabled else "test")
+        items = []
+        for svc in catalog.public(L, include_planned=False):
+            if svc["id"] in EXECUTORS:
+                items.append({"id": svc["id"], "name": svc["name"], "description": svc["description"],
+                              "input_schema": svc.get("input_schema"), "output_schema": svc.get("output_schema"),
+                              "x402": {"url": resource_url(request, svc["id"], cfg), "methods": ["GET", "POST"],
+                                       "price_usd": x402_price(L, svc["id"]), "asset": "USDC", "network": cfg.network,
+                                       "enabled": cfg.enabled},
+                              "card": {"price": svc.get("price"), "currency": "INR", "order_url": "/commerce/v1/orders"}})
+        return {"provider": "BUCS · Project Trillion", "x402Version": 2, "services": items,
+                "mcp": (cfg.public_base or str(request.base_url).rstrip("/")) + "/commerce/mcp"}
+
+    @r.get("/.well-known/x402")
+    async def well_known(request: Request):
+        if not owner_install():
+            return _err(404, "not found")
+        return manifest(request)
+
+    @r.post("/commerce/mcp")
+    async def mcp(request: Request):
+        """Minimal MCP (streamable HTTP, JSON responses): discover services and how to pay for them."""
+        if not owner_install():
+            return _err(404, "not found")
+        try:
+            msg = await request.json()
+        except Exception:
+            return JSONResponse({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
+        mid, method = msg.get("id"), msg.get("method")
+        if mid is None:                                             # notification
+            return JSONResponse({}, 202)
+        ok = lambda res: JSONResponse({"jsonrpc": "2.0", "id": mid, "result": res})      # noqa: E731
+        if method == "initialize":
+            return ok({"protocolVersion": "2025-03-26", "capabilities": {"tools": {"listChanged": False}},
+                       "serverInfo": {"name": "bucs-trillion", "version": "1.0.0"},
+                       "instructions": "BUCS sells per-request data services to agents. Call list_services, then pay the "
+                                       "service's x402 URL (USDC). Failed requests are never charged."})
+        if method == "tools/list":
+            return ok({"tools": [
+                {"name": "list_services", "description": "Paid BUCS services with schemas, prices and their x402 payment URL.",
+                 "inputSchema": {"type": "object", "properties": {}}},
+                {"name": "website_extract", "description": "Structured facts and readable text from a public web page "
+                 "(title, description, headings, links, social profiles, emails, Open Graph, text). Paid per request over x402; "
+                 "this tool returns the exact paid URL and terms to call.",
+                 "inputSchema": {"type": "object", "required": ["url"], "properties": {"url": {"type": "string", "format": "uri"}}}}]})
+        if method == "tools/call":
+            p = msg.get("params") or {}
+            m = manifest(request)
+            if p.get("name") == "list_services":
+                text = json.dumps(m["services"], indent=1)
+            elif p.get("name") == "website_extract":
+                svc = next((x for x in m["services"] if x["id"] == "website.extract"), None)
+                url = ((p.get("arguments") or {}).get("url") or "")
+                if not svc:
+                    text = json.dumps({"available": False})
+                else:
+                    from urllib.parse import quote
+                    text = json.dumps({"payment_required": True, "enabled": svc["x402"]["enabled"],
+                                       "pay_and_call": f"{svc['x402']['url']}?url={quote(url, safe='')}",
+                                       "price_usd": svc["x402"]["price_usd"], "asset": "USDC", "network": svc["x402"]["network"],
+                                       "how": "GET the URL with an x402 client; it answers 402 with terms, your client pays, "
+                                              "the result returns in the same response. Not charged if extraction fails."})
+            else:
+                return JSONResponse({"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": "unknown tool"}})
+            return ok({"content": [{"type": "text", "text": text}]})
+        return JSONResponse({"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": "method not found"}})
+
     # ═══ owner-only admin ════════════════════════════════════════
     def admin_guard(request: Request):
         if not owner_install():
@@ -309,8 +482,56 @@ def build_router(state: dict, is_owner_session, audit) -> APIRouter:
         gw = gateway()
         m = mode if mode in ("test", "live") else (gw.mode if gw.configured else "test")
         L = ledger_for(m)
-        return {"ok": True, "gateway": gw.status(), "catalog": catalog.public(L), "limits": L.get_setting("limits", {}),
-                "disabled": L.get_setting("disabled_services", []), **L.overview()}
+        xc = X.X402Config()
+        UL = ledger_for(xc.mode if xc.enabled else m)
+        usdc = UL.overview("USDC")
+        labels = UL.get_setting("wallet_labels", {})
+        usdc["by_class"] = UL.buyer_stats("USDC", lambda w: xc.classify(w, labels))
+        return {"ok": True, "gateway": gw.status(), "x402": {**xc.status(), "prices_usd": {sid: x402_price(UL, sid) for sid in EXECUTORS}},
+                "catalog": catalog.public(L), "limits": L.get_setting("limits", {}),
+                "disabled": L.get_setting("disabled_services", []), **L.overview("INR"),
+                "usdc": {k: usdc[k] for k in ("mode", "gross_paise", "net_paise", "transactions", "identified_buyers", "repeat_buyers",
+                                              "avg_paise", "recent", "by_customer", "by_class")}}
+
+    @r.post("/api/commerce/admin/x402/price")
+    async def x402_set_price(request: Request):
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        try:
+            b = await request.json()
+            sid, usd_ = str(b["service_id"]), float(b["price_usd"])
+        except Exception:
+            return _err(400, "body: {service_id, price_usd}")
+        if sid not in EXECUTORS or not (0.0005 <= usd_ <= 5):
+            return _err(422, "price must be $0.0005–$5 for a sellable service")
+        xc = X.X402Config()
+        L = ledger_for(xc.mode if xc.enabled else "test")
+        prices = L.get_setting("x402_prices", {}); prices[sid] = round(usd_, 6)
+        L.set_setting("x402_prices", prices)
+        await audit("commerce.x402", f"{sid} price ${usd_}")
+        return {"ok": True, "x402_prices": prices}
+
+    @r.post("/api/commerce/admin/x402/wallet-label")
+    async def wallet_label(req: WalletLabelReq, request: Request):
+        """Mark a paying wallet as the owner's own test buyer or a directory's verification purchase
+        (or back to external). Read-time only: payments are never rewritten."""
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        import re as _re
+        if not _re.fullmatch(r"0x[0-9a-fA-F]{40}", req.address) or req.label not in ("external", "internal_test", "marketplace_test"):
+            return _err(422, "address: 0x… (40 hex); label: external | internal_test | marketplace_test")
+        xc = X.X402Config()
+        L = ledger_for(xc.mode if xc.enabled else "test")
+        labels = L.get_setting("wallet_labels", {})
+        if req.label == "external":
+            labels.pop(req.address.lower(), None)
+        else:
+            labels[req.address.lower()] = req.label
+        L.set_setting("wallet_labels", labels)
+        await audit("commerce.x402", f"wallet {req.address[:10]}… labelled {req.label}")
+        return {"ok": True, "labels": labels}
 
     @r.post("/api/commerce/admin/price")
     async def set_price(req: PriceReq, request: Request):
@@ -406,6 +627,153 @@ def build_router(state: dict, is_owner_session, audit) -> APIRouter:
             return _err(502, str(e))
         await audit("commerce.settlements", f"synced {n} payments")
         return {"ok": True, "newly_settled": n}
+
+    # ═══ market radar (read-only market intelligence; never buys anything) ═══
+    radar_job = {"task": None, "started": 0.0, "error": None}
+
+    async def run_radar():
+        try:
+            prev = RADAR.latest()
+            raw = await RADAR.Radar().collect()
+            RADAR.save_snapshot(raw, RADAR.analyse(raw, prev))
+            radar_job["error"] = None
+        except Exception as e:
+            radar_job["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+
+    @r.get("/api/commerce/admin/radar")
+    async def radar_get(request: Request):
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        t = radar_job["task"]
+        return {"ok": True, "radar": RADAR.latest(), "refreshing": bool(t and not t.done()), "error": radar_job["error"]}
+
+    @r.post("/api/commerce/admin/radar/refresh")
+    async def radar_refresh(request: Request):
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        t = radar_job["task"]
+        if t and not t.done():
+            return {"ok": True, "refreshing": True}
+        if time.time() - radar_job["started"] < 1800:          # be polite to the free sources
+            return _err(429, "the radar was refreshed less than 30 minutes ago")
+        radar_job["started"] = time.time()
+        radar_job["task"] = asyncio.create_task(run_radar())
+        await audit("commerce.radar", "market radar refresh started")
+        return {"ok": True, "refreshing": True}
+
+    # ═══ revenue opportunity pipeline (estimates only; never touches money) ═══
+    def pipe():
+        _, L = books()
+        P.migrate(L)
+        return L
+
+    @r.get("/api/commerce/admin/pipeline")
+    async def pipeline_get(request: Request):
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        L = pipe()
+        return {"ok": True, "opportunities": P.all_(L), "listings": P.listings(L),
+                "drafts": L.get_setting("draft_services", {}), "note": "economics are owner estimates, not revenue"}
+
+    @r.post("/api/commerce/admin/pipeline")
+    async def pipeline_save(req: OpportunityReq, request: Request):
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        if not req.title.strip():
+            return _err(422, "title required")
+        o = P.save(pipe(), req.model_dump())
+        await audit("commerce.pipeline", f"saved {o['id']} '{req.title[:60]}'")
+        return {"ok": True, "opportunity": o}
+
+    @r.post("/api/commerce/admin/pipeline/{oid}/update")
+    async def pipeline_update(oid: str, request: Request):
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        try:
+            fields = await request.json()
+        except Exception:
+            return _err(400, "body must be JSON")
+        o = P.update(pipe(), oid, fields if isinstance(fields, dict) else {})
+        return {"ok": True, "opportunity": o} if o else _err(404, "no such opportunity")
+
+    @r.post("/api/commerce/admin/pipeline/{oid}/decide")
+    async def pipeline_decide(oid: str, req: DecisionReq, request: Request):
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        o = P.decide(pipe(), oid, req.decision, req.note)
+        if not o:
+            return _err(422, "decision must be approved|rejected on an unconverted opportunity")
+        await audit("commerce.pipeline", f"{oid} {req.decision}")
+        return {"ok": True, "opportunity": o}
+
+    @r.post("/api/commerce/admin/pipeline/{oid}/convert")
+    async def pipeline_convert(oid: str, req: ConvertReq, request: Request):
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        sid = req.service_id.strip().lower()
+        if not sid or len(sid) > 40 or not all(c.isalnum() or c in "._-" for c in sid):
+            return _err(422, "service_id: letters, digits, . _ - only")
+        o = P.convert(pipe(), oid, sid)
+        if not o:
+            return _err(422, "only an approved opportunity can become a draft service")
+        await audit("commerce.pipeline", f"{oid} → draft service {sid} (not deployed)")
+        return {"ok": True, "opportunity": o}
+
+    @r.get("/api/commerce/admin/listings/payapi-draft")
+    async def payapi_draft(request: Request, service_id: str = "website.extract", contact_email: str = ""):
+        """The exact PayAPI Market submit_listing payload + what still blocks it. Never submits:
+        submitting is outward-facing and PayAPI then makes a real paid test call."""
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        cfg = X.X402Config()
+        L = ledger_for(cfg.mode if cfg.enabled else "test")
+        svc = catalog.get(service_id)
+        if not svc or service_id not in EXECUTORS:
+            return _err(404, "no sellable service with that id")
+        base = cfg.public_base
+        host = (base.split("//", 1)[-1].split("/", 1)[0]).lower()
+        blockers = []
+        if not cfg.enabled:
+            blockers.append("X402_PAY_TO is not set (a wallet you control; public address only)")
+        if cfg.network != "eip155:8453":
+            blockers.append("X402_NETWORK must be eip155:8453 (Base mainnet): PayAPI verifies with a real paid call on Base")
+        if not base.startswith("https://"):
+            blockers.append("X402_PUBLIC_BASE_URL must be your public https address")
+        elif any(t in host for t in ("localhost", "127.0.0.1", "trycloudflare.com", "ngrok", "loca.lt")):
+            blockers.append("PayAPI refuses localhost and tunnel hosts: use your own domain or a server")
+        if "@" not in contact_email:
+            blockers.append("contact_email is required (pass ?contact_email=…)")
+        if cfg.network == "eip155:8453" and "x402.org" in cfg.facilitator:
+            blockers.append("set X402_FACILITATOR_URL to a mainnet facilitator (x402.org's is testnet only)")
+        payload = {"name": "BUCS " + svc["name"], "provider_name": "BUCS · Bobbiey", "category": "Data",
+                   "description": svc["description"] + " Structured JSON with a quality score; failed extractions are never charged.",
+                   "base_url": base or "<X402_PUBLIC_BASE_URL>", "paid_route_url": resource_url(request, service_id, cfg) + "?url=https://example.com",
+                   "price": x402_price(L, service_id), "networks": ["base"], "payTo": cfg.pay_to or "<X402_PAY_TO>",
+                   "contact_email": contact_email or "<your email>", "mcp_endpoint": (base + "/commerce/mcp") if base else None}
+        return {"ok": True, "ready": not blockers, "blockers": blockers, "payload": payload,
+                "how_to_submit": "Owner only, after approving: call PayAPI's MCP tool submit_listing with this payload (https://payapi.market/mcp). "
+                                 "Then record it here with POST /api/commerce/admin/listings (directory=payapi, status=submitted) and label "
+                                 "PayAPI's test wallet as marketplace_test so its verification purchase is never counted as a customer.",
+                "note": "BUCS never submits listings itself."}
+
+    @r.post("/api/commerce/admin/listings")
+    async def listing_add(req: ListingReq, request: Request):
+        bad = admin_guard(request)
+        if bad:
+            return bad
+        if req.status not in ("prepared", "submitted", "live", "rejected", "removed"):
+            return _err(422, "status: prepared|submitted|live|rejected|removed")
+        lst = P.add_listing(pipe(), req.directory, req.service_id, req.listing_url, req.status, req.detail)
+        await audit("commerce.listing", f"{req.directory} {req.service_id} {req.status}")
+        return {"ok": True, "listing": lst}
 
     return r
 

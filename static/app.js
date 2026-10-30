@@ -5469,7 +5469,7 @@ async function refreshTrillion() {
   try {
     const r = await fetch("/api/commerce/admin/overview");
     if (r.status !== 200) { $("#trillion").hidden = true; return; }     // not the owner → section stays hidden
-    const d = await r.json(); if (d.ok) renderTrillion(d);
+    const d = await r.json(); if (d.ok) { renderTrillion(d); renderX402(d); }
   } catch (e) {}
 }
 document.addEventListener("click", async (e) => {
@@ -5488,6 +5488,11 @@ document.addEventListener("click", async (e) => {
 });
 document.addEventListener("change", async (e) => {
   const t = e.target;
+  if (t.dataset && t.dataset.x402price) {
+    const r = await _trPost("/api/commerce/admin/x402/price", { service_id: t.dataset.x402price, price_usd: parseFloat(t.value) });
+    logEvent(`<span class="tag">[x402]</span> ${r.ok ? "price saved" : escapeHTML(r.error || "price refused")}`, r.ok ? "info" : "warn");
+    refreshTrillion();
+  }
   if (t.dataset && t.dataset.price) {
     const r = await _trPost("/api/commerce/admin/price", { service_id: t.dataset.price, price_paise: Math.round(parseFloat(t.value) * 100) });
     if (!r.ok) logEvent(`<span class="tag">[trillion]</span> ${escapeHTML(r.error || "price refused")}`, "warn");
@@ -5515,3 +5520,139 @@ $("#tr-sync")?.addEventListener("click", async (e) => {
   e.target.textContent = "SYNC SETTLEMENTS"; refreshTrillion();
 });
 refreshTrillion(); setInterval(refreshTrillion, 60000);
+
+/* ═══ AGENT COMMERCE MARKET RADAR (read-only) + REVENUE OPPORTUNITY PIPELINE ═══
+   Market figures come from /api/commerce/admin/radar (public sources, each tagged with its
+   source); "EST." figures are calls × listed price, never revenue. The x402 panel is the only
+   place showing money, and it comes from the ledger (facilitator-settled USDC). */
+const usd = (v, d = 2) => v == null ? "n/a" : "$" + Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: Math.max(d, 4) });
+const num = v => v == null ? "n/a" : Number(v).toLocaleString("en-US");
+const ago = t => { if (!t) return "never"; const s = Date.now() / 1000 - t; return s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : Math.round(s / 86400) + " d ago"; };
+const src = (k, extra) => `<span class="rd-src-chip" title="${escapeHTML(extra || "")}">${escapeHTML(k)}</span>`;
+const host = u => { try { return new URL(u).host; } catch (e) { return String(u || "").slice(0, 40); } };
+let _rd = null;
+
+function renderRadar(d) {
+  const R = d.radar; _rd = R;
+  $("#rd-refresh").textContent = d.refreshing ? "REFRESHING…" : "REFRESH";
+  if (d.error) logEvent(`<span class="tag">[radar]</span> ${escapeHTML(d.error)}`, "warn");
+  if (!R) { $("#rd-asof").textContent = d.refreshing ? "collecting market data…" : "no snapshot yet: press REFRESH"; return; }
+  const errs = Object.keys(R.errors || {});
+  $("#rd-asof").innerHTML = `snapshot ${escapeHTML(ago(R.generated_at))}${errs.length ? ` · <span class="tr-bad" title="${escapeHTML(JSON.stringify(R.errors))}">unavailable: ${escapeHTML(errs.join(", "))}</span>` : ""}`;
+  const M = R.macro || {}, E = R.endpoints || {}, D = R.directory || {}, mo = (M.monthly || []).slice(-1)[0] || {};
+  const k = [
+    ["x402 TXS · ALL TIME", num(M.all_time_txs), "agenteconomy", "on-chain, facilitator-registry scope, as of " + (M.as_of || "?")],
+    ["x402 VOLUME · ALL TIME", usd(M.all_time_volume_usd, 0), "agenteconomy", "USD, on-chain"],
+    [`LATEST MONTH · ${escapeHTML(mo.month || "")}`, `${num(mo.txs)} txs · ${usd(mo.vol, 0)}`, "agenteconomy", "on-chain; partial if it is the current month"],
+    ["TXS · LAST 30 D", num(M.last_30d_txs), "agenteconomy", "sum of daily on-chain counts"],
+    ["LISTED ENDPOINTS · MAINNET", `${num(E.listed_mainnet)} · ${num(E.farm_endpoints)} farm`, "cdp bazaar", `${num(E.farm_sellers)} wallets list hundreds of endpoints with ~1 call each (listing bootstrap, not customers): excluded from demand`],
+    ["SELLERS WITH REAL BUYERS", num(E.demand_sellers), "cdp bazaar", "≥2 unique paying wallets on at least one endpoint in 30 d, farms excluded"],
+    ["SELLERS ≥5 / ≥20 / ≥100 BUYERS", `${num(E.sellers_5plus)} / ${num(E.sellers_20plus)} / ${num(E.sellers_100plus)}`, "cdp bazaar", "best single endpoint's unique payers in 30 d"],
+    ["SETTLED CALLS · 30 D", num(E.calls_30d_sum), "cdp bazaar", "Coinbase-facilitated only; includes farm and single-payer calls"],
+    ["MAX BUYERS · ONE ENDPOINT", num(E.max_payers_single_endpoint), "cdp bazaar", "unique payers are not summed across endpoints (one wallet buys many)"],
+    ["PRICE · MEDIAN / MEAN", `${usd(E.price_median_listed, 3)} / ${usd(E.price_mean_listed, 3)}`, "cdp bazaar", "listed prices; call-weighted median " + usd(E.price_median_call_weighted, 4)],
+    ["DIRECTORY LISTINGS", `${num(D.nohumans_listings)} · ${num(D.nohumans_verified)} verified`, "nohumans", "probe pass rate 24 h: " + (D.probe_pass_rate_24h ?? "n/a")],
+    ["PAYAPI LISTINGS", `${num(D.payapi_listings)} of ${num(D.payapi_total)}`, "payapi", `${num(D.payapi_payment_verified)} payment-verified by PayAPI's own test purchase (not demand)`],
+  ];
+  $("#rd-kpis").innerHTML = k.map(([l, v, s, t]) => `<div class="tr-kpi rd-kpi"><span class="lbl">${l}</span><span class="val">${escapeHTML(String(v))}</span>${src(s, t)}</div>`).join("");
+
+  $("#rd-opps").innerHTML = (R.opportunities || []).length ? `<div class="rd-tr rd-opp th"><span>NICHE</span><span>DEMAND*</span><span>CALLS 30D</span><span>SELLERS ≥5</span><span>PAID SELLERS</span><span>MEDIAN</span><span>SEARCH IPs</span><span>FIT</span><span></span></div>` +
+    R.opportunities.slice(0, 15).map((o, i) => `<div class="rd-tr rd-opp" title="${escapeHTML((o.leaders || []).map(l => `${l.service || host(l.resource)}: ${l.payers_30d} buyers, ${l.calls_30d} calls`).concat((o.search_examples || []).map(q => "searched: " + q)).join("\n"))}">
+      <span><b>${escapeHTML(o.category.replace(/_/g, " "))}</b></span><span>${num(o.seller_demand)}</span><span>${num(o.calls_30d)}</span><span>${o.sellers_5plus}</span>
+      <span>${o.paid_sellers}</span><span>${usd(o.median_price_usd, 3)}</span><span>${num(o.search_ips)}</span><span>${Math.round(o.fit * 100)}%</span>
+      <span><button class="ghost-btn wide tr-mini" data-rdsave="${i}">SAVE</button></span></div>`).join("") +
+    `<div class="tr-chart-note">*for each seller, the unique payers of its best endpoint in the niche, summed over sellers (cdp bazaar, 30 d, farms and single-payer endpoints excluded). It ranks niches; one agent buying from several sellers is counted once per seller, so it is not a buyer count. Niches are keyword-classified. Fit = BUCS judgement. Hover for leaders and search terms.</div>`
+    : `<div class="tf-empty">no endpoint data in this snapshot</div>`;
+
+  const ev = e => { const x = e.evidence || {}, o = x.onchain_24h;
+    return [x.nohumans ? `nohumans ${x.nohumans.status}` : "", x.payapi ? "payapi listed" : "", x.x402list ? "x402-list" : "",
+      o && !o.error ? `chain 24h: ${o.distinct_external_payers} payers, ${o.repeat_payers} repeat, x402-style ${Math.round((o.x402_style_share || 0) * 100)}%` : ""].filter(Boolean).join(" · ") || "bazaar only"; };
+  $("#rd-comp").innerHTML = (R.competitors || []).length ? `<div class="rd-tr rd-cmp th"><span>SERVICE · ENDPOINT</span><span>CATEGORY</span><span>PRICE</span><span>CALLS 30D</span><span>BUYERS</span><span>REPEAT</span><span>NET</span><span>BUCS</span></div>` +
+    R.competitors.map(e => `<div class="rd-tr rd-cmp" title="${escapeHTML(ev(e))}"><span><b>${escapeHTML((e.service || host(e.resource)).slice(0, 40))}</b><i>${escapeHTML(host(e.resource))}</i></span>
+      <span>${escapeHTML(e.category.replace(/_/g, " "))}</span><span>${usd(e.price_usd, 3)}</span><span>${num(e.calls_30d)}</span><span>${num(e.payers_30d)}</span>
+      <span>${e.repeat_ratio ?? "n/a"}×</span><span>${escapeHTML(e.network)}</span><span class="rd-score">${e.bucs_score}</span></div>`).join("") +
+    `<div class="tr-chart-note">source: cdp bazaar (Coinbase-settled, 30 d). Hover a row for directory and on-chain evidence. Settlement verified by the facilitator; volume outside Coinbase's facilitator is not seen here.</div>`
+    : `<div class="tf-empty">no competitor data in this snapshot</div>`;
+
+  const mini = (rows, f) => rows && rows.length ? rows.slice(0, 10).map(f).join("") : `<div class="tf-empty">none in this snapshot</div>`;
+  $("#rd-rev").innerHTML = mini(R.top_revenue, e => `<div class="tr-row"><span>${escapeHTML((e.service || host(e.resource)).slice(0, 34))}</span><span>EST. ${usd(e.est_rev_30d_usd, 0)}</span></div>`);
+  $("#rd-repeat").innerHTML = mini(R.top_repeat, e => `<div class="tr-row"><span>${escapeHTML((e.service || host(e.resource)).slice(0, 34))}</span><span>${e.repeat_ratio}× · ${e.payers_30d} buyers</span></div>`);
+  const S = R.search_demand || {};
+  $("#rd-sw").textContent = `nohumans · ${num(S.distinct_client_ips)} client IPs (not buyers)`;
+  $("#rd-search").innerHTML = mini(S.top_needs, n => `<div class="tr-row ${n.catalogue_status === "search_returned_nothing" ? "rd-unmet" : ""}"><span>${escapeHTML(n.q || "")}</span><span>${n.searches} · ${n.buyer_client_ips} IPs${n.catalogue_status === "search_returned_nothing" ? " · UNMET" : ""}</span></div>`);
+  $("#rd-new").innerHTML = mini(R.newly_verified_7d, c => `<div class="tr-row" title="${escapeHTML(c.endpoint_url || "")}"><span>${escapeHTML(String(c.name || host(c.endpoint_url)).slice(0, 40))}</span><span>${c.changed_at ? escapeHTML(ago(c.changed_at)) : ""}</span></div>`);
+  $("#rd-bad").innerHTML = mini(R.unreliable, l => `<div class="tr-row"><span>${escapeHTML(String(l.name || host(l.endpoint_url)).slice(0, 36))}</span><span class="tr-bad">${escapeHTML(String(l.status))} · ${l.score == null ? "n/a" : Number(l.score).toFixed(2)}</span></div>`);
+  $("#rd-src").innerHTML = Object.entries(R.sources || {}).map(([n, s]) => `<div class="tr-row"><span><b>${escapeHTML(n)}</b> <i>${escapeHTML([s.verification, s.license].filter(Boolean).join(" · "))}</i></span><span>${s.fetched_at ? escapeHTML(ago(s.fetched_at)) : (R.errors || {})[n === "cdp_bazaar" ? "bazaar" : n] ? "<span class='tr-bad'>failed</span>" : "n/a"}</span></div>`).join("");
+}
+function renderX402(ov) {
+  const x = ov.x402 || {}, u = ov.usdc || {};
+  const amt = v => "$" + (Number(v || 0) / 1e6).toFixed(4);
+  $("#rd-x402").innerHTML = `<div class="tr-row"><span>x402 seller</span><span class="${x.enabled ? "tr-ok" : "tr-bad"}">${x.enabled ? escapeHTML(`ON · ${x.network} · ${x.mode}`) : "OFF: set X402_PAY_TO to enable"}</span></div>
+    ${Object.entries(x.prices_usd || {}).map(([sid, pr]) => `<div class="tr-row"><span>x402 price · ${escapeHTML(sid)}</span><span><input class="rd-price" type="number" min="0.0005" step="0.0005" value="${pr}" data-x402price="${escapeHTML(sid)}"/> USDC</span></div>`).join("")}
+    <div class="tr-row"><span>USDC received (settled, all)</span><span>${amt(u.gross_paise)} · ${num(u.transactions)} payments</span></div>
+    ${(() => { const c = u.by_class || {}, e = c.external || {};
+      const other = ["internal_test", "marketplace_test", "self_transfer", "unidentified"].filter(k => (c[k] || {}).payments)
+        .map(k => `${k.replace("_", " ")} ${c[k].payments}`).join(" · ");
+      return `<div class="tr-row"><span><b>External customers</b> (genuine)</span><span>${num(e.buyers)} wallets · ${num(e.repeat_buyers)} repeat · ${amt(e.gross_paise)}</span></div>
+        <div class="tr-row"><span>Not customers</span><span>${other ? escapeHTML(other) : "none"}</span></div>`; })()}
+    ${(u.by_customer || []).slice(0, 5).map(c => `<div class="tr-row"><span><i>${escapeHTML(c.key)}</i></span><span>${c.n} · ${amt(c.gross)}</span></div>`).join("")}`;
+}
+function renderPipeline(p) {
+  const rows = p.opportunities || [];
+  $("#rd-pipe").innerHTML = rows.length ? `<div class="rd-tr rd-pp th"><span>OPPORTUNITY</span><span>STATUS</span><span>PRICE / COST</span><span>REQ / MO</span><span>EST. REV</span><span>EST. PROFIT</span><span>MARGIN</span><span></span></div>` +
+    rows.map(o => { const e = o.economics || {};
+      return `<div class="rd-tr rd-pp"><span><b>${escapeHTML(o.title)}</b><i>${escapeHTML(o.category || "")}${o.service_id ? " → draft " + escapeHTML(o.service_id) : ""}</i></span>
+        <span class="rd-st-${escapeHTML(o.status)}">${escapeHTML(o.status)}</span><span>${usd(o.price_usd, 3)} / ${usd(o.cost_usd, 4)}</span><span>${num(o.monthly_requests)}</span>
+        <span>${usd(e.revenue_usd)}</span><span>${usd(e.profit_usd)}</span><span>${e.unit_margin_pct == null ? "n/a" : e.unit_margin_pct + "%"}</span>
+        <span>${o.status === "saved" || o.status === "rejected" ? `<button class="ghost-btn wide tr-mini" data-rdedit="${escapeHTML(o.id)}">EDIT</button>` : ""}
+          ${o.status !== "converted" && o.status !== "approved" ? `<button class="ghost-btn wide tr-mini" data-rddec="${escapeHTML(o.id)}" data-v="approved">APPROVE</button>` : ""}
+          ${o.status !== "converted" && o.status !== "rejected" ? `<button class="ghost-btn wide tr-mini" data-rddec="${escapeHTML(o.id)}" data-v="rejected">REJECT</button>` : ""}
+          ${o.status === "approved" ? `<button class="ghost-btn wide tr-mini" data-rdconv="${escapeHTML(o.id)}">TO DRAFT SERVICE</button>` : ""}</span></div>`; }).join("") +
+    `<div class="tr-chart-note">EST. = your inputs × price. Real money appears only in the revenue panels above, from gateway- or facilitator-confirmed payments. A draft service is not sold until it has a tested executor.</div>` +
+    ((p.listings || []).length ? `<div class="intel-divider">DIRECTORY LISTINGS</div>` + p.listings.map(l => `<div class="tr-row"><span>${escapeHTML(l.directory)} · ${escapeHTML(l.service_id || "")}</span><span>${escapeHTML(l.status)}</span></div>`).join("") : "")
+    : `<div class="tf-empty">nothing saved yet: press SAVE on an opportunity above</div>`;
+}
+async function refreshRadar() {
+  try {
+    const [r, p] = await Promise.all([fetch("/api/commerce/admin/radar"), fetch("/api/commerce/admin/pipeline")]);
+    if (r.status !== 200) return;
+    renderRadar(await r.json());
+    if (p.status === 200) renderPipeline(await p.json());
+    if (_tr) renderX402(_tr);
+  } catch (e) {}
+}
+document.addEventListener("click", async (e) => {
+  const t = e.target; if (!t.dataset) return;
+  if (t.id === "rd-refresh") {
+    const r = await _trPost("/api/commerce/admin/radar/refresh");
+    if (!r.ok) logEvent(`<span class="tag">[radar]</span> ${escapeHTML(r.error || "refresh refused")}`, "warn");
+    refreshRadar();
+  }
+  if (t.dataset.rdsave != null && _rd) {
+    const o = _rd.opportunities[+t.dataset.rdsave];
+    const r = await _trPost("/api/commerce/admin/pipeline", { title: o.category.replace(/_/g, " "), category: o.category, price_usd: o.median_price_usd,
+      evidence: { ...o, snapshot: _rd.generated_at, source: "cdp bazaar + nohumans searches" }, competitors: o.leaders || [] });
+    logEvent(`<span class="tag">[pipeline]</span> ${r.ok ? "saved " + escapeHTML(o.category) : escapeHTML(r.error || "save failed")}`, r.ok ? "info" : "warn");
+    refreshRadar();
+  }
+  if (t.dataset.rdedit) {
+    const price = prompt("Price per request (USD):", "0.01"); if (price == null) return;
+    const cost = prompt("Your cost per request (USD):", "0.0002"); if (cost == null) return;
+    const reqs = prompt("Expected requests per month (estimate):", "1000"); if (reqs == null) return;
+    const fixed = prompt("Fixed monthly cost (USD: hosting, keys):", "0"); if (fixed == null) return;
+    await _trPost(`/api/commerce/admin/pipeline/${encodeURIComponent(t.dataset.rdedit)}/update`, { price_usd: +price, cost_usd: +cost, monthly_requests: Math.round(+reqs), fixed_monthly_usd: +fixed });
+    refreshRadar();
+  }
+  if (t.dataset.rddec) {
+    const note = prompt(`Note for this ${t.dataset.v === "approved" ? "approval" : "rejection"} (recorded):`, ""); if (note == null) return;
+    await _trPost(`/api/commerce/admin/pipeline/${encodeURIComponent(t.dataset.rddec)}/decide`, { decision: t.dataset.v, note });
+    refreshRadar();
+  }
+  if (t.dataset.rdconv) {
+    const sid = prompt("Service id for the draft (e.g. company.profile). It is NOT sold until an executor exists and passes tests:", ""); if (!sid) return;
+    const r = await _trPost(`/api/commerce/admin/pipeline/${encodeURIComponent(t.dataset.rdconv)}/convert`, { service_id: sid });
+    if (!r.ok) logEvent(`<span class="tag">[pipeline]</span> ${escapeHTML(r.error || "refused")}`, "warn");
+    refreshRadar();
+  }
+});
+refreshRadar(); setInterval(refreshRadar, 120000);

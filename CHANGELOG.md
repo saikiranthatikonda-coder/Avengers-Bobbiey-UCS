@@ -5,6 +5,26 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-30 — v7.8.0 · Agent Commerce Market Radar, x402 seller, opportunity pipeline
+- **feat: AGENT COMMERCE MARKET RADAR** inside the existing Project Trillion card (owner-only, read-only, `commerce/radar.py`):
+  - Live evidence from the Coinbase x402 Bazaar (per-endpoint 30-day calls and unique payers), agenteconomy.to (on-chain totals), nohumans.directory (probe reliability, new APIs, what agents search for), x402-list.com, PayAPI Market and Base mainnet USDC logs (independent payer check).
+  - Every figure shows its source, time, coverage and verification. Mainnet only; never summed across sources.
+  - **Listing farms are detected and excluded:** 8 wallets list 77% of Bazaar endpoints with about 1 call each.
+  - Niche opportunities ranked by seller-level demand, a top-20 competitor table with a BUCS score, top repeat-purchase and estimated-revenue lists (labelled EST.), failing listings, sources. Refresh at most every 30 min.
+- **feat: Revenue Opportunity Pipeline:** save an opportunity with its evidence, model unit economics (always labelled estimates), approve/reject, convert to a **draft** service (never sold until it has a tested executor), track directory listings. Additive tables with a database backup first.
+- **feat: x402 seller** for Website Extraction:
+  - Agents pay per request in USDC: verify, then deliver, then settle **only on success**, so a failed request is never charged.
+  - Booked in USDC, apart from rupees. MCP server and `/.well-known/x402` manifest for discovery.
+  - OFF until the owner sets a wallet address; Base Sepolia test network by default.
+  - Owner-set x402 price.
+- **feat: genuine customers only:** payments from the owner's test wallets, directories' verification purchases and self-transfers are classified apart and never counted as customers.
+- **feat: PayAPI listing draft:** the exact payload plus the blockers still in the way. BUCS never submits listings itself.
+- **quality:** Website Extraction returns machine-readable error codes. A site's 403/429 block page or a JavaScript-only page is a failure, not a charged result. Adds clean text and a quality score.
+- **security:** DNS-rebinding fix for Website Extraction. The vetted IP is the one connected to (`_PinnedBackend`).
+- **docs:** `TRILLION_MARKET_REPORT.md` covers the 10 opportunities, 20 competitors with evidence, first 3 services, a customer-acquisition plan, the path to the first genuine paying agent, and the smallest changes.
+- **test:** x402 (terms in both protocol versions, invalid payment, failed delivery never settled, USDC kept apart from INR, repeat buyers, discovery, off until configured, price change, test purchases never counted as customers), pipeline (owner-only, estimates only, backup before migration, never auto-deployed), radar (owner-only, rate limit, dedup, directory purchase labelling), DNS rebinding. 183 tests.
+- Razorpay is unchanged: still unconfigured, test mode.
+
 ## 2026-10-30 — v7.7.0 · Self-healing core + Project Trillion (phase 1)
 - **feat: SELF-HEALING · AUTONOMIC CORE** (`selfheal.py`). Every 30 s BUCS measures itself: event-loop lag, its own CPU and RAM, background tasks, scheduler, and weather/news/Google freshness and AI routing. It **repairs** what is safe: it revives crashed background tasks (now named and restartable), refreshes stale feeds and restarts a stopped scheduler. It asks the connected AI for a **grounded diagnosis** (only measured data in the prompt) and can hand that diagnosis to engineering mode, where a fix still needs your approval. **Self-restart** through the launcher is the last resort: only under the launcher (`BUCS_LAUNCHER=1`), at most once per 30 min, with no restart loops. Dashboard card plus live push; the header status lights jump to it. Real repair log, with toggleable auto-repair.
 - **feat: PROJECT TRILLION · AGENT COMMERCE** (owner-only, `commerce/`, see PROJECT_TRILLION.md):

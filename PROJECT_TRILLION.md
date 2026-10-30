@@ -16,6 +16,16 @@ in the owner dashboard comes from a ledger of gateway-confirmed payments.
 | API | `commerce/api.py` | Public: catalog, create order, hosted checkout page, verify, order status/result (per-order access token), webhook, history (API key). Owner admin: overview, pricing, pause/resume, limits, API keys, refunds (typed confirmation), settlement sync. |
 | Dashboard | `static/app.js` | **PROJECT TRILLION · AGENT COMMERCE** card — visible only when the owner admin API answers (owner install + host machine + commander). |
 
+### Added in v7.8.0
+| Part | File | What it does |
+|---|---|---|
+| x402 seller | `commerce/x402.py`, `/x402/v1/{service}` | Agents pay per request in USDC (x402 v1 + v2). Verify → deliver → **settle only after successful delivery**. OFF until `X402_PAY_TO` is set; Base Sepolia by default. |
+| Discovery | `/commerce/mcp`, `/.well-known/x402` | Minimal MCP server + manifest so agents find the services and their payment URL. |
+| Payer classes | `ledger.buyer_stats()` | external (customer) vs internal_test / marketplace_test / self_transfer, classified at read time. |
+| Market radar | `commerce/radar.py` | Read-only market intelligence (CDP Bazaar, agenteconomy, nohumans, x402-list, PayAPI, Base on-chain) with source, time, coverage and verification per figure; listing-farm detection. |
+| Opportunity pipeline | `commerce/pipeline.py` | Save → economics (estimates) → approve/reject → draft service → listings. |
+| Market report | `TRILLION_MARKET_REPORT.md` | Top opportunities, top 20 competitors, first 3 services, acquisition plan, path to the first genuine paying agent. |
+
 ### Money rules (enforced in code and tests)
 - Delivery requires: valid client signature **and** the gateway's own record showing the right order, exact amount, INR, `captured`.
 - Webhooks are signature-verified, de-duplicated by event id, and the payment is **re-fetched** from the gateway rather than trusted from the webhook body.

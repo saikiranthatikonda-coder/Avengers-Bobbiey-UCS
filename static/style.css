@@ -2653,3 +2653,26 @@ body.observer-mode .dec-btn { opacity: 0.45; }
 .tr-key[hidden] { display: none; }
 .tr-key code { display: block; margin-top: 0.3rem; font-family: var(--font-mono); color: var(--success); word-break: break-all; }
 .ghost-btn.wide.tr-mini { width: auto; height: 22px; margin: 0 0 0 0.4rem; padding: 0 0.5rem; font-size: 0.5rem; }
+/* market radar */
+.rd { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid color-mix(in srgb, #c084fc 40%, var(--panel-edge)); }
+.rd-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.rd-title { font-family: var(--font-display); font-size: 0.78rem; letter-spacing: 0.2em; background: linear-gradient(110deg, #c084fc, #00d9ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.rd-asof { font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-dim); flex: 1 1 auto; }
+.rd-note { font-size: 0.7rem; color: var(--text-dim); line-height: 1.5; margin: 0.35rem 0; }
+.rd-kpi { position: relative; padding-bottom: 1.1rem; background: rgba(192, 132, 252, 0.04); }
+.rd-kpi .val { color: #d8b4fe; font-size: 0.85rem; }
+.rd-src-chip { position: absolute; right: 0.4rem; bottom: 0.25rem; font-family: var(--font-mono); font-size: 0.55rem; color: var(--text-dim); border: 1px solid var(--panel-edge); border-radius: 3px; padding: 0 0.25rem; cursor: help; }
+.rd-tr { display: grid; gap: 0.35rem; font-size: 0.7rem; font-family: var(--font-mono); padding: 0.22rem 0.3rem; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.03); }
+.rd-tr.th { color: var(--text-dim); font-family: var(--font-display); font-size: 0.46rem; letter-spacing: 0.12em; }
+.rd-tr span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rd-tr i { display: block; color: var(--text-dim); font-style: normal; font-size: 0.6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-opp { grid-template-columns: 1.5fr 0.7fr 0.8fr 0.7fr 0.6fr 0.6fr 0.6fr 0.4fr 0.6fr; }
+.rd-cmp { grid-template-columns: 2fr 1fr 0.6fr 0.7fr 0.6fr 0.6fr 0.5fr 0.4fr; }
+.rd-pp { grid-template-columns: 1.6fr 0.7fr 0.9fr 0.6fr 0.7fr 0.7fr 0.5fr 1.6fr; }
+.rd-tall { max-height: 360px; }
+.rd-score { color: #d8b4fe; font-weight: 700; }
+.rd-price { width: 80px; background: rgba(0, 12, 22, 0.7); border: 1px solid var(--panel-edge); color: var(--text); font-family: var(--font-mono); padding: 0.1rem 0.3rem; }
+.rd-unmet span:first-child { color: var(--warn); }
+.rd-src .tr-row { font-size: 0.68rem; }
+.rd-st-approved, .rd-st-converted { color: var(--success); } .rd-st-rejected { color: var(--error); } .rd-st-saved { color: var(--warn); }
+@media (max-width: 760px) { .rd-opp, .rd-cmp, .rd-pp { grid-template-columns: 1fr 1fr 1fr; } .rd-tr.th { display: none; } }

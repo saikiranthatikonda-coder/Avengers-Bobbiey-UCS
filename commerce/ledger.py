@@ -3,7 +3,8 @@ never appear in real revenue. Every state change also appends to `events`, a
 hash chain (each row hashes the previous one) — editing or deleting history
 breaks the chain and verify_chain() reports where.
 
-Money is stored as integer paise (₹1 = 100 paise); never floats.
+Money is stored as integers in the currency's minor unit (INR: paise; USDC: micro-USDC,
+1 USDC = 1,000,000) — never floats, and never summed across currencies.
 """
 
 import hashlib
@@ -135,7 +136,7 @@ class Ledger:
 
     # ── orders ───────────────────────────────────────────────────
     def create_order(self, service_id: str, customer_id: str | None, inp: dict, amount_paise: int,
-                     idem: str | None) -> tuple[dict, str, bool]:
+                     idem: str | None, currency: str = "INR") -> tuple[dict, str, bool]:
         """Returns (order, access_token, created). Same idempotency key → same order, no duplicate."""
         if idem:
             r = self.db.execute("SELECT * FROM orders WHERE idempotency_key=?", (idem,)).fetchone()
@@ -147,9 +148,10 @@ class Ledger:
         with self.tx():
             self.db.execute("INSERT INTO orders (id, service_id, customer_id, input_json, amount_paise, currency, status, "
                             "idempotency_key, access_hash, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                            (oid, service_id, customer_id, json.dumps(inp), amount_paise, "INR", "created",
+                            (oid, service_id, customer_id, json.dumps(inp), amount_paise, currency, "created",
                              idem, sha(token), now, now))
-            self._append_event("order.created", oid, {"service": service_id, "customer": customer_id, "amount_paise": amount_paise})
+            self._append_event("order.created", oid, {"service": service_id, "customer": customer_id, "amount_minor": amount_paise,
+                                                      "currency": currency})
         return self.order(oid), token, True
 
     def order(self, oid: str) -> dict | None:
@@ -220,30 +222,48 @@ class Ledger:
             return False
 
     # ── owner analytics: computed only from gateway-confirmed rows ──
-    def overview(self) -> dict:
+    def buyer_stats(self, currency: str, classify) -> dict:
+        """Who paid, by class (external / internal_test / marketplace_test / self_transfer / unidentified).
+        Classification happens at read time, so relabelling a wallet never rewrites a payment."""
+        out = {k: {"buyers": 0, "repeat_buyers": 0, "payments": 0, "gross_paise": 0}
+               for k in ("external", "internal_test", "marketplace_test", "self_transfer", "unidentified")}
+        for r in self.db.execute("SELECT o.customer_id cid, COUNT(*) n, SUM(p.amount_paise) gross FROM payments p JOIN orders o "
+                                 "ON o.id=p.order_id WHERE p.status IN ('captured','refunded') AND p.currency=? GROUP BY o.customer_id",
+                                 (currency,)):
+            cid = r["cid"]
+            k = "unidentified" if not cid else classify(cid[7:]) if cid.startswith("wallet:") else "external"
+            b = out[k]
+            b["payments"] += r["n"]; b["gross_paise"] += r["gross"] or 0
+            if cid:
+                b["buyers"] += 1; b["repeat_buyers"] += r["n"] > 1
+        return out
+
+    def overview(self, currency: str = "INR") -> dict:
+        cur = currency
         q = lambda sql, *a: self.db.execute(sql, a).fetchone()          # noqa: E731
         cap = q("SELECT COUNT(*) n, COALESCE(SUM(amount_paise),0) gross, COALESCE(SUM(fee_paise),0) fee, "
                 "COALESCE(SUM(tax_paise),0) tax, COALESCE(SUM(refunded_paise),0) refunded FROM payments "
-                "WHERE status IN ('captured','refunded')")
+                "WHERE status IN ('captured','refunded') AND currency=?", cur)
         pend = q("SELECT COALESCE(SUM(amount_paise - fee_paise - tax_paise - refunded_paise),0) s, COUNT(*) n "
-                 "FROM payments WHERE status IN ('captured','refunded') AND settlement_id IS NULL")
+                 "FROM payments WHERE status IN ('captured','refunded') AND settlement_id IS NULL AND currency=?", cur)
         settled = q("SELECT COALESCE(SUM(amount_paise - fee_paise - tax_paise - refunded_paise),0) s FROM payments "
-                    "WHERE settlement_id IS NOT NULL")
-        failed = q("SELECT COUNT(*) n FROM payments WHERE status='failed'")["n"]
+                    "WHERE settlement_id IS NOT NULL AND currency=?", cur)
+        failed = q("SELECT COUNT(*) n FROM payments WHERE status='failed' AND currency=?", cur)["n"]
         gross, fees, refunded = cap["gross"], cap["fee"] + cap["tax"], cap["refunded"]
 
         def rows(sql):
-            return [dict(r) for r in self.db.execute(sql)]
+            return [dict(r) for r in self.db.execute(sql, (cur,))]
         by_service = rows("SELECT o.service_id key, COUNT(*) n, SUM(p.amount_paise) gross FROM payments p JOIN orders o "
-                          "ON o.id=p.order_id WHERE p.status IN ('captured','refunded') GROUP BY o.service_id ORDER BY gross DESC")
-        by_customer = rows("SELECT COALESCE(c.name, 'anonymous') key, COALESCE(c.kind,'human') kind, COUNT(*) n, "
+                          "ON o.id=p.order_id WHERE p.status IN ('captured','refunded') AND p.currency=? GROUP BY o.service_id ORDER BY gross DESC")
+        by_customer = rows("SELECT COALESCE(c.name, o.customer_id, 'anonymous') key, COALESCE(c.kind, CASE WHEN o.customer_id "
+                           "LIKE 'wallet:%' THEN 'agent wallet' ELSE 'human' END) kind, COUNT(*) n, "
                            "SUM(p.amount_paise) gross FROM payments p JOIN orders o ON o.id=p.order_id LEFT JOIN customers c "
-                           "ON c.id=o.customer_id WHERE p.status IN ('captured','refunded') GROUP BY key, kind ORDER BY gross DESC LIMIT 20")
+                           "ON c.id=o.customer_id WHERE p.status IN ('captured','refunded') AND p.currency=? GROUP BY key, kind ORDER BY gross DESC LIMIT 20")
 
         def series(fmt, n, span):
             out = {}
             for r in self.db.execute("SELECT captured_at, amount_paise FROM payments WHERE status IN ('captured','refunded') "
-                                     "AND captured_at > ?", (time.time() - n * span,)):
+                                     "AND captured_at > ? AND currency=?", (time.time() - n * span, cur)):
                 k = time.strftime(fmt, time.localtime(r["captured_at"]))
                 out[k] = out.get(k, 0) + r["amount_paise"]
             keys = [time.strftime(fmt, time.localtime(time.time() - i * span)) for i in range(n - 1, -1, -1)]
@@ -254,13 +274,18 @@ class Ledger:
             return ordered
         recent = rows("SELECT p.id, p.order_id, o.service_id, p.amount_paise, p.fee_paise + p.tax_paise fees, p.status, "
                       "p.refunded_paise, p.settlement_id, p.captured_at, p.method FROM payments p JOIN orders o ON o.id=p.order_id "
-                      "ORDER BY COALESCE(p.captured_at, 0) DESC LIMIT 25")
+                      "WHERE p.currency=? ORDER BY COALESCE(p.captured_at, 0) DESC LIMIT 25")
         orders = q("SELECT COUNT(*) n, SUM(status='delivered') delivered, SUM(status='failed') failed, "
                    "SUM(status IN ('created','awaiting_payment')) open FROM orders")
-        customers = rows("SELECT id, name, kind, per_txn_limit_paise, daily_limit_paise, enabled, created_at FROM customers "
-                         "ORDER BY created_at DESC LIMIT 50")
+        customers = [dict(r) for r in self.db.execute("SELECT id, name, kind, per_txn_limit_paise, daily_limit_paise, enabled, "
+                                                      "created_at FROM customers ORDER BY created_at DESC LIMIT 50")]
+        buyers = q("SELECT COUNT(DISTINCT o.customer_id) n FROM payments p JOIN orders o ON o.id=p.order_id "
+                   "WHERE p.status IN ('captured','refunded') AND p.currency=? AND o.customer_id IS NOT NULL", cur)["n"]
+        repeat = q("SELECT COUNT(*) n FROM (SELECT o.customer_id FROM payments p JOIN orders o ON o.id=p.order_id "
+                   "WHERE p.status IN ('captured','refunded') AND p.currency=? AND o.customer_id IS NOT NULL "
+                   "GROUP BY o.customer_id HAVING COUNT(*) > 1)", cur)["n"]
         return {
-            "mode": self.mode, "currency": "INR",
+            "mode": self.mode, "currency": cur, "identified_buyers": buyers, "repeat_buyers": repeat,
             "gross_paise": gross, "fees_paise": fees, "refunds_paise": refunded,
             "net_paise": gross - fees - refunded, "transactions": cap["n"],
             "avg_paise": round(gross / cap["n"]) if cap["n"] else 0,

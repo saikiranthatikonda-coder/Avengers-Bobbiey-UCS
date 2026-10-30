@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=7.7.0" />
+  <link rel="stylesheet" href="/static/style.css?v=7.8.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -1126,6 +1126,39 @@
           <div class="tr-list" id="tr-custs"></div>
         </div>
       </div>
+      <!-- AGENT COMMERCE MARKET RADAR · read-only market intelligence (commerce/radar.py) + opportunity pipeline (commerce/pipeline.py) -->
+      <div class="rd" id="rd">
+        <div class="rd-head"><span class="rd-title">AGENT COMMERCE MARKET RADAR</span><span class="rd-asof" id="rd-asof">no snapshot yet</span>
+          <button class="ghost-btn wide tr-mini" id="rd-refresh" type="button" title="Read-only: fetches public market data. Never buys anything.">REFRESH</button></div>
+        <div class="rd-note">Read-only market intelligence from public sources. Mainnet only (testnets excluded). Each figure shows its source; figures are never added across sources. <b>EST.</b> = calls × listed price, an estimate and not revenue. A directory's own verification purchase is never counted as demand.</div>
+        <div class="tr-kpis" id="rd-kpis"></div>
+        <div class="tr-cols">
+          <div>
+            <div class="intel-divider">OPPORTUNITIES · RANKED BY OBSERVED DEMAND (UNIQUE PAYERS, 30 D)</div>
+            <div class="tr-table" id="rd-opps"></div>
+            <div class="intel-divider">TOP 20 COMPETITORS · BUCS-RELEVANT · RANKED BY BUCS SCORE</div>
+            <div class="tr-table rd-tall" id="rd-comp"></div>
+            <div class="tr-split">
+              <div><div class="intel-divider">TOP REVENUE · EST.</div><div class="tr-list" id="rd-rev"></div></div>
+              <div><div class="intel-divider">TOP REPEAT PURCHASE</div><div class="tr-list" id="rd-repeat"></div></div>
+            </div>
+          </div>
+          <div>
+            <div class="intel-divider">YOUR AGENT SALES · x402 USDC · ACTUAL</div>
+            <div class="tr-list" id="rd-x402"></div>
+            <div class="intel-divider">WHAT AGENTS SEARCH FOR · <span id="rd-sw">—</span></div>
+            <div class="tr-list" id="rd-search"></div>
+            <div class="intel-divider">NEW APIS · VERIFIED IN 7 DAYS</div>
+            <div class="tr-list" id="rd-new"></div>
+            <div class="intel-divider">FAILING / UNRELIABLE LISTINGS</div>
+            <div class="tr-list" id="rd-bad"></div>
+            <div class="intel-divider">SOURCES · COVERAGE · VERIFICATION</div>
+            <div class="tr-list rd-src" id="rd-src"></div>
+          </div>
+        </div>
+        <div class="intel-divider">REVENUE OPPORTUNITY PIPELINE · OWNER ESTIMATES, NOT RECEIPTS</div>
+        <div class="tr-table" id="rd-pipe"></div>
+      </div>
     </div>
   </section>
 
@@ -1589,6 +1622,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=7.7.0"></script>
+  <script src="/static/app.js?v=7.8.0"></script>
 </body>
 </html>
