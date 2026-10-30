@@ -1,15 +1,14 @@
 {
   "kind": "bucs-release",
-  "version": "7.6.0",
+  "version": "7.7.0",
   "date": "2026-10-30",
-  "commit": "63a49e2",
+  "commit": "758b3d6",
   "notes": [
-    "Security update: BUCS can no longer be controlled by websites open in your browser; vision and engineering mode are locked down",
-    "Much faster: the process monitor is ~200x cheaper, so the dashboard and weather stay responsive",
-    "Weather never shows 'timeout' for brief outages: the last reading is shown instead"
+    "Self-healing: BUCS now checks itself every 30 s, repairs what it safely can and explains problems using your AI",
+    "Faster connectivity panel and no more stuck background probes"
   ],
-  "url": "releases/bucs-7.6.0.zip",
-  "sha256": "e5c2c69a81fb97cc6230c39df2de98ff239f3ecf18a14bead75a40e61dc95016",
-  "size": 451175,
-  "sig": "P8eSdSGvHc71DqLd6b1d_jHQtMrvkMIqSwhXdWjG1pslF6etLT4sq_qqTF7m7SG91EmwIEJnffzD0fN6m78sDA"
+  "url": "releases/bucs-7.7.0.zip",
+  "sha256": "e2ab332d677f1f66c061b24936ed30a0841005c33fbe2008e1c658b41751453f",
+  "size": 486172,
+  "sig": "k_RqzKBwavMXnFmChB0a6xYSwwLiNmJgryFzz3Gp--969TNEZindblA5MfyAaZfRWUPKkFgkRSynPUzczMa7Bw"
 }
