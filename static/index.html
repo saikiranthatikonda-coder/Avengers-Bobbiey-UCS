@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=7.6.0" />
+  <link rel="stylesheet" href="/static/style.css?v=7.7.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -1085,6 +1085,77 @@
   </section>
 
   <!-- ═══ PHASE 4 · COMMAND FLEET (MULTI-SITE) ═══════════ -->
+  <!-- PROJECT TRILLION · owner-only agent commerce (commerce/). Hidden unless the owner API answers. -->
+  <section class="trillion-row" id="trillion" hidden>
+    <div class="bs-card" id="trillion-card">
+      <div class="bs-head">
+        <div class="bs-title">PROJECT TRILLION · AGENT COMMERCE</div>
+        <div class="bs-sub"><span class="tr-mode" id="tr-mode">—</span> · <span id="tr-gw">—</span> · LEDGER <span id="tr-chain">—</span></div>
+      </div>
+      <div class="tr-banner" id="tr-banner" hidden></div>
+      <div class="tr-kpis" id="tr-kpis"></div>
+      <div class="tr-cols">
+        <div>
+          <div class="intel-divider">REVENUE · <button class="tr-tab on" data-s="daily">30 DAYS</button><button class="tr-tab" data-s="weekly">12 WEEKS</button><button class="tr-tab" data-s="monthly">12 MONTHS</button></div>
+          <div class="tr-chart" id="tr-chart"></div>
+          <div class="tr-split">
+            <div><div class="intel-divider">BY SERVICE</div><div class="tr-list" id="tr-by-service"></div></div>
+            <div><div class="intel-divider">BY CUSTOMER / AGENT</div><div class="tr-list" id="tr-by-customer"></div></div>
+          </div>
+          <div class="intel-divider">RECENT PAYMENTS · GATEWAY-CONFIRMED <button class="ghost-btn wide tr-mini" id="tr-sync" type="button">SYNC SETTLEMENTS</button></div>
+          <div class="tr-table" id="tr-recent"></div>
+        </div>
+        <div>
+          <div class="intel-divider">SERVICE CATALOGUE · PRICING</div>
+          <div class="tr-cat" id="tr-cat"></div>
+          <div class="intel-divider">LIMITS · SPENDING CONTROLS</div>
+          <form class="tr-form" id="tr-limits">
+            <label>Max per transaction (₹)<input id="trl-txn" type="number" min="0" step="1"/></label>
+            <label>Daily cap per customer (₹)<input id="trl-day" type="number" min="0" step="1"/></label>
+            <label class="tr-chk"><input id="trl-key" type="checkbox"/> Allowlist mode: only registered agents/customers may buy</label>
+            <button class="cmd-btn" type="submit">SAVE LIMITS</button>
+          </form>
+          <div class="intel-divider">AGENTS & CUSTOMERS · API KEYS</div>
+          <form class="tr-form" id="tr-addcust">
+            <input id="trc-name" placeholder="name (e.g. research-agent-1)" maxlength="80" required/>
+            <select id="trc-kind"><option value="agent">AI agent</option><option value="human">human</option></select>
+            <input id="trc-day" type="number" min="0" placeholder="daily limit ₹ (optional)"/>
+            <button class="cmd-btn" type="submit">ISSUE KEY</button>
+          </form>
+          <div class="tr-key" id="tr-key" hidden></div>
+          <div class="tr-list" id="tr-custs"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SELF-HEALING · watchdog checks, repairs, AI diagnosis (selfheal.py) -->
+  <section class="heal-row">
+    <div class="bs-card" id="heal-card">
+      <div class="bs-head">
+        <div class="bs-title">SELF-HEALING · AUTONOMIC CORE</div>
+        <div class="bs-sub">STATUS: <span id="heal-overall">—</span> · AUTO-REPAIR: <span id="heal-auto">—</span> · <span id="heal-when">—</span></div>
+      </div>
+      <div class="heal-grid" id="heal-grid"><div class="tf-empty">first check runs ~40 s after start…</div></div>
+      <div class="heal-cols">
+        <div>
+          <div class="intel-divider">AI DIAGNOSIS · <span id="heal-ai-src">—</span></div>
+          <div class="heal-ai" id="heal-ai">No diagnosis yet. One runs automatically when a check fails, or press AI DIAGNOSE.</div>
+          <div class="heal-acts">
+            <button class="cmd-btn" id="heal-run" type="button">RUN CHECKS</button>
+            <button class="cmd-btn" id="heal-diag" type="button">AI DIAGNOSE</button>
+            <button class="ghost-btn wide heal-eng" id="heal-eng" type="button" title="Engineering mode proposes a code fix; nothing is applied without your approval">SEND TO ENGINEERING</button>
+            <button class="ghost-btn wide heal-tog" id="heal-toggle" type="button">AUTO-REPAIR</button>
+          </div>
+        </div>
+        <div>
+          <div class="intel-divider">REPAIR LOG · REAL ACTIONS ONLY</div>
+          <div class="heal-log" id="heal-log"><div class="tf-empty">no repairs needed yet</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="fleet-row">
     <div class="bs-card" id="fleet-card">
       <div class="bs-head">
@@ -1518,6 +1589,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=7.6.0"></script>
+  <script src="/static/app.js?v=7.7.0"></script>
 </body>
 </html>

@@ -65,7 +65,7 @@ LOOPBACK = ("127.0.0.1", "::1", "localhost")
 
 # paths a remote client may reach WITHOUT a session (login surface + public
 # marketing page; static assets are needed by the login page itself)
-PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/status",
+PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/status", "/commerce/v1/",
                 "/static/", "/landing", "/api/waitlist", "/favicon.ico")
 
 
@@ -277,10 +277,12 @@ async def lifespan(app: FastAPI):
         state["runtime_started"] = True
         if os.getenv("JARVIS_TTS", "1") != "0" and not tts.enabled and tts.start():
             tts.warm()
-        tasks.append(asyncio.create_task(net_loop()))
-        tasks.append(asyncio.create_task(sysmon.run()))
+        # named, restartable background tasks (the self-healing watchdog revives crashed ones)
+        factories = {"network": net_loop, "telemetry": sysmon.run}
         if voice:
-            tasks.append(asyncio.create_task(voice.run()))
+            factories["voice"] = voice.run
+        state["runtime_factories"] = factories
+        state["runtime_tasks"] = {n: asyncio.create_task(f()) for n, f in factories.items()}
         # boot jobs (first Google sync, briefings) are timed "N s after boot"; if the
         # runtime starts later than that (slow boot, licence activated later) run
         # them late instead of silently skipping to the next interval
@@ -309,9 +311,15 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(12 * 3600)
     tasks.append(asyncio.create_task(update_loop()))
 
+    from selfheal import SelfHeal
+    state["selfheal"] = SelfHeal(state)
+    tasks.append(asyncio.create_task(state["selfheal"].loop()))
+
     try:
         yield
     finally:
+        for t in list(state.get("runtime_tasks", {}).values()):
+            t.cancel()
         for t in tasks:
             t.cancel()
         license_task.cancel()
@@ -923,9 +931,18 @@ async def agenda():
     return state["agenda"].snapshot()
 
 
+_conn_cache = {"ts": 0.0, "data": None}
+_conn_lock = asyncio.Lock()
+
+
 @app.get("/api/connectivity")
 async def connectivity_endpoint():
-    d = await connectivity.gather()
+    # the probes spawn netsh/PowerShell (seconds) — one shared result per 15 s for every viewer
+    async with _conn_lock:
+        if _conn_cache["data"] is None or time.time() - _conn_cache["ts"] > 15:
+            _conn_cache["data"] = await connectivity.gather()
+            _conn_cache["ts"] = time.time()
+    d = dict(_conn_cache["data"])
     net = state.get("net")
     if net is not None:
         d["net"] = net.snapshot()
@@ -1852,6 +1869,72 @@ def _exit_soon(reason: str) -> None:
     import signal
     request_exit(Path(__file__).parent, reason)
     asyncio.get_running_loop().call_later(0.8, signal.raise_signal, signal.SIGINT)
+
+
+# ═══ PROJECT TRILLION · agent commerce (commerce/) ═══
+from commerce.api import build_router as _commerce_router   # noqa: E402
+
+
+def _owner_session(request: Request) -> bool:
+    """Commerce admin: the owner's own machine, from the host console, commander role."""
+    return _host_only(request) and _commander()
+
+
+app.include_router(_commerce_router(state, _owner_session, lambda kind, detail: _audit(kind, detail)))
+
+
+# ═══ SELF-HEALING (selfheal.py) ═══
+
+@app.get("/api/health")
+async def health_endpoint():
+    sh = state.get("selfheal")
+    return sh.snapshot() if sh else {"overall": "unknown", "checks": {}}
+
+
+@app.post("/api/health/run")
+async def health_run():
+    """Run every check now. Repairs only if auto-repair is on (commander for manual repair)."""
+    return await state["selfheal"].run_checks(repair=state["selfheal"].auto and _commander())
+
+
+class AutoReq(BaseModel):
+    on: bool
+
+
+@app.post("/api/health/auto")
+async def health_auto(req: AutoReq):
+    if not _commander():
+        return _locked()
+    sh = state["selfheal"]
+    sh.auto = bool(req.on)
+    sh._save()
+    await _audit("selfheal.auto", "auto-repair " + ("on" if sh.auto else "off"))
+    return sh.snapshot()
+
+
+@app.post("/api/health/diagnose")
+async def health_diagnose():
+    if not _commander():
+        return _locked()
+    sh = state["selfheal"]
+    if not sh.checks:
+        await sh.run_checks(repair=False)
+    return await sh.diagnose()
+
+
+@app.post("/api/health/engineer")
+async def health_engineer():
+    """Hand the current diagnosis to engineering mode — it proposes a fix; nothing is applied
+    without the commander's explicit approval in the ENGINEERING panel."""
+    if not _commander():
+        return _locked()
+    sh = state["selfheal"]
+    if not sh.ai:
+        await sh.diagnose()
+    problems = "; ".join(f"{k}: {v['detail']}" for k, v in sh.checks.items() if v["status"] in ("fail", "warn"))
+    req = ("Self-healing watchdog report — " + (problems or "no failing checks") +
+           ". AI diagnosis: " + (sh.ai or {}).get("text", "")[:400])
+    return await state["dev"].diagnose(req[:900])
 
 
 @app.get("/api/system/version")

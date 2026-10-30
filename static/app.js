@@ -3625,6 +3625,8 @@ function handle(msg) {
       logEvent(`<span class="tag">[sys]</span> ${escapeHTML(msg.msg)}`); break;
     case "update":
       renderVersion(msg); break;
+    case "selfheal":
+      refreshHeal(); break;
   }
 }
 
@@ -5152,6 +5154,14 @@ const SECTION_INFO = {
     stats: d => [["PLAN", d.paid ? "BUCS PRO" : "NOT LICENSED"], ["MODE", d.owner ? "OWNER" : d.licensed ? "LICENSED" : "LOCKED"], ["KEY", d.key || "—"],
       ["DAYS LEFT", d.owner ? "∞" : d.days_left], ["INSTALL ID", d.install_id]],
     list: d => Object.entries(d.entitlements || {}).map(([k, v]) => `${v ? "✓" : "🔒"} ${k.replace(/_/g, " ")}`) },
+  "SELF-HEALING · AUTONOMIC CORE": { about: "BUCS watches its own health every 30 s, repairs what it safely can (restarts crashed background tasks, refreshes stale feeds, restarts the scheduler), asks the connected AI to explain failures, and restarts itself through the launcher as a last resort. Code changes are never automatic.",
+    api: "/api/health", source: "selfheal.py: real measurements of this process (event-loop lag, CPU, RAM), its tasks and scheduler, and feed freshness.",
+    stats: d => [["OVERALL", (d.overall || "").toUpperCase()], ["AUTO-REPAIR", d.auto ? "ON" : "OFF"], ["RESTARTS 24 H", d.restarts_24h], ["UNDER LAUNCHER", d.under_launcher ? "YES" : "NO"]],
+    list: d => Object.entries(d.checks || {}).map(([k, c]) => `${c.status.toUpperCase()} · ${k} — ${c.detail}`) },
+  "PROJECT TRILLION · AGENT COMMERCE": { about: "Owner-only revenue engine: external AI agents and customers buy individual BUCS services; the service runs only after the backend verifies the payment with the gateway.",
+    api: "/api/commerce/admin/overview", source: "commerce/ledger.py: an append-only SQLite ledger (hash-chained) of gateway-confirmed payments only; separate test and live books.",
+    stats: d => [["MODE", (d.mode || "").toUpperCase()], ["GATEWAY", d.gateway && d.gateway.configured ? "CONFIGURED" : "NOT CONFIGURED"],
+      ["TRANSACTIONS", d.transactions], ["LEDGER", d.chain && d.chain.ok ? "INTACT" : "CHECK"]] },
   "AI BRAIN ROUTER": { about: "Which AI answers your commands, how often each route was used this session, and one-click switching.",
     api: "/api/llm/providers", source: "brain.py route counters (every streamed reply) + llm_providers.py registry and its last real health test.",
     stats: d => [["ACTIVE", ((d.providers || []).find(p => p.active) || {}).name], ["PROVIDERS", (d.providers || []).length],
@@ -5347,3 +5357,161 @@ function refreshSysMod() {
   if (sp && stx) sp.title = "Dashboard link: " + stx.textContent;
 }
 setInterval(refreshSysMod, 1500); refreshSysMod();
+
+/* ═══ SELF-HEALING · watchdog checks, repairs, AI diagnosis ═══ */
+const HEAL_NAMES = { event_loop: "EVENT LOOP", cpu: "CPU", memory: "MEMORY", tasks: "BACKGROUND TASKS",
+  scheduler: "SCHEDULER", weather: "WEATHER FEED", news: "NEWS FEED", google: "GOOGLE SYNC", brain: "AI BRAIN" };
+function renderHeal(d) {
+  if (!d || !$("#heal-grid")) return;
+  const ov = $("#heal-overall"); ov.textContent = (d.overall || "—").toUpperCase(); ov.className = "heal-st-" + d.overall;
+  $("#heal-auto").textContent = d.auto ? "ON" : "OFF";
+  $("#heal-toggle").textContent = d.auto ? "AUTO-REPAIR: ON" : "AUTO-REPAIR: OFF";
+  $("#heal-when").textContent = d.checked_at ? "checked " + new Date(d.checked_at * 1000).toLocaleTimeString() : "not checked yet";
+  const checks = Object.entries(d.checks || {});
+  if (checks.length) $("#heal-grid").innerHTML = checks.map(([k, c]) => `
+    <div class="heal-chk ${escapeHTML(c.status)}" title="${escapeHTML(c.detail || "")}">
+      <span class="hc-dot"></span><span class="hc-name">${escapeHTML(HEAL_NAMES[k] || k.toUpperCase())}</span>
+      <span class="hc-detail">${escapeHTML(c.detail || "")}</span></div>`).join("");
+  if (d.ai && d.ai.text) {
+    $("#heal-ai").textContent = d.ai.text;
+    $("#heal-ai-src").textContent = `${String(d.ai.engine || "AI").toUpperCase()} · ${new Date(d.ai.ts * 1000).toLocaleTimeString()}${d.ai.auto ? " · AUTO" : ""}`;
+  }
+  const log = d.log || [];
+  $("#heal-log").innerHTML = log.length ? log.slice(0, 10).map(e => `
+    <div class="heal-ev ${escapeHTML(e.level)}"><span class="he-t">${new Date(e.ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+      <span class="he-m">${escapeHTML(e.msg)}</span></div>`).join("") : `<div class="tf-empty">no repairs needed yet</div>`;
+}
+async function refreshHeal() { try { renderHeal(await (await fetch("/api/health")).json()); } catch (e) {} }
+const _healPost = (u, b) => fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b || {}) }).then(r => r.json());
+$("#heal-run")?.addEventListener("click", async (e) => {
+  e.target.textContent = "CHECKING…"; renderHeal(await _healPost("/api/health/run")); e.target.textContent = "RUN CHECKS";
+});
+$("#heal-diag")?.addEventListener("click", async (e) => {
+  e.target.textContent = "THINKING…"; $("#heal-ai").textContent = "Asking the connected AI to analyse the live checks…";
+  const r = await _healPost("/api/health/diagnose").catch(err => ({ ok: false, error: err.message }));
+  if (!r.ok && r.error) $("#heal-ai").textContent = r.error;
+  e.target.textContent = "AI DIAGNOSE"; refreshHeal();
+});
+$("#heal-eng")?.addEventListener("click", async (e) => {
+  e.target.textContent = "SENT…";
+  const r = await _healPost("/api/health/engineer").catch(err => ({ ok: false, error: err.message }));
+  logEvent(`<span class="tag">[self-heal]</span> ${r.ok === false ? escapeHTML(r.error || "engineering refused")
+    : "diagnosis handed to engineering mode: review the proposal in the ENGINEERING panel"}`, r.ok === false ? "warn" : "info");
+  setTimeout(() => { e.target.textContent = "SEND TO ENGINEERING"; }, 2500);
+});
+$("#heal-toggle")?.addEventListener("click", async () => {
+  const on = $("#heal-auto").textContent !== "ON";
+  const r = await _healPost("/api/health/auto", { on });
+  if (r.ok === false) logEvent(`<span class="tag">[self-heal]</span> ${escapeHTML(r.error)}`, "warn"); else renderHeal(r);
+});
+// the header's live status lights open the self-healing panel
+$("#sys-mod .sm-status")?.addEventListener("click", () => $("#heal-card")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+refreshHeal(); setInterval(refreshHeal, 30000);
+
+/* ═══ PROJECT TRILLION · owner-only agent commerce ═══
+   Every figure comes from /api/commerce/admin/overview, i.e. the ledger of
+   gateway-confirmed payments. Nothing here is estimated or simulated. */
+const rupees = p => "₹" + (Number(p || 0) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+let _tr = null, _trSeries = "daily";
+const _trPost = (u, b) => fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b || {}) }).then(r => r.json());
+
+function renderTrillion(d) {
+  _tr = d;
+  $("#trillion").hidden = false;
+  const m = $("#tr-mode"); m.textContent = (d.mode || "test").toUpperCase() + " MODE"; m.className = "tr-mode " + d.mode;
+  const g = d.gateway || {};
+  $("#tr-gw").textContent = g.configured ? `RAZORPAY ${g.key_id || ""} · WEBHOOK ${g.webhook_secret_set ? "SECURED" : "NOT SET"}` : "GATEWAY NOT CONFIGURED";
+  const ch = d.chain || {}; $("#tr-chain").textContent = ch.ok ? `INTACT (${ch.checked} events)` : `BROKEN at #${ch.broken_at}`;
+  $("#tr-chain").className = ch.ok ? "tr-ok" : "tr-bad";
+  const b = $("#tr-banner");
+  if (!g.configured) { b.hidden = false; b.innerHTML = "Payments are <b>not configured</b>. Add <code>RAZORPAY_KEY_ID</code>, <code>RAZORPAY_KEY_SECRET</code> and <code>RAZORPAY_WEBHOOK_SECRET</code> (test keys first) to .env and restart. Until then nothing can be sold and every figure below is zero."; }
+  else if (d.mode === "test") { b.hidden = false; b.innerHTML = "<b>Test mode</b>: these are test-ledger figures from Razorpay test payments. No real money."; }
+  else b.hidden = true;
+  const k = [["GROSS REVENUE", rupees(d.gross_paise)], ["NET REVENUE", rupees(d.net_paise)], ["GATEWAY FEES", rupees(d.fees_paise)],
+    ["REFUNDS", rupees(d.refunds_paise)], ["PENDING SETTLEMENT", rupees(d.pending_settlement_paise) + ` · ${d.pending_settlement_count}`],
+    ["SETTLED TO ACCOUNT", rupees(d.settled_paise)], ["TRANSACTIONS", d.transactions], ["AVG TRANSACTION", rupees(d.avg_paise)],
+    ["FAILED PAYMENTS", d.failed_payments], ["ORDERS DELIVERED", `${d.orders.delivered || 0} / ${d.orders.n || 0}`]];
+  $("#tr-kpis").innerHTML = k.map(([l, v]) => `<div class="tr-kpi"><span class="lbl">${l}</span><span class="val">${escapeHTML(String(v))}</span></div>`).join("");
+  renderTrChart();
+  const list = (rows, key) => rows && rows.length ? rows.map(r => `<div class="tr-row"><span>${escapeHTML(r.key)}${r.kind ? ` <i>${escapeHTML(r.kind)}</i>` : ""}</span><span>${r.n} · ${rupees(r.gross)}</span></div>`).join("")
+    : `<div class="tf-empty">no revenue yet</div>`;
+  $("#tr-by-service").innerHTML = list(d.by_service); $("#tr-by-customer").innerHTML = list(d.by_customer);
+  $("#tr-recent").innerHTML = (d.recent || []).length ? `<div class="tr-tr th"><span>WHEN</span><span>SERVICE</span><span>AMOUNT</span><span>FEES</span><span>STATUS</span><span></span></div>` +
+    d.recent.map(p => `<div class="tr-tr"><span>${p.captured_at ? new Date(p.captured_at * 1000).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+      <span>${escapeHTML(p.service_id)}</span><span>${rupees(p.amount_paise)}</span><span>${rupees(p.fees)}</span>
+      <span class="st-${escapeHTML(p.status)}">${escapeHTML(p.status)}${p.refunded_paise ? " · −" + rupees(p.refunded_paise) : ""}${p.settlement_id ? " · settled" : ""}</span>
+      <span>${p.status === "captured" && p.refunded_paise < p.amount_paise ? `<button class="ghost-btn wide tr-mini" data-refund="${escapeHTML(p.id)}" data-max="${p.amount_paise - p.refunded_paise}">REFUND</button>` : ""}</span></div>`).join("")
+    : `<div class="tf-empty">no payments yet: the first appears here only after the gateway confirms it</div>`;
+  $("#tr-cat").innerHTML = (d.catalog || []).map(s => `<div class="tr-svc ${s.available ? "" : "off"}">
+      <div><b>${escapeHTML(s.name)}</b> <i>${escapeHTML(s.id)}</i><div class="tr-desc">${escapeHTML(s.available ? s.description : (s.status || "planned"))}</div></div>
+      ${s.available || (d.disabled || []).includes(s.id) ? `<div class="tr-svc-c">
+        ${s.available ? `<input type="number" min="1" step="1" value="${(s.price_paise || 0) / 100}" data-price="${escapeHTML(s.id)}"/><span>₹</span>` : ""}
+        <button class="ghost-btn wide tr-mini" data-toggle="${escapeHTML(s.id)}" data-on="${s.available ? 0 : 1}">${s.available ? "PAUSE" : "RESUME"}</button></div>` : `<span class="tr-planned">PLANNED</span>`}</div>`).join("");
+  const L = d.limits || {};
+  $("#trl-txn").value = L.per_txn_max_paise ? L.per_txn_max_paise / 100 : ""; $("#trl-day").value = L.daily_cap_paise ? L.daily_cap_paise / 100 : "";
+  $("#trl-key").checked = !!L.require_api_key;
+  $("#tr-custs").innerHTML = (d.customers || []).length ? d.customers.map(c => `<div class="tr-row"><span>${escapeHTML(c.name)} <i>${escapeHTML(c.kind)} · ${escapeHTML(c.id)}</i></span>
+      <span>${c.daily_limit_paise ? "≤" + rupees(c.daily_limit_paise) + "/day · " : ""}<button class="ghost-btn wide tr-mini" data-cust="${escapeHTML(c.id)}" data-en="${c.enabled ? 0 : 1}">${c.enabled ? "DISABLE" : "ENABLE"}</button></span></div>`).join("")
+    : `<div class="tf-empty">no API keys issued</div>`;
+}
+function renderTrChart() {
+  const host = $("#tr-chart"); if (!host || !_tr) return;
+  const rows = _tr[_trSeries] || []; const max = Math.max(1, ...rows.map(r => r.gross));
+  const W = 600, H = 120, bw = W / Math.max(1, rows.length);
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H + 18}" preserveAspectRatio="none" role="img" aria-label="revenue chart">
+    ${rows.map((r, i) => { const h = r.gross ? Math.max(2, r.gross / max * H) : 0;
+      return `<g><rect x="${i * bw + 2}" y="${H - h}" width="${Math.max(1, bw - 4)}" height="${h}" class="tr-bar"><title>${escapeHTML(r.key)}: ${rupees(r.gross)}</title></rect>
+        ${i % Math.ceil(rows.length / 6) === 0 ? `<text x="${i * bw + 2}" y="${H + 14}" class="tr-ax">${escapeHTML(r.key)}</text>` : ""}</g>`; }).join("")}
+    <line x1="0" y1="${H}" x2="${W}" y2="${H}" class="tr-axis"/></svg>
+    <div class="tr-chart-note">${rows.some(r => r.gross) ? "gross, gateway-confirmed" : "no revenue in this period"}</div>`;
+}
+async function refreshTrillion() {
+  try {
+    const r = await fetch("/api/commerce/admin/overview");
+    if (r.status !== 200) { $("#trillion").hidden = true; return; }     // not the owner → section stays hidden
+    const d = await r.json(); if (d.ok) renderTrillion(d);
+  } catch (e) {}
+}
+document.addEventListener("click", async (e) => {
+  const t = e.target;
+  if (t.matches(".tr-tab")) { document.querySelectorAll(".tr-tab").forEach(x => x.classList.toggle("on", x === t)); _trSeries = t.dataset.s; renderTrChart(); }
+  if (t.dataset && t.dataset.toggle) { await _trPost("/api/commerce/admin/service", { service_id: t.dataset.toggle, enabled: t.dataset.on === "1" }); refreshTrillion(); }
+  if (t.dataset && t.dataset.cust) { await _trPost(`/api/commerce/admin/customers/${encodeURIComponent(t.dataset.cust)}/enabled`, { enabled: t.dataset.en === "1" }); refreshTrillion(); }
+  if (t.dataset && t.dataset.refund) {
+    const max = +t.dataset.max; const amt = prompt(`Refund how much (₹, up to ${(max / 100).toFixed(2)})?`, (max / 100).toFixed(2)); if (!amt) return;
+    const reason = prompt("Reason (recorded in the ledger):", "") || "";
+    if (prompt('This sends real money back to the customer. Type REFUND to confirm:') !== "REFUND") return;
+    const r = await _trPost("/api/commerce/admin/refund", { payment_id: t.dataset.refund, amount_paise: Math.round(parseFloat(amt) * 100), reason, confirm: "REFUND" });
+    logEvent(`<span class="tag">[trillion]</span> ${r.ok ? "refund " + escapeHTML(r.refund.status || "") : escapeHTML(r.error || "refund failed")}`, r.ok ? "info" : "warn");
+    refreshTrillion();
+  }
+});
+document.addEventListener("change", async (e) => {
+  const t = e.target;
+  if (t.dataset && t.dataset.price) {
+    const r = await _trPost("/api/commerce/admin/price", { service_id: t.dataset.price, price_paise: Math.round(parseFloat(t.value) * 100) });
+    if (!r.ok) logEvent(`<span class="tag">[trillion]</span> ${escapeHTML(r.error || "price refused")}`, "warn");
+    refreshTrillion();
+  }
+});
+$("#tr-limits")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const rp = v => v ? Math.round(parseFloat(v) * 100) : null;
+  await _trPost("/api/commerce/admin/limits", { per_txn_max_paise: rp($("#trl-txn").value), daily_cap_paise: rp($("#trl-day").value), require_api_key: $("#trl-key").checked });
+  refreshTrillion();
+});
+$("#tr-addcust")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const day = $("#trc-day").value;
+  const r = await _trPost("/api/commerce/admin/customers", { name: $("#trc-name").value, kind: $("#trc-kind").value, daily_paise: day ? Math.round(day * 100) : null });
+  const box = $("#tr-key"); box.hidden = false;
+  box.innerHTML = r.ok ? `API key for <b>${escapeHTML($("#trc-name").value)}</b> (shown once; send it to the customer/agent now):<code>${escapeHTML(r.api_key)}</code>` : escapeHTML(r.error || "refused");
+  e.target.reset(); refreshTrillion();
+});
+$("#tr-sync")?.addEventListener("click", async (e) => {
+  e.target.textContent = "SYNCING…";
+  const r = await _trPost("/api/commerce/admin/settlements/sync");
+  logEvent(`<span class="tag">[trillion]</span> ${r.ok ? r.newly_settled + " payment(s) newly settled" : escapeHTML(r.error || "sync failed")}`, r.ok ? "info" : "warn");
+  e.target.textContent = "SYNC SETTLEMENTS"; refreshTrillion();
+});
+refreshTrillion(); setInterval(refreshTrillion, 60000);

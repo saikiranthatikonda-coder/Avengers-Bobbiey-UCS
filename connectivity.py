@@ -14,7 +14,12 @@ OS = platform.system()   # "Windows" | "Darwin" | "Linux"
 async def _run(*args, timeout=6) -> str:
     proc = await asyncio.create_subprocess_exec(
         *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    try:
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        proc.kill()                          # never leave a hung netsh/PowerShell behind
+        await proc.wait()
+        raise
     return stdout.decode("utf-8", errors="ignore")
 
 

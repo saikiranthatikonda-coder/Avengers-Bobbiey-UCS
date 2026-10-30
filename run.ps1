@@ -70,6 +70,7 @@ if ($host_ -eq "0.0.0.0") {
 # If an update was applied but the new version exits before it marks itself
 # healthy (.updateerify.json still present), the previous files are restored.
 $upd = Join-Path $PSScriptRoot ".update"
+$env:BUCS_LAUNCHER = "1"     # self-healing may request a restart only when this loop will relaunch
 while ($true) {
     & .\.venv\Scripts\python.exe -m uvicorn main:app --host $host_ --port $port
     $restartFlag  = Join-Path $upd "restart.flag"

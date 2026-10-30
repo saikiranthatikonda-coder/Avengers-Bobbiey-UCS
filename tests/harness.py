@@ -32,7 +32,7 @@ def copy_app(dst: Path) -> None:
     for py in ROOT.glob("*.py"):
         shutil.copy2(py, dst / py.name)
     shutil.copy2(ROOT / "VERSION", dst / "VERSION")
-    for d in ("static", "web3mod"):
+    for d in ("static", "web3mod", "commerce"):
         shutil.copytree(ROOT / d, dst / d, ignore=ignore)
 
 

@@ -5,6 +5,18 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-10-30 — v7.7.0 · Self-healing core + Project Trillion (phase 1)
+- **feat: SELF-HEALING · AUTONOMIC CORE** (`selfheal.py`). Every 30 s BUCS measures itself: event-loop lag, its own CPU and RAM, background tasks, scheduler, and weather/news/Google freshness and AI routing. It **repairs** what is safe: it revives crashed background tasks (now named and restartable), refreshes stale feeds and restarts a stopped scheduler. It asks the connected AI for a **grounded diagnosis** (only measured data in the prompt) and can hand that diagnosis to engineering mode, where a fix still needs your approval. **Self-restart** through the launcher is the last resort: only under the launcher (`BUCS_LAUNCHER=1`), at most once per 30 min, with no restart loops. Dashboard card plus live push; the header status lights jump to it. Real repair log, with toggleable auto-repair.
+- **feat: PROJECT TRILLION · AGENT COMMERCE** (owner-only, `commerce/`, see PROJECT_TRILLION.md):
+  - Service catalogue with schemas, prices and limits. Only **Website Extraction** is sold; the other 6 are honestly *planned*.
+  - Hash-chained append-only ledger with separate test and live books.
+  - Razorpay gateway: orders, server-side payment verification, capture, signed webhooks, refunds, settlement recon.
+  - Public order/checkout/result API and owner admin: pricing, pause, limits, allowlist, agent API keys, typed-confirmation refunds, settlement sync.
+  - Delivery only after the gateway confirms the right order, exact amount, INR and captured. Nothing is automatic for money out.
+  - Shows "not configured" with ₹0 until Razorpay keys are added.
+- **fix:** connectivity probes killed on timeout (no hung netsh/PowerShell), and `/api/connectivity` shared and cached (was 7.5 s per tab).
+- **test:** `tests/test_selfheal.py` (task revival, stale-feed refresh, repair off, restart only under launcher and never looping, grounded diagnosis, live endpoint) and `tests/test_commerce.py` (11: catalogue honesty, forged signature, wrong amount, another order's payment, capture, idempotency/duplicate prevention, webhook signature/replay/re-fetch, failure → owner refund only with confirmation, ledger-only figures, tamper detection, owner-only admin, spending caps, SSRF). 163 tests.
+
 ## 2026-10-30 — v7.6.0 · Security hardening, 200× faster process monitor, weather fix
 - **fix (root cause of "weather: timeout"):** the PROCESS MONITOR re-scanned every process on every request with psutil, which is O(n²) on Windows (~2 s of CPU per sweep on 358 processes). Each open dashboard polled it every 6 s, so the server sat at 100% of a core and even trivial requests took ~7 s; weather was just the panel that reported it. New `procscan.py` reads all processes in one `NtQuerySystemInformation` call (**10 ms**, verified against psutil), and one shared snapshot serves every viewer (≤1 scan / 4 s). Part of the load came from ~20 leftover headless Chrome instances started by our own screenshot scripts; those were closed.
 - **weather:** identical requests share one upstream call; server timeout (8 s) now sits under the dashboard's (15 s); an outage shows the last good reading marked CACHED instead of "timeout"; a newer GPS location queues a refresh instead of being dropped.

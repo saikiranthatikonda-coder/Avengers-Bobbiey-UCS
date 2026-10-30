@@ -49,6 +49,7 @@ class NewsService:
         self.hub = hub
         self.recent: list[dict] = []
         self.source = "none"          # "newsapi" | "open" | "none"
+        self.last_ok = 0.0
 
     async def fetch_top(self, country: str = "us", page_size: int = 12) -> list[dict]:
         """NewsAPI when NEWSAPI_KEY is set; otherwise (or if it fails) the
@@ -64,6 +65,7 @@ class NewsService:
         self.source = "open"
         if articles:
             self.recent = articles
+            self.last_ok = time.time()          # freshness signal for the self-healing watchdog
             await self.hub.broadcast({"type": "news", "items": articles, "source": "open"})
         if failed:
             await self.hub.broadcast({"type": "log", "level": "warn",
@@ -89,6 +91,7 @@ class NewsService:
                 if a.get("title") and a.get("title") != "[Removed]"
             ]
             self.recent = articles
+            self.last_ok = time.time()          # freshness signal for the self-healing watchdog
             self.source = "newsapi"
             await self.hub.broadcast({"type": "news", "items": articles, "source": "newsapi"})
             return articles

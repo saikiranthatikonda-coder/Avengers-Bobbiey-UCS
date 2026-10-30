@@ -44,6 +44,7 @@ class WeatherService:
         self._cache: dict[str, tuple[dict, float]] = {}
         self._inflight: dict[str, asyncio.Future] = {}
         self._stale: dict[str, tuple[dict, float]] = {}
+        self.last_ok = 0.0
 
     async def get(self, lat: float | None = None, lon: float | None = None) -> dict | None:
         use_lat = float(lat) if lat is not None else self.lat
@@ -113,4 +114,5 @@ class WeatherService:
         # 5-minute cache per coord pair; the last good reading is kept for outages
         self._cache[key] = (result, time.time() + 300)
         self._stale[key] = (result, 0)
+        self.last_ok = time.time()
         return result

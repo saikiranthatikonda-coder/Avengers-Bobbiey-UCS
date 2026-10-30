@@ -35,7 +35,8 @@ ROOT = Path(__file__).resolve().parent
 PROTECTED = [".env", "credentials.json", "token.json", "auth.json", "fleet_token.txt",
              "pair_code.txt", "node_id.txt", "node_token.txt", "operators.json",
              "commander_memory.md", "operator_memory.json", "providers.json", "license.json",
-             "license_signing.key", "licences_issued.json"]
+             "license_signing.key", "licences_issued.json",
+             "commerce_test.db", "commerce_live.db"]
 DIAG_TOOLS = "Read,Grep,Glob"
 APPLY_TOOLS = "Read,Grep,Glob,Edit,Write"
 # A fix may never touch what runs automatically afterwards (the test suite, git

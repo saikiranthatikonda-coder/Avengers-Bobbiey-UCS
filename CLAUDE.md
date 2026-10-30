@@ -300,6 +300,18 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
 - Anything that can take >50 ms (process scans, subprocess, git) runs off the event loop and,
   if polled by the UI, behind a shared cache.
 
+### 6h. Self-healing + Project Trillion (2026-10-30)
+
+- `selfheal.py`: checks must be REAL measurements; repairs must be safe/reversible; code changes
+  only via engineering mode with commander approval; self-restart only under the launcher,
+  max once per 30 min. Background tasks live in `state["runtime_tasks"]` with factories in
+  `state["runtime_factories"]` so they can be revived.
+- `commerce/` (PROJECT_TRILLION.md): owner-install only. Never deliver without a gateway-side
+  verified capture of the exact amount; never auto-refund; never add an endpoint that moves money
+  out or changes payout details; never show money figures not derived from the ledger; keep test
+  and live ledgers separate (`commerce_test.db` / `commerce_live.db` are private, gitignored,
+  PROTECTED). New services ship as `available` only with a working, tested executor.
+
 ### 6f. Versions, in-app updates, shutdown (updater.py, tools/release.py, 2026-10-29)
 
 - `VERSION` is the product version (semver). Every customer-facing change ships as a release:
