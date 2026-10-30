@@ -1,14 +1,15 @@
 {
   "kind": "bucs-release",
-  "version": "7.5.4",
-  "date": "2026-10-29",
-  "commit": "379ea24",
+  "version": "7.6.0",
+  "date": "2026-10-30",
+  "commit": "63a49e2",
   "notes": [
-    "The Stark Industries × Bobbiey logo now has the shimmering colour motion",
-    "The header stays on one line when you zoom in: no more clock dropping to a second row"
+    "Security update: BUCS can no longer be controlled by websites open in your browser; vision and engineering mode are locked down",
+    "Much faster: the process monitor is ~200x cheaper, so the dashboard and weather stay responsive",
+    "Weather never shows 'timeout' for brief outages: the last reading is shown instead"
   ],
-  "url": "releases/bucs-7.5.4.zip",
-  "sha256": "1997471d4a157cdd5f82bb1c03f3bc1b93339adbccd55351cedafa5ba3450c4d",
-  "size": 442489,
-  "sig": "6jIrxUYPyOkM_NLbVe495YMbIEkN9824Kox5Aww79NSTBLj4QYiIMg5SHaoM-TRa1noaZdZwFTcqCeDesVvaBw"
+  "url": "releases/bucs-7.6.0.zip",
+  "sha256": "e5c2c69a81fb97cc6230c39df2de98ff239f3ecf18a14bead75a40e61dc95016",
+  "size": 451175,
+  "sig": "P8eSdSGvHc71DqLd6b1d_jHQtMrvkMIqSwhXdWjG1pslF6etLT4sq_qqTF7m7SG91EmwIEJnffzD0fN6m78sDA"
 }
