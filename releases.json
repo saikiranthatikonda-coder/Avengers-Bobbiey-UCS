@@ -1,0 +1,16 @@
+{
+  "kind": "bucs-release",
+  "version": "7.8.0",
+  "date": "2026-10-30",
+  "commit": "eb48a60",
+  "notes": [
+    "Agent Commerce Market Radar inside Project Trillion (owner-only, read-only): live evidence on where AI agents pay, with sources",
+    "Revenue Opportunity Pipeline: save, model, approve and track opportunities (estimates kept apart from real money)",
+    "Website Extraction: agents can pay per request in USDC once the owner enables it; failed requests are never charged",
+    "Security: DNS-rebinding protection for Website Extraction"
+  ],
+  "url": "releases/bucs-7.8.0.zip",
+  "sha256": "b497a3a8e82494ad36b5c1003ea0f2f1071553b7ad5099bfbb1e870b7ab19e04",
+  "size": 526562,
+  "sig": "BZm_ha-oRBUI2Jl-vMLGJscphHI8ZbwEyXE4ACaDJToQvFCCTDTVyLeQeYAqKdWGYYdI8qU-i51cGVK8NkOQDA"
+}
