@@ -1,16 +1,18 @@
 {
   "kind": "bucs-release",
-  "version": "7.8.0",
-  "date": "2026-10-30",
-  "commit": "eb48a60",
+  "version": "7.9.0",
+  "date": "2026-11-03",
+  "commit": "3437120",
   "notes": [
-    "Agent Commerce Market Radar inside Project Trillion (owner-only, read-only): live evidence on where AI agents pay, with sources",
-    "Revenue Opportunity Pipeline: save, model, approve and track opportunities (estimates kept apart from real money)",
-    "Website Extraction: agents can pay per request in USDC once the owner enables it; failed requests are never charged",
-    "Security: DNS-rebinding protection for Website Extraction"
+    "Microphone ON / SLEEP / OFF with push-to-talk: in Sleep, JARVIS acts only when you say 'Jarvis…' or press TALK (Ctrl+Space)",
+    "More accurate real-time answers: live news, Wikipedia and prices, cited, instead of guesses",
+    "New: Disaster Response with live earthquakes, cyclones, floods, Indian alerts and digital outages",
+    "New: Devices & Connectivity: control Home Assistant, Hue, Shelly, Tasmota, MQTT, ESPHome devices; node links via LAN, Tailscale, WireGuard, Cloudflare Tunnel",
+    "New: Cyber Analyst agent: continuous security scans, fixes proposed for your approval",
+    "Security: critical web-framework vulnerability fixed (dependencies update automatically)"
   ],
-  "url": "releases/bucs-7.8.0.zip",
-  "sha256": "b497a3a8e82494ad36b5c1003ea0f2f1071553b7ad5099bfbb1e870b7ab19e04",
-  "size": 526562,
-  "sig": "BZm_ha-oRBUI2Jl-vMLGJscphHI8ZbwEyXE4ACaDJToQvFCCTDTVyLeQeYAqKdWGYYdI8qU-i51cGVK8NkOQDA"
+  "url": "releases/bucs-7.9.0.zip",
+  "sha256": "92725559d4d0fbd63fe9ed74021d00d742af03e799a0743f6e9918d62993b50a",
+  "size": 501765,
+  "sig": "a3OvH9F_87SKWzobuFANgxGU41platvWlI-6ZNYczIipAtmw_2CHoLMT_Yv6RfmR6PuZli9ZZoutLhVimxynAg"
 }
