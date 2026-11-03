@@ -65,8 +65,7 @@ LOOPBACK = ("127.0.0.1", "::1", "localhost")
 
 # paths a remote client may reach WITHOUT a session (login surface + public
 # marketing page; static assets are needed by the login page itself)
-PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/status", "/commerce/v1/", "/commerce/mcp", "/x402/v1/",
-                "/.well-known/x402",
+PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/status",
                 "/static/", "/landing", "/api/waitlist", "/favicon.ico")
 
 
@@ -315,6 +314,10 @@ async def lifespan(app: FastAPI):
     from selfheal import SelfHeal
     state["selfheal"] = SelfHeal(state)
     tasks.append(asyncio.create_task(state["selfheal"].loop()))
+
+    for _fm in state.get("feature_modules", {}).values():     # disaster / devices / secagent loops
+        if hasattr(_fm, "start"):
+            tasks.append(asyncio.create_task(_fm.start(_feature_ctx)))
 
     try:
         yield
@@ -846,6 +849,42 @@ async def conversation_set(req: ConversationReq):
     await _audit("voice.conversation_mode", "on" if req.on else "off")
     await state["hub"].broadcast({"type": "conversation", "on": req.on})
     return await conversation_get()
+
+
+class MicReq(BaseModel):
+    mode: str
+
+
+@app.get("/api/voice/mic")
+async def mic_get():
+    v = state.get("voice")
+    if v is None:
+        return {"enabled": False, "mode": "off", "hint": "set JARVIS_VOICE=1 in .env"}
+    return {"enabled": True, "mode": v.mic_mode, "armed_s": max(0.0, round(v.armed_until - time.time(), 1))}
+
+
+@app.post("/api/voice/mic")
+async def mic_set(req: MicReq):
+    """Mic ON (normal) · SLEEP (only deliberate commands: "Jarvis …", clap, TALK) · OFF (mic released)."""
+    v = state.get("voice")
+    if v is None:
+        return {"ok": False, "error": "voice is disabled (JARVIS_VOICE=1 in .env)"}
+    try:
+        mode = await v.set_mic_mode(req.mode)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    await _audit("voice.mic", mode)
+    return {"ok": True, "mode": mode}
+
+
+@app.post("/api/voice/talk")
+async def mic_talk():
+    """Push-to-talk: the next utterance (within 10 s) is a command, no wake word needed."""
+    v = state.get("voice")
+    if v is None or v.mic_mode == "off":
+        return {"ok": False, "error": "microphone is off" if v is not None else "voice is disabled"}
+    await v.arm()
+    return {"ok": True, "armed_s": 10}
 
 
 @app.get("/api/voice/diagnostics")
@@ -1872,16 +1911,22 @@ def _exit_soon(reason: str) -> None:
     asyncio.get_running_loop().call_later(0.8, signal.raise_signal, signal.SIGINT)
 
 
-# ═══ PROJECT TRILLION · agent commerce (commerce/) ═══
-from commerce.api import build_router as _commerce_router   # noqa: E402
+# ═══ FEATURE MODULES (disaster.py, devices.py, secagent.py) ═══
+# Each module exposes build_router(ctx) -> APIRouter and may expose async start(ctx) for a
+# background loop. ctx gives it the shared state, the audit log and the role checks, so a
+# module never imports main.py.
+import importlib  # noqa: E402
 
-
-def _owner_session(request: Request) -> bool:
-    """Commerce admin: the owner's own machine, from the host console, commander role."""
-    return _host_only(request) and _commander()
-
-
-app.include_router(_commerce_router(state, _owner_session, lambda kind, detail: _audit(kind, detail)))
+FEATURE_MODULES = ("disaster", "devices", "secagent")
+_feature_ctx = {"state": state, "audit": lambda action, detail="": _audit(action, detail),
+                "commander": lambda: _commander(), "host_only": lambda request: _host_only(request)}
+for _name in FEATURE_MODULES:
+    try:
+        _m = importlib.import_module(_name)
+        app.include_router(_m.build_router(_feature_ctx))
+        state.setdefault("feature_modules", {})[_name] = _m
+    except Exception as _e:      # one broken module must never take the dashboard down
+        print(f"[features] {_name} not loaded: {type(_e).__name__}: {_e}")
 
 
 # ═══ SELF-HEALING (selfheal.py) ═══

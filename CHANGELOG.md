@@ -5,6 +5,42 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-03 — v7.9.0 · Mic modes, live answers, disaster response, devices, cyber analyst
+- **Refocus:** Project Trillion / agent commerce is removed: the code, the dashboard card, its docs and its tests. The old ledger files stay on disk untouched.
+- **feat: MIC ON / SLEEP / OFF + TALK:**
+  - **SLEEP** takes only deliberate commands: "Jarvis …", an agent wake phrase, a double-clap or the TALK button. Background talk and follow-up windows are ignored.
+  - **OFF** releases the microphone.
+  - **TALK** (or Ctrl+Space) makes your next sentence a command. Ctrl+Shift+M toggles the mic.
+  - Say "Jarvis, go to sleep", "Jarvis, wake up" or "mic off". The choice is remembered.
+- **feat: accurate real-time answers:**
+  - Every answer knows the real date, time, your location and the latest measured weather.
+  - Questions about current events, scores, prices or office-holders are checked against live sources fetched in about 1 s: news from the last 7 days, Wikipedia and CoinGecko.
+  - The answer must cite them, or say it couldn't verify live instead of guessing.
+- **feat: DISASTER RESPONSE · REAL-TIME EVENTS:**
+  - Live earthquakes (USGS), disasters (GDACS, NASA EONET) and Indian alerts (NDMA SACHET) on a world map, marked "near you" within 500 km.
+  - Digital events: newly added actively-exploited vulnerabilities (CISA KEV), status of major services, internet outages (IODA).
+  - Preparedness guidance and alerts for new severe events.
+- **feat: DEVICES & CONNECTIVITY:**
+  - Add and control smart devices through local APIs: Home Assistant (covering Matter, Zigbee, Z-Wave and thousands of brands), MQTT, Philips Hue, Shelly, Tasmota, ESPHome, WLED and generic HTTP.
+  - mDNS/SSDP discovery.
+  - Secure by design: private-network addresses only, tokens masked, commander-only and every action audited.
+  - **Node connectivity** detects LAN, Wi-Fi, Tailscale, WireGuard, ZeroTier, Cloudflare Tunnel, SSH, Bluetooth and cellular, with join steps for each.
+- **feat: CYBER ANALYST · AUTONOMOUS DEFENCE:**
+  - Continuous real scans: dependency vulnerabilities (OSV), CISA KEV, secret hygiene, open ports, firewall/Defender and app config.
+  - Keeps its threat intel and finding history up to date.
+  - Proposes code fixes to engineering mode; nothing is applied without your approval.
+- **security:** acting on the analyst's first scan:
+  - The web framework is upgraded (fastapi 0.162, starlette 1.10). This fixes CVE-2026-48710, which CISA lists as actively exploited.
+  - certifi is upgraded, removing the compromised emSign roots.
+  - urllib3, oauthlib, pyasn1, filelock and setuptools are also upgraded.
+  - Posture score went from 21 to 85; no critical or high findings remain.
+- **website:**
+  - A real-time 3D hero: an arc reactor inside a holographic globe, with the 8 agents in orbit.
+  - An interactive agent constellation, capability cards that tilt in 3D, a "New in BUCS" showcase and a command-console demo.
+  - Respects reduced-motion settings and works on mobile.
+- **clean download:** customers now get `bucs-latest.zip`, which contains only the app in a `BUCS/` folder. No website, tests, owner tools or planning docs (`.gitattributes` export-ignore covers GitHub's zip too).
+- **test:** 233 tests (mic modes, live grounding, disaster feeds, device adapters and security, cyber analyst).
+
 ## 2026-10-30 — v7.8.0 · Agent Commerce Market Radar, x402 seller, opportunity pipeline
 - **feat: AGENT COMMERCE MARKET RADAR** inside the existing Project Trillion card (owner-only, read-only, `commerce/radar.py`):
   - Live evidence from the Coinbase x402 Bazaar (per-endpoint 30-day calls and unique payers), agenteconomy.to (on-chain totals), nohumans.directory (probe reliability, new APIs, what agents search for), x402-list.com, PayAPI Market and Base mainnet USDC logs (independent payer check).

@@ -295,6 +295,15 @@ class Engine:
         if self.context:
             ctx = " | ".join(f"Q:{q[:70]} A:{a[:90]}" for q, a, _ in list(self.context)[-3:])
             prompt = f"(recent conversation: {ctx}) New request: {prompt}"
+        # real date/time/location always; live news/Wikipedia/prices for time-sensitive questions
+        try:
+            import livefacts
+            if livefacts.is_time_sensitive(cmd.text):
+                await self._emit(cmd, "grounding", sources="live")
+            prompt = await livefacts.ground(self.state, cmd.text) + prompt
+            cmd.mark("grounded_ms")
+        except Exception:
+            pass
 
         chunker = SentenceChunker()
         pending = {"buf": "", "t": 0.0}

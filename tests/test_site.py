@@ -68,7 +68,7 @@ class Website(unittest.TestCase):
         for gone in ("early access", "waitlist", "design partner"):
             self.assertNotIn(gone, low)
         self.assertIn('id="get"', DOCS)
-        self.assertIn("/archive/refs/heads/main.zip", DOCS)        # the download customers install from
+        self.assertIn("releases/bucs-latest.zip", DOCS)              # the clean customer package
         self.assertIn("Start BUCS.cmd", DOCS)
         self.assertTrue((ROOT / "Start BUCS.cmd").exists())        # ...and it really ships in the repo
 

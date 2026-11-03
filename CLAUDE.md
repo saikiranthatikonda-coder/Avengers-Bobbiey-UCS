@@ -300,28 +300,24 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
 - Anything that can take >50 ms (process scans, subprocess, git) runs off the event loop and,
   if polled by the UI, behind a shared cache.
 
-### 6h. Self-healing + Project Trillion (2026-10-30)
+### 6h. Self-healing, feature modules, voice modes, live grounding
 
 - `selfheal.py`: checks must be REAL measurements; repairs must be safe/reversible; code changes
   only via engineering mode with commander approval; self-restart only under the launcher,
   max once per 30 min. Background tasks live in `state["runtime_tasks"]` with factories in
   `state["runtime_factories"]` so they can be revived.
-- `commerce/` (PROJECT_TRILLION.md): owner-install only. Never deliver without a gateway-side
-  verified capture of the exact amount; never auto-refund; never add an endpoint that moves money
-  out or changes payout details; never show money figures not derived from the ledger; keep test
-  and live ledgers separate (`commerce_test.db` / `commerce_live.db` are private, gitignored,
-  PROTECTED). New services ship as `available` only with a working, tested executor.
-- x402 (`commerce/x402.py`): verify → deliver → settle; a failed delivery is NEVER settled. USDC is
-  booked in its own currency (never mixed with INR). Only `external` payers are customers:
-  internal tests, marketplace verification purchases and self-transfers are classified at read
-  time (`ledger.buyer_stats`) and never counted as demand or revenue from customers.
-- Market radar (`commerce/radar.py`) is read-only: public sources only, honest User-Agent, polite
-  pacing, never buys or submits anything. Keep every figure tagged with its source; never sum
-  across sources; mainnet only; listing farms and single-payer endpoints are not demand; "EST."
-  values are estimates. Listings to directories are prepared, never submitted, by BUCS.
-- The pipeline (`commerce/pipeline.py`) holds owner ESTIMATES only; schema changes there are
-  additive with a DB backup first. A converted opportunity is a draft until an executor + tests exist.
-- Website extraction must connect only to the IP it vetted (`_PinnedBackend`: DNS-rebinding safe).
+- Project Trillion / agent commerce was REMOVED in v7.9.0 at the owner's request (git history
+  keeps it). Do not reintroduce payment/commerce features without an explicit owner request.
+  The old ledger files `commerce_*.db` stay on disk untouched (PROTECTED data, gitignored).
+- Feature modules (`disaster.py`, `devices.py`, `secagent.py`) plug in via `build_router(ctx)` and
+  optional `async start(ctx)`; ctx = state, audit, commander(), host_only(request). A module that
+  fails to import must never take the dashboard down. Each renders into `#<name>-mount`.
+- Voice mic modes (`voice.py`): ON · SLEEP (only "Jarvis …", agent wake phrases, double-clap or
+  TALK; follow-up windows don't apply) · OFF (input stream stopped, device released). The choice
+  persists in `.update/mic_pref.json`. Mode switches by voice never reach the LLM.
+- Real-time answers (`livefacts.py`): every LLM prompt gets the real clock/location/weather;
+  time-sensitive questions get live Google News RSS / Wikipedia / CoinGecko under a 3.5 s budget,
+  and the model must answer current facts only from those sources or say it can't verify.
 
 ### 6f. Versions, in-app updates, shutdown (updater.py, tools/release.py, 2026-10-29)
 

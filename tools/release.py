@@ -22,8 +22,11 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import updater  # noqa: E402
 
-# app files only; the website, tests and owner tooling don't ship in updates
-EXCLUDE = ["docs", "site", "tests", "tools", "desktop.png", ".claude", ".github"]
+# app files only: the website, tests, owner tooling, planning docs and owner-only
+# scripts never reach a customer (keep in sync with .gitattributes export-ignore)
+EXCLUDE = ["docs", "site", "tests", "tools", "desktop.png", ".claude", ".github", ".gitignore", ".gitattributes",
+           "ARCHITECTURE.md", "CLAUDE.md", "MIGRATION.md", "PROJECT_CONTEXT.md", "ROADMAP.md", "SAAS_PLAN.md",
+           "netlify.toml", "restore-data.ps1", "restore-data.sh"]
 KEEP = 2   # packages kept on the site (the latest is all an install needs)
 
 
@@ -64,7 +67,11 @@ def main() -> None:
     assert updater.verify_manifest(signed), "signature self-check failed"
     (ROOT / "docs" / "releases.json").write_text(json.dumps(signed, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    old = sorted(pkg_dir.glob("bucs-*.zip"), key=lambda p: updater.vtuple(p.stem[5:]), reverse=True)
+    # the website's download button: the same clean files inside a BUCS/ folder (updates use root paths)
+    subprocess.run(["git", "archive", "--format=zip", "--prefix=BUCS/", "-o", str(pkg_dir / "bucs-latest.zip"),
+                    "HEAD", "--", *spec], cwd=ROOT, check=True)
+    old = sorted((p for p in pkg_dir.glob("bucs-*.zip") if p.stem != "bucs-latest"),
+                 key=lambda p: updater.vtuple(p.stem[5:]), reverse=True)
     for stale in old[KEEP:]:
         stale.unlink()
     # mirror for the Netlify copy of the site

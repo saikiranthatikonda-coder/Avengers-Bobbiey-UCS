@@ -1,0 +1,20 @@
+# Not shipped to customers: GitHub's "Download ZIP" and git archive skip these.
+# Keep in sync with EXCLUDE in tools/release.py.
+docs/ export-ignore
+site/ export-ignore
+tests/ export-ignore
+tools/ export-ignore
+.claude/ export-ignore
+.github/ export-ignore
+desktop.png export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+ARCHITECTURE.md export-ignore
+CLAUDE.md export-ignore
+MIGRATION.md export-ignore
+PROJECT_CONTEXT.md export-ignore
+ROADMAP.md export-ignore
+SAAS_PLAN.md export-ignore
+netlify.toml export-ignore
+restore-data.ps1 export-ignore
+restore-data.sh export-ignore
