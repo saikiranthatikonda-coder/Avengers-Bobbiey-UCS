@@ -65,7 +65,9 @@ LOOPBACK = ("127.0.0.1", "::1", "localhost")
 
 # paths a remote client may reach WITHOUT a session (login surface + public
 # marketing page; static assets are needed by the login page itself)
-PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/status",
+# /phone/twilio/: telephony webhooks reach BUCS through the owner's tunnel; phone.py verifies the
+# provider signature on every request (HMAC), so no session is needed there.
+PUBLIC_PATHS = ("/login", "/api/auth/login", "/api/auth/status", "/phone/twilio/",
                 "/static/", "/landing", "/api/waitlist", "/favicon.ico")
 
 
@@ -417,6 +419,8 @@ def _origin_problem(method: str, host: str, origin: str | None, fetch_site: str 
 @app.middleware("http")
 async def origin_guard(request: Request, call_next):
     client = request.client.host if request.client else ""
+    if request.url.path.startswith("/phone/twilio/"):        # provider webhooks via tunnel: signature-checked in phone.py
+        return await call_next(request)
     why = _origin_problem(request.method, request.headers.get("host", ""), request.headers.get("origin"),
                           request.headers.get("sec-fetch-site"), _is_loopback(client),
                           request.url.path.startswith("/api/"))
@@ -1917,7 +1921,7 @@ def _exit_soon(reason: str) -> None:
 # module never imports main.py.
 import importlib  # noqa: E402
 
-FEATURE_MODULES = ("disaster", "devices", "secagent")
+FEATURE_MODULES = ("disaster", "devices", "secagent", "computeruse", "phone", "evolution", "agentos", "globalmap")
 _feature_ctx = {"state": state, "audit": lambda action, detail="": _audit(action, detail),
                 "commander": lambda: _commander(), "host_only": lambda request: _host_only(request)}
 for _name in FEATURE_MODULES:
