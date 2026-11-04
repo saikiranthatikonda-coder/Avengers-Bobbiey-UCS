@@ -108,11 +108,11 @@ class InsightsEngine:
             sev = str(data.get("severity", "info")).lower()
             if sev not in ("info", "warn", "critical"):
                 sev = "info"
-            conf = data.get("confidence", 70)
+            conf = data.get("confidence")          # model self-reported; None if absent
             try:
-                conf = max(5, min(99, int(conf)))
+                conf = max(5, min(99, int(conf))) if conf is not None else None
             except Exception:
-                conf = 70
+                conf = None
             insight = str(data.get("insight", "")).strip()
             if not insight:
                 return None
@@ -127,7 +127,7 @@ class InsightsEngine:
             if len(text) < 8:
                 return None
             return {"insight": text[:280], "recommendation": "",
-                    "severity": "info", "confidence": 60}
+                    "severity": "info", "confidence": None}
 
     # ── rule-based fallback ───────────────────────────────────────
     def _template_insight(self, s: dict) -> dict:
@@ -213,6 +213,8 @@ class InsightsEngine:
                 source, model = "claude", "claude-cli"
         if data is None:
             data = self._template_insight(s)
+            # deterministic rule: there is no model confidence to report
+            data["confidence"] = None
             source, model = "template", "rules"
 
         item = {**data, "source": source, "ts": time.time()}
@@ -292,7 +294,7 @@ class InsightsEngine:
                     f"{s['priority_mail']} priority messages await your attention.")
         text = text.strip()[:600]
         item = {"insight": text, "recommendation": "", "severity": "info",
-                "confidence": 85, "source": "briefing", "ts": time.time()}
+                "confidence": None, "source": "briefing", "ts": time.time()}
         self.recent = ([item] + self.recent)[:12]
         await self.hub.broadcast({"type": "insight", **item})
         self.last_digest = {"msg": text, "kind": "briefing", "ts": time.time()}

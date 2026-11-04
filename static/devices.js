@@ -19,38 +19,88 @@
   const haCache = {};           // device id -> entity list (loaded on demand)
 
   mount.innerHTML = `
-  <div class="bs-card dv-card" id="dv-card">
-    <div class="bs-head">
-      <div class="bs-title">DEVICES &amp; CONNECTIVITY</div>
-      <div class="bs-sub">LOCAL PROTOCOLS ONLY · LAN-RESTRICTED · EVERY ACTION AUDITED · <span id="dv-stat">—</span></div>
+  <div class="bs-card dv-card ft-card" id="dv-card">
+    <div class="ft-head">
+      <div class="ft-head-txt">
+        <div class="ft-kicker">LOCAL PROTOCOLS ONLY · LAN-RESTRICTED · EVERY ACTION AUDITED</div>
+        <div class="bs-title">DEVICES &amp; CONNECTIVITY</div>
+        <div class="bs-sub" id="dv-stat">loading…</div>
+      </div>
+      <div class="ft-actions">
+        <button class="cmd-btn" id="dv-scan" type="button" title="Find devices advertising on this network (mDNS + SSDP, ~6 s)">⌕ SCAN LAN</button>
+        <button class="cmd-btn" type="button" data-goto="add">+ ADD DEVICE</button>
+      </div>
     </div>
-    <div class="dv-cols">
-      <div class="dv-col">
-        <div class="intel-divider">SMART DEVICES · <span id="dv-count">0</span> ADDED</div>
-        <div class="dv-list" id="dv-list"><div class="tf-empty">loading…</div></div>
-        <details class="fleet-add dv-add" id="dv-add">
-          <summary>◆ ADD A DEVICE / INTEGRATION</summary>
-          <form class="dv-form" id="dv-form" autocomplete="off">
-            <select id="dv-kind" class="dv-in"></select>
-            <input class="dv-in" name="name" placeholder="Display name" maxlength="60"/>
-            <div id="dv-fields" class="dv-fields"></div>
-            <div class="dv-note" id="dv-note"></div>
-            <div class="dv-acts">
-              <button type="submit" class="cmd-btn" id="dv-submit">ADD DEVICE</button>
-            </div>
-          </form>
-        </details>
-        <div class="intel-divider">LAN DISCOVERY · mDNS + SSDP · <span id="dv-disc-when">—</span>
-          <button class="cmd-btn dv-mini" id="dv-scan" type="button">SCAN</button></div>
-        <div class="dv-disc" id="dv-disc"><div class="tf-empty">no scan yet</div></div>
-      </div>
-      <div class="dv-col">
-        <div class="intel-divider">NODE CONNECTIVITY · DETECTED ON THIS HOST · <span id="dv-conn-when">—</span>
-          <button class="cmd-btn dv-mini" id="dv-conn-refresh" type="button">RE-CHECK</button></div>
-        <div class="dv-conn" id="dv-conn"><div class="tf-empty">probing interfaces…</div></div>
-      </div>
+    <div class="ft-stats" id="dv-tiles"><div class="ft-skel"></div><div class="ft-skel"></div><div class="ft-skel"></div><div class="ft-skel"></div></div>
+    <div class="ft-tabs" role="tablist" id="dv-tabs">
+      <button type="button" role="tab" data-tab="devices" class="on">MY DEVICES · <span id="dv-count">0</span></button>
+      <button type="button" role="tab" data-tab="disc">LAN DISCOVERY · <span id="dv-disc-n">0</span></button>
+      <button type="button" role="tab" data-tab="conn">NODE CONNECTIVITY</button>
+      <button type="button" role="tab" data-tab="add">ADD DEVICE</button>
+    </div>
+    <div class="ft-pane" data-pane="devices">
+      <div class="dv-list" id="dv-list"><div class="tf-empty">loading…</div></div>
+    </div>
+    <div class="ft-pane" data-pane="disc" hidden>
+      <div class="dv-pane-head">mDNS + SSDP · <span id="dv-disc-when">—</span></div>
+      <div class="dv-disc" id="dv-disc"><div class="tf-empty">no scan yet · press SCAN LAN</div></div>
+    </div>
+    <div class="ft-pane" data-pane="conn" hidden>
+      <div class="dv-pane-head">DETECTED ON THIS HOST · <span id="dv-conn-when">—</span>
+        <button class="ft-link" id="dv-conn-refresh" type="button">RE-CHECK ↻</button></div>
+      <div class="dv-conn" id="dv-conn"><div class="tf-empty">probing interfaces…</div></div>
+    </div>
+    <div class="ft-pane" data-pane="add" hidden>
+      <form class="dv-form" id="dv-form" autocomplete="off">
+        <select id="dv-kind" class="dv-in" aria-label="Integration type"></select>
+        <input class="dv-in" name="name" placeholder="Display name" maxlength="60"/>
+        <div id="dv-fields" class="dv-fields"></div>
+        <div class="dv-note" id="dv-note"></div>
+        <div class="dv-acts">
+          <button type="submit" class="cmd-btn" id="dv-submit">ADD DEVICE</button>
+        </div>
+      </form>
     </div>
   </div>`;
+
+  function showTab(t) {
+    mount.querySelectorAll("#dv-tabs [data-tab]").forEach(b => { b.classList.toggle("on", b.dataset.tab === t); b.setAttribute("aria-selected", b.dataset.tab === t); });
+    mount.querySelectorAll(".ft-pane").forEach(p => { p.hidden = p.dataset.pane !== t; });
+  }
+  function renderTiles() {
+    const devs = data.devices || [], online = devs.filter(d => d.status && d.status.online).length;
+    const disc = (data.discovery || {}).items || [];
+    const linked = conn ? conn.methods.filter(m => m.status === "connected").length : null;
+    const t = (tab, n, lab, cls, tip) => `<button type="button" class="ft-stat${cls ? " " + cls : ""}" data-goto="${tab}" title="${esc(tip)}"><b>${n}</b><span>${lab}</span></button>`;
+    document.getElementById("dv-tiles").innerHTML =
+      t("devices", devs.length, "DEVICES", "", "Devices you added") +
+      t("devices", devs.length ? `${online}/${devs.length}` : "—", "ONLINE", online ? "ok" : "", "Reachable on the last status check") +
+      t("disc", disc.length, "FOUND ON LAN", "", (data.discovery || {}).at ? "From the last LAN scan" : "No scan yet") +
+      t("conn", linked == null ? "…" : `${linked}/${conn.methods.length}`, "LINK METHODS UP", linked ? "ok" : "", "Ways this node can reach your other machines") +
+      (conn && conn.fleet ? t("conn", `${conn.fleet.online}/${conn.fleet.nodes}`, "FLEET ONLINE", conn.fleet.online ? "ok" : "", "Fleet nodes reporting") : "");
+    const sub = [];
+    sub.push(devs.length ? `${online} of ${devs.length} device${devs.length === 1 ? "" : "s"} online` : "No devices added yet");
+    if ((data.discovery || {}).at) sub.push(`${disc.length} found on the last LAN scan (${ago(data.discovery.at)})`);
+    if (conn) sub.push(`${linked} link method${linked === 1 ? "" : "s"} available`);
+    document.getElementById("dv-stat").textContent = sub.join(" · ");
+    document.getElementById("dv-disc-n").textContent = disc.length;
+  }
+  function openDevice(d) {
+    const st = d.status || {};
+    const html = `<div class="mb-grid">
+        <div class="mb-stat"><span class="lbl">STATUS</span><span class="val">${st.online === true ? "ONLINE" : st.online === false ? "OFFLINE" : "UNKNOWN"}</span></div>
+        <div class="mb-stat"><span class="lbl">INTEGRATION</span><span class="val">${esc(d.label)}</span></div>
+        <div class="mb-stat"><span class="lbl">ADDRESS</span><span class="val">${esc(d.host || d.url || "—")}</span></div>
+        <div class="mb-stat"><span class="lbl">CONTROL</span><span class="val">${d.control ? "YES · audited" : "READ-ONLY"}</span></div>
+        <div class="mb-stat"><span class="lbl">LAST CHECK</span><span class="val">${st.checked ? esc(ago(st.checked)) : "—"}</span></div>
+        ${d.token ? `<div class="mb-stat"><span class="lbl">CREDENTIAL</span><span class="val">${esc(d.token)}</span></div>` : ""}
+      </div>
+      <div class="mb-list">${st.detail ? `<div class="mb-row">${esc(st.detail)}</div>` : ""}
+        <div class="mb-row">Controls for this device are on its row in MY DEVICES. Removing it only forgets it in BUCS; the device itself is not changed.</div></div>
+      <div class="mb-actions"><button class="cmd-btn" type="button" data-dv-remove="${esc(d.id)}">REMOVE FROM BUCS</button></div>
+      <div class="si-src"><span class="lbl">DATA SOURCE</span> devices.py adapter status check <code>/api/devices</code> · read ${new Date().toLocaleTimeString()}</div>`;
+    if (typeof openCustomModal === "function") openCustomModal(d.name, "DEVICE · " + String(d.label || d.kind).toUpperCase(), null, html);
+  }
 
   async function api(path, body) {
     const opt = body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" },
@@ -128,13 +178,13 @@
   function renderDevices() {
     const list = document.getElementById("dv-list");
     document.getElementById("dv-count").textContent = data.devices.length;
-    const online = data.devices.filter((d) => d.status && d.status.online).length;
-    document.getElementById("dv-stat").textContent = data.devices.length
-      ? `${online}/${data.devices.length} ONLINE` : "NO DEVICES";
+    renderTiles();
     if (!data.devices.length) {
-      list.innerHTML = `<div class="dv-empty">No devices added. BUCS only shows real hardware it can reach.
-        Open <b>ADD A DEVICE</b> below (Home Assistant alone covers Matter, Zigbee, Z-Wave and most brands),
-        or press <b>SCAN</b> to find devices advertising on this network.</div>`;
+      list.innerHTML = `<div class="dv-empty">
+        <div class="dv-empty-t">No devices yet</div>
+        <div>BUCS only lists real hardware it can reach. Home Assistant alone covers Matter, Zigbee, Z-Wave and most brands.</div>
+        <div class="dv-empty-a"><button type="button" class="cmd-btn" data-goto="add">+ ADD A DEVICE</button>
+          <button type="button" class="cmd-btn" data-act-scan="1">⌕ SCAN THIS NETWORK</button></div></div>`;
       return;
     }
     list.innerHTML = data.devices.map((d) => {
@@ -143,7 +193,7 @@
       const where = d.host || d.url || "";
       return `<div class="dv-dev heal-chk ${cls}" data-id="${esc(d.id)}">
         <span class="hc-dot"></span>
-        <div class="dv-dev-head"><span class="hc-name">${esc(d.name)}</span>
+        <div class="dv-dev-head"><button type="button" class="hc-name dv-name" data-dv-open="${esc(d.id)}" title="Device detail">${esc(d.name)}</button>
           <span class="dv-kind">${esc(d.label)} · ${esc(where)}${d.token ? " · token " + esc(d.token) : ""}</span>
           <button type="button" class="dv-x" data-act="remove" title="remove device">✕</button></div>
         <div class="hc-detail" title="${esc(st.detail)}">${esc(st.online === false ? "OFFLINE · " : "")}${esc(st.detail || "")}${st.checked ? " · " + ago(st.checked) : ""}</div>
@@ -186,7 +236,7 @@
       if (r.ok) {
         log(`Device added: ${r.device.name}`);
         form.querySelectorAll("input[name]").forEach((i) => { i.value = ""; });
-        document.getElementById("dv-add").open = false;
+        showTab("devices");
         await load();
       } else {
         log(`Add device: ${r.error || "failed"}`, "warn");
@@ -198,7 +248,8 @@
   // ── discovery ───────────────────────────────────────────
   function renderDiscovery() {
     const d = data.discovery || {};
-    document.getElementById("dv-disc-when").textContent = d.running ? "scanning…" : (d.at ? ago(d.at) : "—");
+    document.getElementById("dv-disc-when").textContent = d.running ? "scanning…" : (d.at ? "last scan " + ago(d.at) : "no scan yet");
+    renderTiles();
     const box = document.getElementById("dv-disc");
     const items = d.items || [];
     if (!items.length) {
@@ -223,15 +274,15 @@
     if ((it.kind === "mqtt" || it.kind === "dlna") && it.port) pre.port = it.port;
     renderFields(pre);
     document.querySelector("#dv-form input[name=name]").value = it.name || "";
-    const det = document.getElementById("dv-add");
-    det.open = true;
-    det.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    showTab("add");
+    document.getElementById("dv-form").scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
   // ── connectivity ────────────────────────────────────────
   function renderConn() {
     const box = document.getElementById("dv-conn");
     if (!conn) return;
+    renderTiles();
     document.getElementById("dv-conn-when").textContent = ago(conn.at) +
       (conn.fleet ? ` · FLEET ${conn.fleet.online}/${conn.fleet.nodes} ONLINE` : "");
     box.innerHTML = conn.methods.map((m) => `<details class="dv-link heal-chk ${ST_CLASS[m.status] || "off"}">
@@ -246,6 +297,25 @@
   }
 
   // ── actions (event delegation) ──────────────────────────
+  mount.addEventListener("click", (ev) => {
+    const g = ev.target.closest("[data-goto], [data-tab]");
+    if (g) { showTab(g.dataset.goto || g.dataset.tab); return; }
+    const o = ev.target.closest("[data-dv-open]");
+    if (o) { const d = data.devices.find(x => x.id === o.dataset.dvOpen); if (d) openDevice(d); return; }
+    if (ev.target.closest("[data-act-scan]")) { showTab("disc"); document.getElementById("dv-scan").click(); }
+  });
+  document.addEventListener("click", async (ev) => {
+    const r = ev.target.closest("#tool-modal [data-dv-remove]");
+    if (!r) return;
+    const dev = data.devices.find(x => x.id === r.dataset.dvRemove); if (!dev) return;
+    if (!confirm(`Remove ${dev.name} from BUCS? (the device itself is not changed)`)) return;
+    r.disabled = true;
+    const res = await api(`/api/devices/${encodeURIComponent(dev.id)}/remove`, {});
+    log(res.ok ? `Device removed: ${dev.name}` : `Remove: ${res.error}`, res.ok ? "info" : "warn");
+    try { closeToolModal(); } catch (e) {}
+    load();
+  });
+
   mount.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-act]");
     if (!b) return;
@@ -310,24 +380,27 @@
   document.getElementById("dv-kind").addEventListener("change", () => renderFields());
   document.getElementById("dv-form").addEventListener("submit", submitAdd);
   document.getElementById("dv-scan").addEventListener("click", async (ev) => {
-    const b = ev.target; b.disabled = true;
+    const b = document.getElementById("dv-scan"); b.disabled = true; b.textContent = "SCANNING…";
+    showTab("disc");
     document.getElementById("dv-disc-when").textContent = "scanning… (~6 s)";
     try {
       const r = await api("/api/devices/discover", {});
       if (r.ok === false) log(`Discovery: ${r.error}`, "warn");
       else { data.discovery = r; log(`LAN discovery: ${(r.items || []).length} device(s) found`); }
-    } finally { b.disabled = false; renderDiscovery(); }
+    } catch (e) { log("Discovery failed: server unreachable", "warn"); }
+    finally { b.disabled = false; b.textContent = "⌕ SCAN LAN"; renderDiscovery(); }
   });
   document.getElementById("dv-conn-refresh").addEventListener("click", async (ev) => {
-    ev.target.disabled = true;
-    try { conn = await api("/api/devices/connectivity?refresh=1"); renderConn(); }
-    finally { ev.target.disabled = false; }
+    const b = ev.currentTarget; b.disabled = true; b.textContent = "CHECKING…";
+    try { const j = await api("/api/devices/connectivity?refresh=1"); if (j.methods) { conn = j; renderConn(); } }
+    finally { b.disabled = false; b.textContent = "RE-CHECK ↻"; }
   });
 
   async function load() {
     try {
       const j = await api("/api/devices");
-      if (!j.devices) return;
+      if (!j.devices) throw new Error(j.error || "no data");
+      document.getElementById("dv-card").classList.remove("is-error");
       const first = !Object.keys(data.adapters).length;
       data = j;
       if (first) renderKinds();
@@ -335,7 +408,11 @@
       const active = document.activeElement;
       if (!(active && active.closest && active.closest("#dv-list"))) renderDevices();
       renderDiscovery();
-    } catch (e) {}
+    } catch (e) {
+      document.getElementById("dv-card").classList.add("is-error");
+      document.getElementById("dv-stat").textContent = "Devices service unavailable · retrying every 30 s";
+      if (!data.devices.length) document.getElementById("dv-list").innerHTML = `<div class="tf-empty">could not reach /api/devices</div>`;
+    }
   }
   async function loadConn() {
     try { const j = await api("/api/devices/connectivity"); if (j.methods) { conn = j; renderConn(); } } catch (e) {}

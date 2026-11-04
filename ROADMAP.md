@@ -138,6 +138,14 @@ tracks both.
 | Devices & connectivity hub (Home Assistant, MQTT, Hue, Shelly, Tasmota, ESPHome; LAN/Tailscale/WireGuard/Tunnel) | IMPLEMENTED (v7.9.0) |
 | Cyber analyst agent (real scans, fixes proposed to engineering mode with approval) | IMPLEMENTED (v7.9.0) |
 | Project Trillion / agent commerce | REMOVED (v7.9.0, owner decision) |
+| Computer Use agent (vision model loop, approval gate, pause/stop/take-over, privacy guard) | IMPLEMENTED (v8.0.0; live-tested via Claude CLI; Anthropic API / Ollama vision optional) |
+| AI Phone agent (Twilio inbound/outbound, transcripts, summaries, consent, DNC, calling hours) | BUILT (v8.0.0): needs the owner's Twilio account + public URL |
+| Autonomous evolution loop (observe → analyze → propose → sandbox → approve → deploy → evaluate) | IMPLEMENTED (v8.0.0; full loop verified in a sandbox copy) |
+| AI Core: provider registry, routing, tool calling, RAG memory, agents & workflows, plugins, integrations | IMPLEMENTED (v8.0.0) |
+| Global Activity Map rebuilt (BUPIS layers: quakes, GDACS, EONET, volcanoes, NWS/NDMA, IODA, flights, satellites, space weather) | IMPLEMENTED (v8.0.0) |
+| Dashboard: mock data removed, every card clickable with detail views, header clock module | IMPLEMENTED (v8.0.0) |
+| Desktop installers: Windows / macOS (Apple Silicon + Intel) / Linux, CI install-tested | IMPLEMENTED (v8.0.0; unsigned until owner certificates are added) |
+| Code signing / notarization | NEEDS OWNER: Apple Developer ID + Windows certificate secrets |
 | Computer-use skill (JARVIS operates apps to fulfil commands) | PLANNED: needs Anthropic API key (computer-use tool) or an MCP desktop server; every step screenshot-confirmed, per-action approval, no credentials/payments |
 | Web3 module (off by default) | OPTIONAL |
 | Web3: chain status, gas, RPC health, on-chain balances | IMPLEMENTED (real JSON-RPC, when enabled) |

@@ -12,45 +12,58 @@
   const open = new Set();
 
   mount.innerHTML = `
-  <div class="bs-card sa-card" id="sa-card">
-    <div class="bs-head">
-      <div class="bs-title">CYBER ANALYST · AUTONOMOUS DEFENCE</div>
-      <div class="bs-sub">POSTURE: <span id="sa-posture">—</span> · <span id="sa-when">no scan yet</span> · RULESET <span id="sa-ruleset">—</span></div>
+  <div class="bs-card sa-card ft-card" id="sa-card">
+    <div class="ft-head">
+      <div class="ft-head-txt">
+        <div class="ft-kicker">LOCAL SCANS · OSV.dev · CISA KEV · FIXES NEED YOUR APPROVAL</div>
+        <div class="bs-title">CYBER ANALYST</div>
+        <div class="bs-sub">Posture <span id="sa-posture">—</span> · <span id="sa-when">no scan yet</span> · ruleset <span id="sa-ruleset">—</span></div>
+      </div>
+      <div class="ft-actions">
+        <button class="cmd-btn" id="sa-scan" type="button" title="Full scan: OSV dependencies, secrets, exposure, config, CISA KEV">SCAN NOW</button>
+        <button class="cmd-btn" id="sa-light" type="button" title="Light check: exposure + app config">LIGHT CHECK</button>
+      </div>
     </div>
-    <div class="sa-grid">
-      <div class="sa-left">
-        <div class="sa-gauge-wrap"><svg class="sa-gauge" viewBox="0 0 120 72" aria-label="Security posture score">
+    <div class="sa-top">
+      <button type="button" class="sa-gauge-wrap" data-tab-go="checks" title="What the score is made of">
+        <svg class="sa-gauge" viewBox="0 0 120 72" aria-label="Security posture score">
           <path class="sa-g-bg" d="M10 66 A50 50 0 0 1 110 66" />
           <path class="sa-g-fg" id="sa-g-fg" d="M10 66 A50 50 0 0 1 110 66" pathLength="100" stroke-dasharray="0 100" />
           <text x="60" y="58" class="sa-g-num" id="sa-score">—</text><text x="60" y="70" class="sa-g-lab">POSTURE</text>
-        </svg></div>
-        <div class="sa-sev" id="sa-sev"></div>
-        <div class="intel-divider">TREND · SCORE PER SCAN</div>
-        <svg class="sa-spark" id="sa-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
-        <div class="sa-trend-note" id="sa-trend-note">—</div>
-        <div class="intel-divider">INTEL FRESHNESS</div>
-        <div class="sa-intel" id="sa-intel">—</div>
-        <div class="intel-divider">CHECKS</div>
-        <div class="sa-checks" id="sa-checks"><div class="tf-empty">first scan runs ~90 s after start…</div></div>
-      </div>
-      <div class="sa-mid">
-        <div class="intel-divider">FINDINGS · <span id="sa-filter-lab">ALL</span></div>
-        <div class="sa-list" id="sa-list"><div class="tf-empty">no findings yet</div></div>
-        <details class="sa-accepted"><summary>ACCEPTED RISKS · <span id="sa-acc-n">0</span></summary><div id="sa-acc"></div></details>
-      </div>
-      <div class="sa-right">
-        <div class="intel-divider">ANALYST BRIEFING · <span id="sa-brief-src">—</span></div>
-        <div class="sa-brief" id="sa-brief">Press AI BRIEF for a briefing grounded only in the measured findings.</div>
-        <div class="sa-acts">
-          <button class="cmd-btn" id="sa-scan" type="button" title="Full scan: OSV dependencies, secrets, exposure, config, CISA KEV">SCAN NOW</button>
-          <button class="cmd-btn" id="sa-light" type="button" title="Light check: exposure + app config">LIGHT CHECK</button>
-          <button class="cmd-btn" id="sa-brief-btn" type="button">AI BRIEF</button>
+        </svg></button>
+      <div class="sa-top-r">
+        <div class="ft-stats sa-sev" id="sa-sev"><div class="ft-skel"></div><div class="ft-skel"></div><div class="ft-skel"></div><div class="ft-skel"></div></div>
+        <div class="sa-trend">
+          <svg class="sa-spark" id="sa-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+          <div class="sa-trend-note" id="sa-trend-note">—</div>
         </div>
-        <div class="intel-divider">AGENT ACTIVITY</div>
-        <div class="sa-log" id="sa-log"><div class="tf-empty">idle</div></div>
       </div>
     </div>
+    <div class="sa-findings-head"><span>FINDINGS · <b id="sa-filter-lab">ALL</b></span>
+      <button type="button" class="ft-link" id="sa-filter-clear" hidden>SHOW ALL ✕</button></div>
+    <div class="sa-list" id="sa-list"><div class="tf-empty">no findings yet</div></div>
+    <div class="ft-tabs" role="tablist" id="sa-tabs">
+      <button type="button" role="tab" data-tab="checks" class="on">CHECKS</button>
+      <button type="button" role="tab" data-tab="brief">ANALYST BRIEFING</button>
+      <button type="button" role="tab" data-tab="intel">THREAT INTEL</button>
+      <button type="button" role="tab" data-tab="log">ACTIVITY</button>
+      <button type="button" role="tab" data-tab="acc">ACCEPTED RISKS · <span id="sa-acc-n">0</span></button>
+    </div>
+    <div class="ft-pane" data-pane="checks"><div class="sa-checks" id="sa-checks"><div class="tf-empty">first scan runs ~90 s after start…</div></div></div>
+    <div class="ft-pane" data-pane="brief" hidden>
+      <div class="sa-brief" id="sa-brief">Press AI BRIEF for a briefing grounded only in the measured findings.</div>
+      <div class="sa-acts"><button class="cmd-btn" id="sa-brief-btn" type="button">AI BRIEF</button>
+        <span class="ft-note">engine: <span id="sa-brief-src">—</span></span></div>
+    </div>
+    <div class="ft-pane" data-pane="intel" hidden><div class="sa-intel" id="sa-intel">—</div></div>
+    <div class="ft-pane" data-pane="log" hidden><div class="sa-log" id="sa-log"><div class="tf-empty">idle</div></div></div>
+    <div class="ft-pane" data-pane="acc" hidden><div id="sa-acc"></div></div>
   </div>`;
+
+  function showTab(t) {
+    mount.querySelectorAll("#sa-tabs [data-tab]").forEach(b => { b.classList.toggle("on", b.dataset.tab === t); b.setAttribute("aria-selected", b.dataset.tab === t); });
+    mount.querySelectorAll(".ft-pane").forEach(p => { p.hidden = p.dataset.pane !== t; });
+  }
 
   const $s = (id) => document.getElementById(id);
   const ago = (ts) => {
@@ -85,6 +98,7 @@
     const all = (data && data.findings) || [];
     const fs = filter ? all.filter((f) => f.severity === filter) : all;
     $s("sa-filter-lab").textContent = filter ? filter.toUpperCase() + " · " + fs.length : "ALL · " + fs.length;
+    $s("sa-filter-clear").hidden = !filter;
     if (!fs.length) {
       $s("sa-list").innerHTML = `<div class="tf-empty">${data && data.last_scan && data.last_scan.full ? "no open findings at this level" : "no scan yet"}</div>`;
       return;
@@ -130,8 +144,9 @@
     $s("sa-ruleset").textContent = (d.intel && d.intel.ruleset) || "—";
     const c = d.counts || {};
     $s("sa-sev").innerHTML = SEV.filter((s) => s !== "info").map((s) =>
-      `<button type="button" class="sa-chip ${s}${filter === s ? " on" : ""}" data-filter="${s}" title="Show ${s} findings">
-        <span class="sa-chip-n">${c[s] || 0}</span><span class="sa-chip-l">${s.toUpperCase()}</span></button>`).join("");
+      `<button type="button" class="ft-stat sa-st ${s}${filter === s ? " on" : ""}" data-filter="${s}" title="Show ${s} findings only">
+        <b>${c[s] || 0}</b><span>${s.toUpperCase()}</span></button>`).join("");
+    $s("sa-card").classList.toggle("is-running", !!d.running);
     // sparkline
     const t = d.trend || [];
     if (t.length > 1) {
@@ -149,7 +164,7 @@
       <div><span>NEXT FULL</span><b>${d.next_full ? esc(new Date(d.next_full * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })) : "—"}</b><em>light checks every 30 min</em></div>`;
     const ch = Object.entries(d.checks || {});
     if (ch.length) $s("sa-checks").innerHTML = ch.map(([k, v]) => `
-      <div class="sa-chk ${esc(v.status)}" title="${esc(v.detail)}"><span class="hc-dot"></span>
+      <div class="sa-chk ${esc(v.status)}" data-chk="${esc(k)}" role="button" tabindex="0" title="${esc(v.detail)} · click for detail"><span class="hc-dot"></span>
         <span class="sa-chk-n">${esc(CAT[k] || k.toUpperCase())}</span><span class="sa-chk-d">${esc(v.detail)}</span></div>`).join("");
     renderList();
     const acc = d.accepted || [];
@@ -173,8 +188,16 @@
   }
 
   async function refresh() {
-    try { render(await (await fetch("/api/secagent", { cache: "no-store" })).json()); }
-    catch (e) { clearTimeout(timer); timer = setTimeout(refresh, 60000); }
+    try {
+      const r = await fetch("/api/secagent", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      $s("sa-card").classList.remove("is-error");
+      render(await r.json());
+    } catch (e) {
+      $s("sa-card").classList.add("is-error");
+      $s("sa-when").textContent = "analyst unavailable (" + (e.message || "error") + ") · retrying";
+      clearTimeout(timer); timer = setTimeout(refresh, 60000);
+    }
   }
   const post = (u, b) => fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b || {}) })
     .then((r) => r.json()).catch((e) => ({ ok: false, error: e.message }));
@@ -197,7 +220,28 @@
     b.disabled = false; b.textContent = "AI BRIEF"; refresh();
   });
 
+  function openCheck(k) {
+    const v = (data && data.checks || {})[k]; if (!v) return;
+    const rel = ((data && data.findings) || []).filter((f) => f.category === k);
+    const html = `<div class="mb-grid">
+        <div class="mb-stat"><span class="lbl">STATUS</span><span class="val">${esc(String(v.status).toUpperCase())}</span></div>
+        <div class="mb-stat"><span class="lbl">OPEN FINDINGS</span><span class="val">${rel.length}</span></div>
+        <div class="mb-stat"><span class="lbl">LAST FULL SCAN</span><span class="val">${esc(ago(data.last_scan && data.last_scan.full))}</span></div>
+      </div><div class="mb-list"><div class="mb-row">${esc(v.detail || "—")}</div>
+        ${rel.slice(0, 8).map((f) => `<div class="mb-row">${esc(f.severity.toUpperCase())} · ${esc(f.title)}</div>`).join("")}</div>
+      <div class="si-src"><span class="lbl">DATA SOURCE</span> secagent.py ${esc(CAT[k] || k)} check <code>/api/secagent</code> · read ${new Date().toLocaleTimeString()}</div>`;
+    if (typeof openCustomModal === "function") openCustomModal(CAT[k] || k.toUpperCase(), "CYBER ANALYST · CHECK", null, html);
+  }
+  $s("sa-filter-clear").addEventListener("click", () => { filter = null; render(data); });
+  mount.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-chk]")) { e.preventDefault(); openCheck(e.target.dataset.chk); }
+  });
+
   mount.addEventListener("click", async (e) => {
+    const tb = e.target.closest("[data-tab], [data-tab-go]");
+    if (tb) { showTab(tb.dataset.tab || tb.dataset.tabGo); return; }
+    const ck = e.target.closest("[data-chk]");
+    if (ck) { openCheck(ck.dataset.chk); return; }
     const el = e.target.closest("[data-toggle],[data-filter],[data-propose],[data-accept],[data-accept-rule],[data-undo]");
     if (!el || !mount.contains(el)) return;
     if (el.dataset.toggle) { const id = el.dataset.toggle; open.has(id) ? open.delete(id) : open.add(id); renderList(); return; }

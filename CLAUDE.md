@@ -309,7 +309,8 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
 - Project Trillion / agent commerce was REMOVED in v7.9.0 at the owner's request (git history
   keeps it). Do not reintroduce payment/commerce features without an explicit owner request.
   The old ledger files `commerce_*.db` stay on disk untouched (PROTECTED data, gitignored).
-- Feature modules (`disaster.py`, `devices.py`, `secagent.py`) plug in via `build_router(ctx)` and
+- Feature modules (`disaster.py`, `devices.py`, `secagent.py`, `computeruse.py`, `phone.py`,
+  `evolution.py`, `agentos.py`, `globalmap.py`) plug in via `build_router(ctx)` and
   optional `async start(ctx)`; ctx = state, audit, commander(), host_only(request). A module that
   fails to import must never take the dashboard down. Each renders into `#<name>-mount`.
 - Voice mic modes (`voice.py`): ON · SLEEP (only "Jarvis …", agent wake phrases, double-clap or
@@ -318,6 +319,24 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
 - Real-time answers (`livefacts.py`): every LLM prompt gets the real clock/location/weather;
   time-sensitive questions get live Google News RSS / Wikipedia / CoinGecko under a 3.5 s budget,
   and the model must answer current facts only from those sources or say it can't verify.
+
+### 6i. v8.0 modules — rules that must hold
+- **Computer Use** (`computeruse*.py`): commander + host only; the sensitive-action gate pauses for
+  approval (payments, credentials, delete, send/submit, install, settings, irreversible choices); it
+  never types secrets (cards/Aadhaar/keys/passwords → human takeover); private-file windows (.env,
+  keys, password managers) are never captured or sent; STOP always works; frames auto-delete.
+- **Phone agent** (`phone*.py`): `/phone/twilio/*` is public ONLY because every request's Twilio
+  signature is verified; outbound calls need commander + host + two-step confirm + recorded consent +
+  DNC + calling hours; the AI discloses itself; never show a call that the provider didn't report;
+  the owner's location is never put in call prompts (`livefacts.ground(..., location=False)`).
+- **Evolution** (`evolution*.py`, devagent sandbox/deploy): Observe → Analyze → Propose → Sandbox →
+  Approval → Deploy → Evaluate. Never deploy without explicit commander approval and a passing sandbox;
+  owner machine only; customer installs observe/analyze only. `.update/` is PROTECTED wholesale.
+- **AI Core** (`agentos*.py`): adapters are replaceable; routing decisions are explainable; tool tiers
+  (read-only free · actions commander · outward/destructive need per-call approval); no endpoint ever
+  returns a key; third-party plugins are never auto-enabled and the UI says they run with full privileges.
+- **Global map** (`globalmap*.py`): real keyless sources only, each with source/time/status; OpenSky's
+  anonymous credit budget must be respected; approximate placements are labelled.
 
 ### 6f. Versions, in-app updates, shutdown (updater.py, tools/release.py, 2026-10-29)
 

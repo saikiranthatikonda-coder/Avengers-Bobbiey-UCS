@@ -184,6 +184,7 @@ class VoiceLoop:
         self.barge_ins = 0
         # mic mode: on (normal) · sleep (only "Jarvis …"/wake phrases, clap or TALK) · off (mic closed)
         self.mic_mode = "on"                     # the saved choice is restored when the mic loop starts
+        self.status = "starting"                 # starting · loading model · listening · sleeping · mic off · error: …
         self.armed_until = 0.0
         self._mode_event = asyncio.Event()
 
@@ -199,7 +200,9 @@ class VoiceLoop:
         except Exception:
             pass
         self._mode_event.set()
-        await self.hub.broadcast({"type": "micmode", "mode": mode, "source": source})
+        if not self.status.startswith(("starting", "loading", "error")):
+            self.status = {"on": "listening", "sleep": "sleeping", "off": "mic off"}[mode]
+        await self.hub.broadcast({"type": "micmode", "mode": mode, "source": source, "status": self.status})
         return mode
 
     async def arm(self, seconds: float = ARM_S) -> None:
@@ -240,6 +243,8 @@ class VoiceLoop:
         # multilingual training set contains much more accent diversity.
         model_name = os.getenv("JARVIS_WHISPER_MODEL", "small")
         self.model_name = model_name
+        self.status = f"loading speech model ({model_name})"
+        await self.hub.broadcast({"type": "micmode", "mode": self.mic_mode, "status": self.status})
         await self.hub.broadcast({
             "type": "log", "level": "info",
             "msg": f"loading whisper {model_name} (first run downloads model — ~500 MB for 'small')…",
@@ -283,108 +288,112 @@ class VoiceLoop:
                 pass
 
         try:
-            with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16",
-                                blocksize=chunk_samples, callback=cb) as stream:
-                buffer: list = []
-                barge = 0
-                preroll: deque = deque(maxlen=preroll_chunks)
-                in_speech = False
-                silence_count = 0
-
-                while True:
-                    if self.mic_mode == "off":            # mic OFF: the device is released, nothing is heard
-                        stream.stop()
-                        while not q.empty():
-                            q.get_nowait()
-                        buffer, in_speech, silence_count = [], False, 0
-                        preroll.clear()
-                        await self.hub.broadcast({"type": "mic", "off": True, "peak": 0, "rms": 0})
-                        while self.mic_mode == "off":
-                            self._mode_event.clear()
-                            await self._mode_event.wait()
-                        stream.start()
-                        continue
-                    pkt = await q.get()
-                    if self.muted:
-                        # mic is muted while BUCS speaks (no self-triggering), but
-                        # two barge-ins stay live:
-                        #  · double clap
-                        #  · Conversation Mode: sustained speech clearly LOUDER than
-                        #    our own voice's echo (the laptop's echo cancellation only
-                        #    partly removes it: measured p95 ~410, peaks ~700 RMS)
-                        f32 = pkt[:, 0].astype(np.float32)
-                        b_rms = float(np.sqrt(np.mean(f32 ** 2)))
-                        preroll.append(pkt[:, 0])
-                        if self.engine is not None:
-                            if self.clap and self.clap.feed(float(np.max(np.abs(f32))), b_rms,
-                                                            self.noise_rms, time.time()):
-                                await self.engine.cancel(reason="double clap (barge-in)")
-                                self.muted = False
-                                barge = 0
-                                continue
-                            if self._conversation():
-                                self.echo_rms = 0.95 * self.echo_rms + 0.05 * min(b_rms, 4000)
-                                bar = max(900.0, self.echo_rms * 3.5)
-                                barge = barge + 1 if b_rms > bar else 0
-                                if barge >= 6:                  # 0.3 s of loud speech
-                                    self.barge_ins += 1
-                                    await self.engine.cancel(reason="operator spoke (barge-in)")
-                                    self.muted = False
-                                    in_speech, silence_count = True, 0
-                                    buffer = list(preroll)        # keep the words that interrupted
-                                    barge = 0
-                                    await self.hub.broadcast({"type": "voice", "event": "listening"})
-                                    continue
-                        buffer = []
-                        in_speech = False
-                        silence_count = 0
-                        continue
+            while True:
+                if self.mic_mode == "off":
+                    while not q.empty():
+                        q.get_nowait()
+                    self.status = "mic off"
+                    await self.hub.broadcast({"type": "mic", "off": True, "peak": 0, "rms": 0})
+                    await self.hub.broadcast({"type": "micmode", "mode": "off", "status": self.status})
+                    while self.mic_mode == "off":
+                        self._mode_event.clear()
+                        await self._mode_event.wait()
+                self.status = "listening" if self.mic_mode == "on" else "sleeping"
+                await self.hub.broadcast({"type": "micmode", "mode": self.mic_mode, "status": self.status})
+                with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16",
+                                    blocksize=chunk_samples, callback=cb) as stream:
+                    buffer: list = []
                     barge = 0
+                    preroll: deque = deque(maxlen=preroll_chunks)
+                    in_speech = False
+                    silence_count = 0
 
-                    samples = pkt[:, 0]
-                    f32 = samples.astype(np.float32)
-                    rms = float(np.sqrt(np.mean(f32 ** 2)))
-                    peak = float(np.max(np.abs(f32)))
-                    if not in_speech:     # learn the room while nobody talks
-                        self.noise_rms = 0.97 * self.noise_rms + 0.03 * min(rms, self.noise_rms * 3)
-                    threshold = fixed_thr or max(120.0, self.noise_rms * 4.5)
-                    now_t = time.time()
-                    self._lvl_peak = max(getattr(self, "_lvl_peak", 0.0), peak)
-                    if now_t - getattr(self, "_lvl_t", 0.0) > 0.25:
-                        self._lvl_t = now_t
-                        await self.hub.broadcast({"type": "mic", "peak": round(self._lvl_peak),
-                                                  "rms": round(rms), "noise": round(self.noise_rms),
-                                                  "trigger": round(threshold)})
-                        self._lvl_peak = 0.0
+                    while True:
+                        if self.mic_mode == "off":            # leave the `with`: the device is closed and released
+                            break
+                        pkt = await q.get()
+                        if self.muted:
+                            # mic is muted while BUCS speaks (no self-triggering), but
+                            # two barge-ins stay live:
+                            #  · double clap
+                            #  · Conversation Mode: sustained speech clearly LOUDER than
+                            #    our own voice's echo (the laptop's echo cancellation only
+                            #    partly removes it: measured p95 ~410, peaks ~700 RMS)
+                            f32 = pkt[:, 0].astype(np.float32)
+                            b_rms = float(np.sqrt(np.mean(f32 ** 2)))
+                            preroll.append(pkt[:, 0])
+                            if self.engine is not None:
+                                if self.clap and self.clap.feed(float(np.max(np.abs(f32))), b_rms,
+                                                                self.noise_rms, time.time()):
+                                    await self.engine.cancel(reason="double clap (barge-in)")
+                                    self.muted = False
+                                    barge = 0
+                                    continue
+                                if self._conversation():
+                                    self.echo_rms = 0.95 * self.echo_rms + 0.05 * min(b_rms, 4000)
+                                    bar = max(900.0, self.echo_rms * 3.5)
+                                    barge = barge + 1 if b_rms > bar else 0
+                                    if barge >= 6:                  # 0.3 s of loud speech
+                                        self.barge_ins += 1
+                                        await self.engine.cancel(reason="operator spoke (barge-in)")
+                                        self.muted = False
+                                        in_speech, silence_count = True, 0
+                                        buffer = list(preroll)        # keep the words that interrupted
+                                        barge = 0
+                                        await self.hub.broadcast({"type": "voice", "event": "listening"})
+                                        continue
+                            buffer = []
+                            in_speech = False
+                            silence_count = 0
+                            continue
+                        barge = 0
 
-                    if self.clap and self.clap.feed(peak, rms, self.noise_rms, time.time()):
-                        buffer, in_speech, silence_count = [], False, 0
-                        preroll.clear()
-                        await self._summon()
-                        continue
+                        samples = pkt[:, 0]
+                        f32 = samples.astype(np.float32)
+                        rms = float(np.sqrt(np.mean(f32 ** 2)))
+                        peak = float(np.max(np.abs(f32)))
+                        if not in_speech:     # learn the room while nobody talks
+                            self.noise_rms = 0.97 * self.noise_rms + 0.03 * min(rms, self.noise_rms * 3)
+                        threshold = fixed_thr or max(120.0, self.noise_rms * 4.5)
+                        now_t = time.time()
+                        self._lvl_peak = max(getattr(self, "_lvl_peak", 0.0), peak)
+                        if now_t - getattr(self, "_lvl_t", 0.0) > 0.25:
+                            self._lvl_t = now_t
+                            await self.hub.broadcast({"type": "mic", "peak": round(self._lvl_peak),
+                                                      "rms": round(rms), "noise": round(self.noise_rms),
+                                                      "trigger": round(threshold)})
+                            self._lvl_peak = 0.0
 
-                    if in_speech:
-                        buffer.append(samples)
-                        if rms < threshold:
-                            silence_count += 1
-                            if silence_count >= end_silence_chunks:
+                        if self.clap and self.clap.feed(peak, rms, self.noise_rms, time.time()):
+                            buffer, in_speech, silence_count = [], False, 0
+                            preroll.clear()
+                            await self._summon()
+                            continue
+
+                        if in_speech:
+                            buffer.append(samples)
+                            if rms < threshold:
+                                silence_count += 1
+                                if silence_count >= end_silence_chunks:
+                                    self._enqueue(buffer, stt, np, min_utterance_chunks)
+                                    buffer, in_speech, silence_count = [], False, 0
+                                    preroll.clear()
+                            else:
+                                silence_count = 0
+                            if len(buffer) >= max_utterance_chunks:
                                 self._enqueue(buffer, stt, np, min_utterance_chunks)
                                 buffer, in_speech, silence_count = [], False, 0
                                 preroll.clear()
                         else:
-                            silence_count = 0
-                        if len(buffer) >= max_utterance_chunks:
-                            self._enqueue(buffer, stt, np, min_utterance_chunks)
-                            buffer, in_speech, silence_count = [], False, 0
-                            preroll.clear()
-                    else:
-                        preroll.append(samples)
-                        if rms > threshold:
-                            in_speech = True
-                            buffer = list(preroll) + [samples]  # prepend pre-roll
-                            silence_count = 0
-                            await self.hub.broadcast({"type": "voice", "event": "listening"})
+                            preroll.append(samples)
+                            if rms > threshold:
+                                in_speech = True
+                                buffer = list(preroll) + [samples]  # prepend pre-roll
+                                silence_count = 0
+                                await self.hub.broadcast({"type": "voice", "event": "listening"})
         except Exception as e:
+            self.status = f"error: {e}"[:160]
+            await self.hub.broadcast({"type": "micmode", "mode": self.mic_mode, "status": self.status})
             await self.hub.broadcast({
                 "type": "log", "level": "error",
                 "msg": f"voice loop crashed: {e}",
@@ -493,6 +502,7 @@ class VoiceLoop:
                          "off": "Microphone off."}[wanted], channel="conversation"))
                 await self.hub.broadcast({"type": "voice", "event": "idle"})
                 return
+            self._consume_arm()
             if not self._sleep_allows(text, entry):
                 await self.hub.broadcast({"type": "voice", "event": "unrouted", "text": text,
                                           "hint": "sleep mode — say “Jarvis …”, double-clap, or press TALK"})
@@ -682,6 +692,15 @@ class VoiceLoop:
 
     ENGAGED_S = 20.0
 
+    def _consume_arm(self) -> bool:
+        """TALK pressed in ON mode: route the next utterance to JARVIS without a wake word."""
+        if self.mic_mode == "on" and time.time() < self.armed_until:
+            self.armed_until = 0.0
+            self.follow_agent = "jarvis"
+            self.follow_until = time.time() + 2.0
+            return True
+        return False
+
     def _sleep_allows(self, text: str, entry: dict) -> bool:
         """Sleep mode: only a deliberate command gets through — "Jarvis …", an agent wake
         phrase, or an utterance right after TALK / a bare "Jarvis" (one command per arm).
@@ -692,6 +711,7 @@ class VoiceLoop:
         agent_key, command = self._match_agent(text)
         if time.time() < self.armed_until:
             self.armed_until = 0.0
+            self.follow_agent = self.follow_agent or "jarvis"
             self.follow_until = time.time() + 2.0          # let this one utterance through as engaged
             return True
         if named and not rest or (agent_key and not command):
@@ -722,7 +742,7 @@ class VoiceLoop:
         return {"model": getattr(self, "model_name", None), "noise_rms": round(self.noise_rms),
                 "echo_rms": round(self.echo_rms), "barge_ins": self.barge_ins,
                 "dropped_stale": getattr(self, "dropped_stale", 0),
-                "conversation_mode": self._conversation(), "mic_mode": self.mic_mode,
+                "conversation_mode": self._conversation(), "mic_mode": self.mic_mode, "status": self.status,
                 "utterances": list(self.diag)[::-1]}
 
     def _open_followup(self, agent_key: str, seconds: float = 12.0) -> None:

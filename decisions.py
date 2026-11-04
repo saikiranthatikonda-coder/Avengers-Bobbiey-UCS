@@ -99,7 +99,7 @@ class DecisionEngine:
                 out.append({
                     "key": "ack_resolved", "risk": "low",
                     "title": f"Acknowledge {len(stale)} resolved incident(s)",
-                    "rationale": "These incidents completed the response pipeline but still hold the queue.",
+                    "rationale": "Live telemetry shows these conditions have cleared, but they still hold the queue.",
                     "impact": f"SIM: response queue {len(snap.get('response_queue', []))} → "
                               f"{len(snap.get('response_queue', [])) - len(stale)}; board hygiene restored",
                     "_ids": [e["id"] for e in stale],

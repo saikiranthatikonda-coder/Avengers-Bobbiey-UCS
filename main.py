@@ -103,7 +103,7 @@ async def lifespan(app: FastAPI):
                                   "msg": "TTS subsystem online — agents will speak"})
         else:
             await hub.broadcast({"type": "log", "level": "warn",
-                                  "msg": "TTS unavailable — pip install pyttsx3 in .venv"})
+                                  "msg": "TTS unavailable — no system speech engine found"})
 
     # Probe the LLM chain: claude CLI → local OpenAI-compatible endpoint → templates.
     mode = await brain.probe()
@@ -835,6 +835,51 @@ async def engine_status():
     return state["engine"].snapshot()
 
 
+@app.get("/api/dashboard/ai-performance")
+async def dashboard_ai_performance():
+    """AI PERFORMANCE card: only measured values. Command outcomes and
+    first-token latency come from the realtime engine, route usage from the
+    brain's per-route counters, model speed from the local LLM's last calls.
+    Anything not measured yet is None (the card shows "—"), never a guess."""
+    import time as _t
+    eng = state["engine"].snapshot() if state.get("engine") else {}
+    tot = eng.get("totals") or {}
+    n = int(tot.get("commands") or 0)
+    bad = int(tot.get("failed") or 0) + int(tot.get("cancelled") or 0)
+    brain = state.get("brain")
+    routes = dict(getattr(brain, "route_counts", {}) or {})
+    route_ms = dict(getattr(brain, "route_ms", {}) or {})
+    ins = getattr(state.get("insights"), "status", {}) or {}
+    llm = state.get("local_llm")
+    try:
+        perf = llm.perf() if llm else {}
+    except Exception:
+        perf = {}
+    reg = state.get("providers")
+    return {
+        "ts": _t.time(),
+        "commands": n,
+        "fast": int(tot.get("fast") or 0),
+        "llm": int(tot.get("llm") or 0),
+        "failed": int(tot.get("failed") or 0),
+        "cancelled": int(tot.get("cancelled") or 0),
+        "success_pct": round((n - bad) * 100 / n, 1) if n else None,
+        "first_token_p50_ms": eng.get("first_token_p50_ms"),
+        "first_speech_p50_ms": eng.get("first_speech_p50_ms"),
+        "routes": routes,
+        "route_ms": route_ms,
+        "replies": sum(int(v or 0) for v in routes.values()),
+        "brain_mode": getattr(brain, "mode", None),
+        "active_provider": getattr(reg, "active", None),
+        "insight_engine": {"source": ins.get("source"), "model": ins.get("model"),
+                           "latency_ms": ins.get("latency_ms"), "last_run": ins.get("last_run")},
+        "local_model": {"latency_ms": perf.get("latency_ms"), "tokens_per_sec": perf.get("tokens_per_sec"),
+                        "calls": perf.get("calls_total")},
+        "sources": ["realtime engine (/api/engine)", "brain route counters", "insights engine status",
+                    "local LLM perf"],
+    }
+
+
 class ConversationReq(BaseModel):
     on: bool
 
@@ -864,7 +909,8 @@ async def mic_get():
     v = state.get("voice")
     if v is None:
         return {"enabled": False, "mode": "off", "hint": "set JARVIS_VOICE=1 in .env"}
-    return {"enabled": True, "mode": v.mic_mode, "armed_s": max(0.0, round(v.armed_until - time.time(), 1))}
+    return {"enabled": True, "mode": v.mic_mode, "status": getattr(v, "status", "?"),
+            "armed_s": max(0.0, round(v.armed_until - time.time(), 1))}
 
 
 @app.post("/api/voice/mic")
@@ -878,7 +924,7 @@ async def mic_set(req: MicReq):
     except ValueError as e:
         return {"ok": False, "error": str(e)}
     await _audit("voice.mic", mode)
-    return {"ok": True, "mode": mode}
+    return {"ok": True, "mode": mode, "status": getattr(v, "status", "?")}
 
 
 @app.post("/api/voice/talk")
@@ -1036,6 +1082,9 @@ _gpu_cache = {"ts": 0.0, "pct": None}
 
 def _read_gpu() -> float | None:
     """Real GPU utilization via nvidia-smi; None when no NVIDIA GPU present."""
+    import platform
+    if platform.system() == "Darwin":
+        return None
     import subprocess
     try:
         r = subprocess.run(
@@ -1182,6 +1231,9 @@ def _scan_hardware() -> dict:
                 u = psutil.disk_usage(part.mountpoint)
             except Exception:
                 continue
+            mp = part.mountpoint or ""
+            if mp.startswith("/System/Volumes/") and mp != "/System/Volumes/Data":
+                continue
             removable = "removable" in (part.opts or "").lower() or "cdrom" in (part.opts or "").lower()
             vols.append({
                 "name": part.device.replace("\\", "").rstrip(":") + ":" if ":" in part.device else part.mountpoint,
@@ -1217,6 +1269,9 @@ def _scan_hardware() -> dict:
 def _scan_peripherals() -> list[dict]:
     """Connected devices via Windows PnP (camera/audio/bluetooth/disk/monitor).
     Returns [] on non-Windows or if enumeration is unavailable."""
+    import platform
+    if platform.system() != "Windows":
+        return []
     import subprocess
     ps = (
         "Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | "
@@ -1929,6 +1984,8 @@ for _name in FEATURE_MODULES:
         _m = importlib.import_module(_name)
         app.include_router(_m.build_router(_feature_ctx))
         state.setdefault("feature_modules", {})[_name] = _m
+        if _name == "evolution" and hasattr(_m, "timing_middleware"):   # passive API timing for the evolution loop
+            app.middleware("http")(_m.timing_middleware)
     except Exception as _e:      # one broken module must never take the dashboard down
         print(f"[features] {_name} not loaded: {type(_e).__name__}: {_e}")
 

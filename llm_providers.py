@@ -3,6 +3,8 @@
 Built-ins:  "auto"   — Claude CLI → local LLM → rule templates (the original chain)
             "claude" — Claude Code CLI only (then the chain's fallbacks)
             "ollama" — the local OpenAI-compatible endpoint (LocalLLM)
+            "smart"  — AI CORE router (agentos.py): picks a model per task/policy with
+                       live health + fallback; offered only when the AI CORE module loaded
 Custom:     any OpenAI-compatible /v1 endpoint (OpenAI, Anthropic, Gemini, Groq,
             OpenRouter, DeepSeek, Mistral, Together, LM Studio, vLLM, …) added
             with base_url + model (+ API key when the service needs one).
@@ -37,6 +39,11 @@ PRESETS = {
     "custom":     {"name": "Custom endpoint",    "base_url": "",                                                        "model": "",                          "key": False},
 }
 CLOUD = "cloud"      # tier label used for entitlements (paid editions)
+ROUTER = "router"    # tier of the AI CORE smart router (it applies the licence gate per model itself)
+
+# Set by agentos.build_router(): a LocalLLM-shaped client (chat / chat_stream) that routes every
+# prompt through the AI CORE capability router. None → the "smart" choice is not offered.
+SMART: dict = {"client": None}
 LOCAL = "local"
 
 
@@ -94,6 +101,10 @@ class ProviderRegistry:
              "model": self.local.model or "", "base_url": self.local.base_url, "builtin": True,
              "available": bool(self.local.available)},
         ]
+        if SMART["client"] is not None:
+            out.insert(1, {"id": "smart", "name": "Smart router (AI CORE: per-task routing + fallback)",
+                           "kind": "router", "tier": ROUTER, "model": "best model per task", "builtin": True,
+                           "available": True})
         for p in self.custom:
             out.append({"id": p["id"], "name": p["name"], "kind": "openai-compatible",
                         "tier": LOCAL if _is_local(p["base_url"]) else CLOUD,
@@ -122,7 +133,7 @@ class ProviderRegistry:
         if not (model or "").strip():
             return {"ok": False, "error": "model name is required"}
         pid = pid or _slug(name)
-        if pid in ("auto", "claude", "ollama"):
+        if pid in ("auto", "claude", "ollama", "smart"):
             pid += "-custom"
         existing = next((p for p in self.custom if p["id"] == pid), None)
         keep_key = existing and existing.get("base_url") == base_url     # a key never follows a URL change
@@ -150,6 +161,8 @@ class ProviderRegistry:
     def client(self, pid: str) -> LocalLLM | None:
         if pid == "ollama":
             return self.local
+        if pid == "smart":
+            return SMART["client"]
         p = next((x for x in self.custom if x["id"] == pid), None)
         if p is None:
             return None
@@ -175,6 +188,14 @@ class ProviderRegistry:
         b.provider_name = None
         b.prefer_claude = self.active == "claude"
         b.cloud_locked = not self.cloud_allowed()
+        if self.active == "smart":
+            if SMART["client"] is not None:
+                # the router itself excludes cloud models when the licence locks them
+                b.force_local = False
+                b.provider = SMART["client"]
+                b.provider_name = "smart"
+                return
+            self.active = "auto"                     # AI CORE not loaded → original chain
         cloud = self.active in ("auto", "claude") or (
             self.active != "ollama" and not _is_local(next((p["base_url"] for p in self.custom
                                                            if p["id"] == self.active), "")))

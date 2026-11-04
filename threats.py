@@ -9,7 +9,15 @@ Aggregates real signals into a classified incident feed:
   PRODUCTIVITY  — extended operator absence during work hours
 
 Maintains a rolling incident timeline, per-category counts, severity levels
-and an operational risk score (0-100). Broadcasts:
+and an operational risk score (0-100).
+
+Incident lifecycle is REAL state, never a timer pretending to be work:
+  active        the condition was observed and has not cleared
+  resolved      a metric incident whose condition is no longer true in live telemetry
+  acknowledged  the operator acknowledged it (ACK)
+  expired       older than 30 min with no resolution signal (stops counting toward risk)
+
+Broadcasts:
   {type: "threat-event", ...}   on each new incident
   {type: "risk", score, level}  whenever the score changes materially
 """
@@ -56,7 +64,7 @@ class ThreatEngine:
     # ── event plumbing ────────────────────────────────────────────
     async def _add(self, category: str, severity: str, title: str,
                    detail: str = "", dedupe_key: str | None = None,
-                   cooldown: float = 600.0) -> None:
+                   cooldown: float = 600.0, cond: dict | None = None) -> None:
         key = dedupe_key or f"{category}:{title}"
         now = time.time()
         if now - self._fired.get(key, 0) < cooldown:
@@ -68,6 +76,9 @@ class ThreatEngine:
             "title": title[:120], "detail": detail[:240],
             "agent": AGENT_FOR_CATEGORY.get(category, "jarvis"),
         }
+        if cond:
+            # {"metric": "mem", "above": 93}: re-checked against live telemetry
+            ev["cond"] = cond
         self.events.appendleft(ev)
         self.stats["alerts"] += 1
         await self.hub.broadcast({"type": "threat-event", **ev})
@@ -90,6 +101,8 @@ class ThreatEngine:
             age = now - ev["ts"]
             if age > 1800:           # incidents decay after 30 min
                 continue
+            if self._stage(ev) == "resolved":   # condition cleared: no longer a risk
+                continue
             decay = 1.0 - (age / 1800)
             score += SEVERITY_WEIGHT.get(ev["severity"], 3) * decay
         self.risk_score = min(100, round(score))
@@ -107,18 +120,22 @@ class ThreatEngine:
         if m.get("cpu", 0) > 92:
             await self._add("system", "high",
                             f"CPU saturation — {m['cpu']:.0f}%",
-                            "Sustained load above 92%. Thermal throttling likely.")
+                            "Sustained load above 92%. Thermal throttling likely.",
+                            cond={"metric": "cpu", "above": 92})
         elif m.get("cpu", 0) > 85:
             await self._add("system", "medium",
-                            f"CPU pressure — {m['cpu']:.0f}%")
+                            f"CPU pressure — {m['cpu']:.0f}%",
+                            cond={"metric": "cpu", "above": 85})
         if m.get("mem", 0) > 93:
             await self._add("system", "high",
                             f"Memory critical — {m['mem']:.0f}%",
-                            "Paging imminent; responsiveness will degrade.")
+                            "Paging imminent; responsiveness will degrade.",
+                            cond={"metric": "mem", "above": 93})
         if m.get("disk", 0) > 95:
             await self._add("system", "critical",
                             f"Disk nearly full — {m['disk']:.0f}%",
-                            "Updates and saves may begin to fail.")
+                            "Updates and saves may begin to fail.",
+                            cond={"metric": "disk", "above": 95})
 
         # OPERATIONS — calendar conflicts
         if self.agenda:
@@ -216,25 +233,46 @@ class ThreatEngine:
                                        + max(0, mem - 70) * 1.1)),
             "security": min(100, round(6 + recent("external") * 2.5)),
         }
+        # what each domain score is made of (shown in the dashboard detail view)
+        cat_for = {"operational": "operations", "infrastructure": "system", "network": "network",
+                   "ai": "ai", "resource": "system", "security": "external"}
+        basis = {
+            "operational": f"calendar conflicts {intel.get('conflicts', 0)}, day density "
+                           f"{intel.get('density') or 'n/a'}, operations incidents (30 min)",
+            "infrastructure": f"disk {disk:.0f}% (counts above 70%) + system incidents (30 min)",
+            "network": "network incidents in the last 30 min",
+            "ai": f"average agent confidence {avg_conf:.0f}%",
+            "resource": f"CPU {cpu:.0f}% (counts above 60%), memory {mem:.0f}% (counts above 70%)",
+            "security": "security headlines from the news feed (30 min)",
+        }
         out = {}
         for k, v in domains.items():
             prev = self._prev_matrix.get(k, v)
+            signals = sum(1 for ev in self.events
+                          if ev["category"] == cat_for[k] and now - ev["ts"] <= 1800)
             out[k] = {"score": v,
                       "trend": "up" if v > prev + 2 else "down" if v < prev - 2 else "flat",
-                      "confidence": max(60, 96 - abs(v - prev))}
+                      "signals": signals, "basis": basis[k]}
         self._prev_matrix = {k: v["score"] for k, v in out.items()}
         return out
 
-    # ── incident lifecycle stage (for the response timeline) ──────
-    @staticmethod
-    def _stage(ev: dict) -> str:
-        age = time.time() - ev["ts"]
-        if age < 60:    return "detected"
-        if age < 180:   return "classification"
-        if age < 600:   return "analysis"
-        if age < 1500 and ev["severity"] in ("high", "critical"):
-            return "escalation"
-        return "resolved"
+    # ── incident lifecycle (real state, see the module docstring) ─
+    def _stage(self, ev: dict) -> str:
+        if ev["id"] in self._acked:
+            return "acknowledged"
+        if ev.get("resolved_ts"):
+            return "resolved"
+        cond = ev.get("cond")
+        if cond and self.sysmon is not None:
+            cur = (self.sysmon.latest or {}).get(cond.get("metric"))
+            if isinstance(cur, (int, float)) and cur <= cond.get("above", 100):
+                ev["resolved_ts"] = time.time()
+                ev["resolved_note"] = (f"{cond['metric']} back to {cur:.0f}% "
+                                       f"(threshold {cond['above']}%)")
+                return "resolved"
+        if time.time() - ev["ts"] > 1800:
+            return "expired"
+        return "active"
 
     # ── API snapshot ──────────────────────────────────────────────
     def snapshot(self) -> dict:
@@ -243,20 +281,23 @@ class ThreatEngine:
         by_sev: dict[str, int] = {}
         resolved = 0
         events = []
+        by_stage: dict[str, int] = {}
         for ev in self.events:
             by_cat[ev["category"]] = by_cat.get(ev["category"], 0) + 1
             by_sev[ev["severity"]] = by_sev.get(ev["severity"], 0) + 1
             stage = self._stage(ev)
-            if stage == "resolved":
+            by_stage[stage] = by_stage.get(stage, 0) + 1
+            if stage in ("resolved", "acknowledged"):
                 resolved += 1
-            events.append({**ev, "stage": stage})
+            out_ev = {k: v for k, v in ev.items() if k != "cond"}
+            out_ev.update(stage=stage, auto_check=bool(ev.get("cond")))
+            events.append(out_ev)
         self.stats["resolved"] = resolved
-        investigations = sum(1 for e in events
-                             if e["stage"] in ("analysis", "escalation"))
-        # Threat 2.0: response queue = live medium+ incidents awaiting an
-        # operator acknowledgement (SOC work-queue discipline)
+        investigations = by_stage.get("active", 0)
+        # response queue = medium+ incidents the operator has not acknowledged yet
+        # (still active, or cleared on their own and waiting to be closed out)
         queue = [e for e in events
-                 if e["stage"] != "resolved" and e["id"] not in self._acked
+                 if e["stage"] in ("active", "resolved")
                  and e["severity"] in ("medium", "high", "critical")][:8]
         return {
             "risk_score": score,
@@ -266,6 +307,7 @@ class ThreatEngine:
             "by_severity": by_sev,
             "matrix": self.matrix(),
             "soc": {**self.stats, "investigations": investigations},
+            "by_stage": by_stage,
             "history": list(self.history),
             "response_queue": queue,
             "acked": len(self._acked),

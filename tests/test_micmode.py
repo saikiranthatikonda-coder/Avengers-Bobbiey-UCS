@@ -23,6 +23,12 @@ class FakeHub:
     async def broadcast(self, m):
         self.msgs.append(m)
 
+    def subscribe(self):
+        return asyncio.Queue()
+
+    def unsubscribe(self, q):
+        pass
+
 
 class Commands(unittest.TestCase):
     def test_spoken_mode_switches(self):
@@ -89,7 +95,62 @@ class SleepMode(unittest.TestCase):
         self.hear("Jarvis wake up")
         self.assertEqual(self.v.mic_mode, "on")
         self.engine.submit.assert_not_awaited()                # mode switches are not sent to the LLM
-        self.assertIn({"type": "micmode", "mode": "on", "source": "voice"}, self.hub.msgs)
+        self.assertTrue(any(m.get("type") == "micmode" and m.get("mode") == "on" and m.get("source") == "voice" for m in self.hub.msgs))
+
+    def test_talk_works_without_conversation_mode(self):
+        self.engine.state["tts"].conversation_mode = False         # wake-word mode
+        run(self.v.arm())
+        self.hear("open the weather panel")
+        self.engine.submit.assert_awaited_once()
+        self.assertEqual(self.engine.submit.await_args.args[0], "open the weather panel")
+
+    def test_off_closes_the_device_and_on_reopens_it(self):
+        import threading
+        import types
+        import numpy as np
+        events = []
+
+        class FakeStream:
+            def __init__(self, callback=None, **kw):
+                self.cb, self.stop_ev = callback, threading.Event()
+
+            def __enter__(self):
+                events.append("open")
+                def feed():
+                    while not self.stop_ev.wait(0.01):
+                        self.cb(np.zeros((800, 1), dtype=np.int16), 800, None, None)
+                threading.Thread(target=feed, daemon=True).start()
+                return self
+
+            def __exit__(self, *a):
+                self.stop_ev.set(); events.append("close")
+
+        fake_sd = types.SimpleNamespace(InputStream=FakeStream)
+        fake_fw = types.SimpleNamespace(WhisperModel=lambda *a, **k: object())
+
+        async def scenario():
+            with mock.patch.dict(sys.modules, {"sounddevice": fake_sd, "faster_whisper": fake_fw}):
+                task = asyncio.create_task(self.v.run())
+                for _ in range(100):
+                    await asyncio.sleep(0.02)
+                    if events == ["open"]:
+                        break
+                self.assertEqual(self.v.status, "listening")
+                await self.v.set_mic_mode("off")
+                for _ in range(100):
+                    await asyncio.sleep(0.02)
+                    if events == ["open", "close"]:
+                        break
+                self.assertEqual(self.v.status, "mic off")
+                await self.v.set_mic_mode("sleep")
+                for _ in range(100):
+                    await asyncio.sleep(0.02)
+                    if len(events) == 3:
+                        break
+                task.cancel()
+            self.assertEqual(events[:3], ["open", "close", "open"])   # OFF released the device; SLEEP reopened it
+            self.assertIn({"type": "mic", "off": True, "peak": 0, "rms": 0}, self.hub.msgs)
+        run(scenario())
 
     def test_bad_mode_is_refused(self):
         with self.assertRaises(ValueError):

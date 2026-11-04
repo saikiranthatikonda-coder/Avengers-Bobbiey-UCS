@@ -475,8 +475,19 @@ setTimeout(() => ConversationMode.load(), 500);
 // ═══ MIC MODES · on / sleep (deliberate commands only) / off (mic released) + TALK ═══
 var MicMode = {
   mode: "on",
-  set(mode, armed) {
+  set(mode, armed, status) {
     this.mode = mode;
+    if (status) this.status = status;
+    const s = this.status || "";
+    const box0 = document.getElementById("mic-modes");
+    if (box0) {
+      box0.title = "Microphone: " + (s ? s.toUpperCase() : mode.toUpperCase()) +
+        ". ON hears everything addressed to JARVIS · SLEEP only “Jarvis…”, double-clap or TALK (Ctrl+Space) · OFF releases the mic.";
+      box0.classList.toggle("loading", /^(starting|loading)/.test(s));
+      box0.classList.toggle("error", /^error/.test(s));
+    }
+    if (/^error/.test(s)) { const st0 = document.getElementById("mm-state"); if (st0) { st0.textContent = "VOICE ERROR"; st0.className = "mm-state off"; } }
+    if (/^(starting|loading)/.test(s) && mode !== "off") { const st0 = document.getElementById("mm-state"); if (st0) { st0.textContent = "LOADING VOICE…"; st0.className = "mm-state"; } }
     document.querySelectorAll(".mic-mode").forEach(b => b.setAttribute("aria-checked", b.dataset.mic === mode ? "true" : "false"));
     const box = document.getElementById("mic-modes"); if (box) box.dataset.mode = mode;
     const talk = document.getElementById("mic-talk");
@@ -484,10 +495,16 @@ var MicMode = {
     const st = document.getElementById("mm-state");
     if (st && mode !== "on") { st.textContent = mode === "off" ? "MIC OFF" : "SLEEP · say “Jarvis…”"; st.className = "mm-state " + mode; }
   },
-  async load() { try { const d = await (await fetch("/api/voice/mic")).json(); this.set(d.enabled ? d.mode : "off"); } catch (e) {} },
+  async load() {
+    try {
+      const d = await (await fetch("/api/voice/mic")).json();
+      this.enabled = !!d.enabled;
+      this.set(d.enabled ? d.mode : "off", 0, d.enabled ? d.status : "voice disabled: set JARVIS_VOICE=1 in .env");
+    } catch (e) {}
+  },
   async choose(mode) {
     const r = await (await fetch("/api/voice/mic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode }) })).json().catch(() => ({}));
-    if (r.ok) this.set(r.mode); else logEvent(`<span class="tag">[voice]</span> ${escapeHTML(r.error || "mic change failed")}`, "warn");
+    if (r.ok) this.set(r.mode, 0, r.status); else logEvent(`<span class="tag">[voice]</span> ${escapeHTML(r.error || "mic change failed")}`, "warn");
     if (r.ok) logEvent(`<span class="tag">[voice]</span> microphone ${mode === "on" ? "ON: listening" : mode === "sleep" ? "SLEEP: only “Jarvis …”, double-clap or TALK" : "OFF: released"}`);
   },
   async talk() {
@@ -700,147 +717,43 @@ function setHeard(text, routeLabel) {
   if (r) r.textContent = routeLabel || "";
 }
 
-/* ═══ WORLD MAP via D3 + TopoJSON (50m for better outlines) ═══ */
-
-const CITIES = [
-  { name: "HYDERABAD", lat: 17.385, lon: 78.4867, primary: true },
-  { name: "NEW YORK",  lat: 40.7128, lon: -74.0060 },
-  { name: "LONDON",    lat: 51.5074, lon: -0.1278 },
-  { name: "TOKYO",     lat: 35.6762, lon: 139.6503 },
-  { name: "SYDNEY",    lat: -33.8688, lon: 151.2093 },
-  { name: "SAN FRAN",  lat: 37.7749, lon: -122.4194 },
-];
+/* ═══ WORLD MAP ═══════════════════════════════════════
+   The GLOBAL ACTIVITY MAP panel (#globalmap-mount) is owned by static/globalmap.js,
+   which replaces its contents and exposes window.GlobalMap.focus({lat, lon, id, layer}).
+   app.js no longer draws into #world-map (the old fixed "NEW YORK / LONDON / TOKYO…"
+   arcs were decoration, not activity). Only the projection helpers stay for the side maps. */
 
 let mapProjection = null;
-let worldFeatures = null;
+let worldFeatures = null;          // read by disaster.js as a coastline fallback
 
 function fallbackProjection(lat, lon, w = 1000, h = 460) {
   return [(lon + 180) * w / 360, (90 - lat) * h / 180];
-}
-
-async function renderRealWorldMap() {
-  const continents = document.getElementById("map-continents");
-  if (!continents) return;
-
-  if (typeof d3 === "undefined" || typeof topojson === "undefined") {
-    console.warn("d3/topojson not loaded — using fallback shapes");
-    renderFallbackContinents();
-    renderArcs();
-    renderCities();
-    renderIndiaMap();
-    renderTelanganaMap();
-    return;
-  }
-
-  try {
-    // Use 50m for sharper continent outlines (a bit larger payload, ~250KB)
-    const r = await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json");
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const world = await r.json();
-    worldFeatures = topojson.feature(world, world.objects.countries);
-
-    // Match the viewBox to the panel's real aspect ratio so the map uses the
-    // panel's full size instead of a fixed 1000×460 box letterboxed inside it.
-    const svg = document.getElementById("world-map");
-    const box = svg.getBoundingClientRect();
-    const h = 460, w = Math.max(1000, Math.round(h * (box.width && box.height ? box.width / box.height : 1000 / 460)));
-    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    svg.querySelectorAll("rect.map-bg, rect[fill='url(#map-vignette)'], #not-india rect").forEach(r => r.setAttribute("width", w));
-    svg.querySelector("#not-india")?.setAttribute("width", w);
-    [...svg.querySelectorAll(".map-grid line")].filter(l => l.getAttribute("y1") === "0")
-      .forEach((l, i) => { const x = Math.round(w * (i + 1) / 4); l.setAttribute("x1", x); l.setAttribute("x2", x); });
-    svg.querySelectorAll(".map-grid line").forEach(l => { if (l.getAttribute("x1") === "0") l.setAttribute("x2", w); });
-    // fit the inhabited band (56°S – 74°N, every longitude): all populated land
-    // stays in view (Ushuaia, Hobart, Murmansk) and only polar ice is left out
-    const band = { type: "MultiPoint", coordinates: [] };
-    for (let lon = -180; lon <= 180; lon += 5) band.coordinates.push([lon, -56], [lon, 74], [lon, 0]);
-    mapProjection = d3.geoNaturalEarth1().fitExtent([[12, 8], [w - 12, h - 8]], band);
-    const path = d3.geoPath(mapProjection);
-
-    continents.innerHTML = "";
-    worldFeatures.features.forEach(f => {
-      if (String(f.id) === "356") return;          // India: drawn from the official boundary below
-      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      p.setAttribute("d", path(f));
-      p.setAttribute("class", "country");
-      const t = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      t.textContent = (f.properties && f.properties.name) || ""; p.appendChild(t);
-      continents.appendChild(p);
-    });
-    // India with its official boundary (J&K incl. PoK/Gilgit-Baltistan, Ladakh incl.
-    // Aksai Chin): static/geo/india_world.json, same dataset as the India panel.
-    // Neighbours are masked out underneath it so no de-facto line shows through.
-    const indiaHost = document.getElementById("map-india");
-    let india = null;
-    try { india = await (await fetch("/static/geo/india_world.json")).json(); } catch (e) {}
-    if (!india) india = worldFeatures.features.find(f => String(f.id) === "356");
-    if (india && indiaHost) {
-      const d = path(india);
-      document.getElementById("india-mask-path")?.setAttribute("d", d);
-      indiaHost.innerHTML = `<path class="country india-official" d="${d}"><title>India</title></path>`;
-    }
-  } catch (e) {
-    console.warn("world map load failed", e);
-    renderFallbackContinents();
-  } finally {
-    renderArcs();
-    renderCities();
-    renderIndiaMap();
-    renderTelanganaMap();
-  }
-}
-
-function renderFallbackContinents() {
-  const host = document.getElementById("map-continents"); if (!host) return;
-  const blobs = [
-    { cx: 220, cy: 160, rx: 130, ry: 90 }, { cx: 320, cy: 330, rx: 60, ry: 100 },
-    { cx: 510, cy: 145, rx: 55, ry: 45 },  { cx: 530, cy: 260, rx: 70, ry: 100 },
-    { cx: 720, cy: 175, rx: 160, ry: 110 },{ cx: 830, cy: 345, rx: 65, ry: 40 },
-  ];
-  host.innerHTML = blobs.map(b =>
-    `<ellipse cx="${b.cx}" cy="${b.cy}" rx="${b.rx}" ry="${b.ry}" class="country"/>`
-  ).join("");
 }
 function projectCity(c) {
   if (mapProjection) { try { return mapProjection([c.lon, c.lat]); } catch (e) {} }
   return fallbackProjection(c.lat, c.lon);
 }
-function renderCities() {
-  const host = document.getElementById("map-cities"); if (!host) return;
-  host.innerHTML = "";
-  for (const c of CITIES) {
-    const [x, y] = projectCity(c);
-    if (!isFinite(x) || !isFinite(y)) continue;
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    g.classList.add("city-marker"); if (c.primary) g.classList.add("primary");
-    const r = c.primary ? 4 : 3;
-    g.innerHTML = `
-      <circle cx="${x}" cy="${y}" r="${r}" class="city-dot"/>
-      <circle cx="${x}" cy="${y}" r="${r+2}" class="city-ping"/>
-      <circle cx="${x}" cy="${y}" r="${r+2}" class="city-ping ping-2"/>
-      <text x="${x + 9}" y="${y + 4}" class="city-label">${c.name}</text>`;
-    host.appendChild(g);
-  }
-  // NOTE: #map-nodes badge is owned by the live fleet (refreshFleet), not the
-  // static city list — don't overwrite it here.
+async function renderRealWorldMap() {
+  // side panels only (India + Telangana, official boundaries from static/geo)
+  try { renderIndiaMap(); } catch (e) { console.warn("india map", e); }
+  try { renderTelanganaMap(); } catch (e) { console.warn("telangana map", e); }
 }
-function renderArcs() {
-  const arcs = document.getElementById("map-arcs"); if (!arcs) return;
-  arcs.innerHTML = "";
-  const primary = CITIES.find(c => c.primary); if (!primary) return;
-  const [px, py] = projectCity(primary);
-  if (!isFinite(px) || !isFinite(py)) return;
-  for (const c of CITIES) {
-    if (c === primary) continue;
-    const [cx, cy] = projectCity(c);
-    if (!isFinite(cx) || !isFinite(cy)) continue;
-    const mx = (px + cx) / 2;
-    const my = Math.min(py, cy) - Math.abs(cx - px) * 0.18 - 30;
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", `M ${px} ${py} Q ${mx} ${my} ${cx} ${cy}`);
-    arcs.appendChild(path);
+
+/* Focus the global map on a point. Feature-detected: when globalmap.js has not
+   loaded (or has no focus()), scroll to the panel and say so instead of failing. */
+function bucsShowOnMap(pt) {
+  if (!pt || pt.lat == null || pt.lon == null) return false;
+  const panel = document.getElementById("globalmap-mount");
+  try { panel?.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (e) {}
+  const gm = window.GlobalMap;
+  if (gm && typeof gm.focus === "function") {
+    try { gm.focus({ lat: +pt.lat, lon: +pt.lon, id: pt.id, layer: pt.layer }); return true; }
+    catch (e) { console.warn("GlobalMap.focus failed", e); }
   }
+  try { logEvent(`<span class="tag">[map]</span> ${escapeHTML(pt.label || "location")} · ${(+pt.lat).toFixed(2)}, ${(+pt.lon).toFixed(2)} (global map not loaded yet)`, "warn"); } catch (e) {}
+  return false;
 }
+window.bucsShowOnMap = bucsShowOnMap;
 
 /* ═══ INDIA MAP ═══════════════════════════════════════ */
 
@@ -908,29 +821,18 @@ function renderIndiaMap() {
     for (const c of INDIA_CITIES) {
       const [x, y] = indiaProjection ? indiaProjection([c.lon, c.lat]) : indiaFallbackProject(c.lat, c.lon);
       const r = c.primary ? 3.5 : 2.6;
-      const g = svgEl("g", { class: "region-marker" + (c.primary ? " primary" : "") });
+      const g = svgEl("g", { class: "region-marker" + (c.primary ? " primary" : ""), "data-lat": c.lat, "data-lon": c.lon, "data-name": c.name });
       g.innerHTML = `
         <circle cx="${x}" cy="${y}" r="${r}" class="city-dot"/>
-        <circle cx="${x}" cy="${y}" r="${r + 1.5}" class="city-ping"/>
-        <circle cx="${x}" cy="${y}" r="${r + 1.5}" class="city-ping ping-2"/>
-        <text x="${x + 6}" y="${y + 2}" class="city-label">${c.name}</text>`;
+        ${c.primary ? `<circle cx="${x}" cy="${y}" r="${r + 1.5}" class="city-ping"/>` : ""}
+        <text x="${x + 6}" y="${y + 2}" class="city-label">${c.name}</text>
+        <title>${c.name} · ${c.lat.toFixed(2)}, ${c.lon.toFixed(2)} · click to show on the global map</title>`;
       citiesHost.appendChild(g);
     }
   }
 
-  if (arcsHost) {
-    arcsHost.innerHTML = "";
-    const proj = c => indiaProjection ? indiaProjection([c.lon, c.lat]) : indiaFallbackProject(c.lat, c.lon);
-    const hyd = INDIA_CITIES.find(c => c.primary);
-    const hp = proj(hyd);
-    for (const c of INDIA_CITIES) {
-      if (c === hyd) continue;
-      const cp = proj(c);
-      const mx = (hp[0] + cp[0]) / 2;
-      const my = Math.min(hp[1], cp[1]) - Math.abs(cp[0] - hp[0]) * 0.25 - 8;
-      arcsHost.appendChild(svgEl("path", { d: `M ${hp[0]} ${hp[1]} Q ${mx} ${my} ${cp[0]} ${cp[1]}` }));
-    }
-  }
+  // (no HQ→city arcs: they suggested a live network that does not exist)
+  if (arcsHost) arcsHost.innerHTML = "";
 }
 
 function indiaFallbackProject(lat, lon) {
@@ -977,12 +879,12 @@ function renderTelanganaMap() {
   for (const c of TS_CITIES) {
     const [x, y] = tsProjection([c.lon, c.lat]);
     const r = c.primary ? 4 : 2.5;
-    const g = svgEl("g", { class: "region-marker" + (c.primary ? " primary" : "") });
+    const g = svgEl("g", { class: "region-marker" + (c.primary ? " primary" : ""), "data-lat": c.lat, "data-lon": c.lon, "data-name": c.name });
     g.innerHTML = `
       <circle cx="${x}" cy="${y}" r="${r}" class="city-dot"/>
-      <circle cx="${x}" cy="${y}" r="${r + 2}" class="city-ping"/>
-      <circle cx="${x}" cy="${y}" r="${r + 2}" class="city-ping ping-2"/>
-      <text x="${x + 6}" y="${y + 2}" class="city-label">${c.name}</text>`;
+      ${c.primary ? `<circle cx="${x}" cy="${y}" r="${r + 2}" class="city-ping"/>` : ""}
+      <text x="${x + 6}" y="${y + 2}" class="city-label">${c.name}</text>
+      <title>${c.name} · click to show on the global map</title>`;
     citiesHost.appendChild(g);
   }
 }
@@ -1040,8 +942,8 @@ async function _refreshWeather(force = false) {
     $("#weather-wind").textContent  = d.wind_kmh != null ? Math.round(d.wind_kmh) : "--";
     $("#weather-feels").textContent = d.feels_c != null ? Math.round(d.feels_c) : "--";
     $("#weather-update").textContent = (d.stale ? "CACHED · " : "OK · ") + new Date((d.fetched_at || Date.now() / 1000) * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
-    $("#hw-glyph").textContent = d.glyph || "◐";
-    $("#hw-temp").textContent = d.temp_c != null ? `${Math.round(d.temp_c)}°` : "--°";
+    const hg = $("#hw-glyph"); if (hg) hg.textContent = d.glyph || "◐";        // header readout removed (v8); guarded
+    const ht = $("#hw-temp"); if (ht) ht.textContent = d.temp_c != null ? `${Math.round(d.temp_c)}°` : "--°";
     if (d.city) {
       $("#weather-city").textContent = `${(weatherCity || d.city || "").toUpperCase()} · WEATHER`;
     }
@@ -1078,7 +980,7 @@ async function refreshConnectivity() {
       wifiRow.classList.remove("ok"); wifiRow.classList.add("bad");
     }
     const ble = d.bluetooth || {};
-    $("#ble-val").textContent = ble.count ? `${ble.count} paired` : "none";
+    $("#ble-val").textContent = ble.count == null ? "n/a" : (ble.count ? `${ble.count} paired` : "none");
     $("#conn-ble").classList.toggle("ok", ble.count > 0);
 
     const p = d.ping_ms ?? -1;
@@ -1294,20 +1196,13 @@ function updateResource(cpu, mem, disk) {
   if (disk != null){ $("#res-disk2").textContent = `${Math.round(disk)}%`; $("#res-disk-bar").style.width = `${Math.min(100, disk)}%`; }
 }
 
-// ── AI gauge animation (r=36, circumference ≈ 226) ─
-let aiGaugeBase = 0.92;
-const AI_CIRC = 2 * Math.PI * 36;  // ≈ 226 (matches HTML circle r=36)
+// ── AI PERFORMANCE card (r=36, circumference ≈ 226) ─
+// The gauge is the measured command success rate (refreshAiPerf); while an agent
+// is thinking the card only gets a "busy" glow, the number is never animated.
+const AI_CIRC = 2 * Math.PI * 36;
 function animateAiGauge(active) {
-  const arc = $("#ai-arc"); if (!arc) return;
-  const target = active ? 0.78 : aiGaugeBase;
-  arc.style.transition = "stroke-dashoffset 0.6s ease";
-  arc.setAttribute("stroke-dashoffset", String(AI_CIRC * (1 - target)));
+  document.getElementById("ai-perf-card")?.classList.toggle("busy", !!active);
 }
-(function () {
-  const arc = $("#ai-arc"); if (!arc) return;
-  arc.setAttribute("stroke-dasharray", String(AI_CIRC.toFixed(1)));
-  arc.setAttribute("stroke-dashoffset", String(AI_CIRC * (1 - aiGaugeBase)));
-})();
 
 // ── quick access buttons ─────────────────────────────
 document.querySelectorAll(".quick-btn").forEach(btn => {
@@ -1423,7 +1318,7 @@ const TOOL_DATA = {
     title: "THREAT SCANNER", sub: "LIVE RISK ENGINE · 6-DOMAIN",
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M 12 2 L 20 5 V 12 Q 20 18 12 22 Q 4 18 4 12 V 5 Z"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>`,
     render: s => {
-      const t = s.threats || {}, soc = t.soc || {}, open = (t.events || []).filter(e => e.stage !== "resolved");
+      const t = s.threats || {}, soc = t.soc || {}, open = (t.events || []).filter(e => e.stage === "active");
       const lvl = (t.level || "—").toUpperCase(), cls = t.level === "secure" ? "ok" : "warn";
       return `<div class="mb-grid">
         ${_stat("RISK SCORE", t.risk_score != null ? `${t.risk_score} / 100` : "—", cls)}
@@ -1495,7 +1390,7 @@ const TOOL_DATA = {
         ${_row(`SSID ${escapeHTML(w.ssid || "—")} · channel ${escapeHTML(w.channel || "—")} · security <b style="color:var(${secure ? "--success" : "--warn"})">${escapeHTML(w.auth || "unknown")}</b>`, secure ? "ENCRYPTED LINK" : "UNENCRYPTED WI-FI · USE A VPN ON THIS NETWORK")}
         ${sp && sp.ok ? _row(`Speed test · ${escapeHTML(sp.server)} · ${Math.round(sp.bytes_used / 1e6)} MB used`, `MEASURED ${_ago(sp.ts)}`) : ""}
         ${top ? _row(`Busiest process: ${escapeHTML(top.name)} · CPU ${top.cpu}% · ${Math.round(top.mem_mb)} MB`, "LIVE PROCESS SWEEP") : ""}
-        ${_row(`Bluetooth: ${((c.bluetooth || {}).count ?? 0)} paired device(s)`, "ADAPTER")}
+        ${_row(`Bluetooth: ${((c.bluetooth || {}).count ?? "unknown")} paired device(s)`, "ADAPTER")}
       </div>
       <button class="cmd-btn" id="speedtest-btn" ${net.testing ? "disabled" : ""}>${net.testing ? "SPEED TEST RUNNING…" : "RUN SPEED TEST NOW (~33 MB)"}</button>`;
     },
@@ -1510,8 +1405,10 @@ async function openToolModal(toolKey) {
   $("#modal-icon").innerHTML = def.icon;
   $("#modal-body").innerHTML = '<div style="color:var(--text-dim);font-style:italic">acquiring live data…</div>';
   modal.hidden = false;
+  const seq = ++window._mSeq;
 
   const state = await gatherToolSnapshot();
+  if (seq !== window._mSeq) return;           // the operator opened something else meanwhile
   try {
     $("#modal-body").innerHTML = def.render(state);
     $("#speedtest-btn")?.addEventListener("click", async (ev) => {
@@ -1524,6 +1421,7 @@ async function openToolModal(toolKey) {
   }
 }
 function closeToolModal() {
+  window._mSeq = (window._mSeq || 0) + 1;
   const modal = $("#tool-modal"); if (modal) modal.hidden = true;
 }
 
@@ -1548,7 +1446,7 @@ async function refreshToolCardStats() {
   const agg = (s.fleet || {}).aggregate || {};
   set("#tc-fleet", `${agg.online ?? 0}/${agg.nodes ?? 0} NODES · ${agg.cpu_cores ?? "—"} CORES`);
   const t = s.threats || {};
-  const open = (t.events || []).filter(e => e.stage !== "resolved").length;
+  const open = (t.events || []).filter(e => e.stage === "active").length;
   set("#tc-threat", `RISK ${t.risk_score ?? "—"} · ${open} OPEN`);
   const o = s.orch || {};
   set("#tc-missions", `${o.active ?? 0} ACTIVE · ${(o.recent_done || []).length} DONE`);
@@ -1930,8 +1828,11 @@ const CONF_CIRC = 2 * Math.PI * 36;  // ≈ 226 (matches conf-arc r=36)
 
 function setConfidence(pct) {
   const v = $("#conf-val");
-  if (v) v.textContent = pct != null ? Math.round(pct) : "--";
+  if (v) v.textContent = pct != null ? Math.round(pct) : "—";
+  const lbl = document.querySelector("#aiops-reasoning .conf-lbl");
+  if (lbl) lbl.textContent = pct != null ? "MODEL-REPORTED CONFIDENCE" : "RULE-BASED · NO CONFIDENCE";
   const arc = $("#conf-arc");
+  if (arc && pct == null) arc.setAttribute("stroke-dashoffset", CONF_CIRC.toFixed(1));
   if (arc && pct != null) {
     const p = Math.max(0, Math.min(100, pct)) / 100;
     arc.setAttribute("stroke-dasharray", CONF_CIRC.toFixed(1));  // keep dasharray in sync with JS circumference
@@ -1956,7 +1857,7 @@ function setEngineInfo(engine) {
   if (lat) lat.textContent = engine.latency_ms != null ? engine.latency_ms + " ms" : "—";
   const src = $("#insight-source");
   if (src && engine.source) src.textContent = engine.source.toUpperCase();
-  if (engine.confidence != null) setConfidence(engine.confidence);
+  setConfidence(engine.confidence ?? null);
 }
 
 function addInsight(d, animate = true) {
@@ -1964,12 +1865,13 @@ function addInsight(d, animate = true) {
   const empty = feed.querySelector(".insight-empty"); if (empty) empty.remove();
   const div = document.createElement("div");
   div.className = "insight-item " + (d.severity || "info");
+  div._data = d; div.tabIndex = 0; div.setAttribute("role", "button"); div.title = "Open insight detail";
   const t = new Date((d.ts || Date.now() / 1000) * 1000)
     .toTimeString().slice(0, 5);
   div.innerHTML = `
     <div class="insight-text"></div>
     <div class="insight-rec">${d.recommendation ? "→ " + escapeHTML(d.recommendation) : ""}</div>
-    <div class="insight-meta">${t} · ${escapeHTML((d.source || "").toUpperCase())} · CONF ${d.confidence ?? "--"}%</div>`;
+    <div class="insight-meta">${t} · ${escapeHTML((d.source || "").toUpperCase())}${d.confidence != null ? ` · CONF ${d.confidence}% (model)` : " · RULE"}</div>`;
   feed.prepend(div);
   while (feed.children.length > 8) {
     const old = feed.lastChild;
@@ -2088,8 +1990,12 @@ function slopePerMin(arr) {
   const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1);
   return slope * 30;   // 30 samples per minute at 2s cadence
 }
-const trendGlyph = (d15) =>
-  d15 > 2 ? "↗ +" + d15.toFixed(0) + "%" : d15 < -2 ? "↘ " + d15.toFixed(0) + "%" : "→ STABLE";
+// d15 = projected change in percentage points over 15 min, clamped to what is
+// physically possible from the current value (0-100 %)
+const trendGlyph = (d15, now) => {
+  if (now != null) d15 = Math.max(-now, Math.min(100 - now, d15));
+  return d15 > 2 ? `↗ +${d15.toFixed(0)} pts` : d15 < -2 ? `↘ ${d15.toFixed(0)} pts` : "→ STABLE";
+};
 
 function updateForecast() {
   ensureForecastChart();
@@ -2107,8 +2013,8 @@ function updateForecast() {
   forecastChart.data.datasets[1].data = [...new Array(hist.length - 1).fill(null), last, ...proj];
   forecastChart.update("none");
 
-  const tc = $("#trend-cpu"); if (tc) tc.textContent = trendGlyph(cpu15);
-  const tm = $("#trend-mem"); if (tm) tm.textContent = trendGlyph(mem15);
+  const tc = $("#trend-cpu"); if (tc) tc.textContent = trendGlyph(cpu15, last);
+  const tm = $("#trend-mem"); if (tm) tm.textContent = trendGlyph(mem15, metricHist.mem[metricHist.mem.length - 1]);
   const ft = $("#forecast-text");
   if (ft) {
     const memNow = metricHist.mem[metricHist.mem.length - 1] || 0;
@@ -2136,7 +2042,8 @@ function updateMissionReadiness(ready, anomaly) {
     g.classList.toggle("warn", ready < 75 && ready >= 50);
     g.classList.toggle("bad", ready < 50);
   }
-  const sys = $("#mr-systems"); if (sys) sys.textContent = `${agentsOnline || 8} / 8 AGENTS`;
+  const sys = $("#mr-systems");
+  if (sys) sys.textContent = agentsOnline ? `${agentsOnline} AGENTS` : "—";
   const pen = $("#mr-pending"); if (pen) pen.textContent = String(pendingActions);
   const stab = $("#mr-stability"); if (stab) stab.textContent = `${Math.max(0, 100 - anomaly)}%`;
   const up = $("#mr-uptime"); const ops = $("#ops-timer");
@@ -2172,6 +2079,7 @@ function addThreatEvent(ev, prepend = true) {
   const empty = feed.querySelector(".tf-empty"); if (empty) empty.remove();
   const div = document.createElement("div");
   div.className = "tf-item " + (ev.severity || "low");
+  if (ev.id) { div.dataset.incident = ev.id; div.tabIndex = 0; div.setAttribute("role", "button"); div.title = "Open incident detail"; }
   const t = new Date((ev.ts || Date.now() / 1000) * 1000).toTimeString().slice(0, 5);
   div.innerHTML =
     `<span class="tf-cat">${escapeHTML((ev.category || "sys").toUpperCase().slice(0, 4))}</span>` +
@@ -2201,6 +2109,7 @@ function updateRisk(score, level) {
   const fs = $("#fl-shield");
   // "HIGH RISK" (not "BREACH"): high risk is usually resource pressure, not an intrusion
   if (fs) fs.textContent = level === "secure" ? "ACTIVE" : level === "elevated" ? "ELEVATED" : "HIGH RISK";
+  const fr = $("#fl-risk-lbl"); if (fr) fr.textContent = `RISK ${score}/100`;
 }
 
 async function seedThreats() {
@@ -2261,14 +2170,15 @@ function renderThreatCenter(d) {
   const rows = $("#matrix-rows");
   if (rows) {
     rows.innerHTML = MX_KEYS.map((k, i) => {
-      const m = mx[k] || { score: 0, trend: "flat", confidence: 90 };
+      const m = mx[k] || { score: 0, trend: "flat", signals: 0, basis: "" };
       const heat = m.score >= 60 ? "hot" : m.score >= 35 ? "warm" : "";
       const arrow = m.trend === "up" ? "▲" : m.trend === "down" ? "▼" : "—";
-      return `<div class="mx-row ${heat}">
+      const sig = m.signals ?? 0;
+      return `<button type="button" class="mx-row ${heat}" data-domain="${k}" title="${escapeHTML(m.basis || "")} · click for detail">
         <span class="mx-name">${MX_LABELS[i]} · ${k.toUpperCase().slice(0, 9)}</span>
         <span class="mx-score">${m.score}</span>
         <span class="mx-trend ${m.trend}">${arrow}</span>
-        <span class="mx-conf">${m.confidence}%</span></div>`;
+        <span class="mx-conf" title="incidents in this domain, last 30 min">${sig} SIG</span></button>`;
     }).join("");
   }
   // SOC
@@ -2282,13 +2192,13 @@ function renderThreatCenter(d) {
     const evs = (d.events || []).slice(0, 6);
     tl.innerHTML = evs.length ? evs.map(ev => {
       const t = new Date(ev.ts * 1000).toTimeString().slice(0, 5);
-      return `<div class="ir-item">
+      return `<div class="ir-item" data-incident="${escapeHTML(ev.id)}" tabindex="0" role="button" title="Open incident detail">
         <span class="ir-time">${t}</span>
         <span class="ir-main">
           <div class="ir-title">${escapeHTML(ev.title)}</div>
           <div class="ir-meta">${escapeHTML(ev.severity.toUpperCase())} · ASSIGNED <b>${escapeHTML((ev.agent || "jarvis").toUpperCase())}</b></div>
         </span>
-        <span class="ir-stage ${ev.stage || "detected"}">${(ev.stage || "detected").toUpperCase()}</span>
+        <span class="ir-stage ${ev.stage || "active"}">${(ev.stage || "active").toUpperCase()}</span>
       </div>`;
     }).join("") : '<div class="tf-empty">no incidents in the response pipeline</div>';
   }
@@ -2348,13 +2258,16 @@ function renderThreatAnalytics(d) {
     if (qn) qn.textContent = items.length;
     q.innerHTML = items.length ? items.map(ev => `
       <div class="ta-q-item ${ev.severity}">
-        <span class="ta-q-title" title="${escapeHTML(ev.detail || "")}">${escapeHTML(ev.title)}</span>
+        <span class="ta-q-title" data-incident="${escapeHTML(ev.id)}" role="button" tabindex="0" title="${escapeHTML(ev.detail || "open incident detail")}">${escapeHTML(ev.title)}${ev.stage === "resolved" ? ' <em class="ta-q-cleared">CLEARED</em>' : ""}</span>
         <button class="ta-q-ack" data-id="${escapeHTML(ev.id)}">ACK</button>
       </div>`).join("")
       : '<div class="tf-empty">queue clear — nothing awaiting acknowledgement</div>';
     q.querySelectorAll(".ta-q-ack").forEach(btn => btn.addEventListener("click", async () => {
       btn.disabled = true; btn.textContent = "…";
-      try { await fetch("/api/threats/ack/" + btn.dataset.id, { method: "POST" }); } catch (e) {}
+      try {
+        const r = await (await fetch("/api/threats/ack/" + encodeURIComponent(btn.dataset.id), { method: "POST" })).json();
+        if (r.ok === false) logEvent(`<span class="tag">[threat]</span> ACK refused: ${escapeHTML(r.error || "observer role")}`, "warn");
+      } catch (e) { logEvent('<span class="tag">[threat]</span> ACK failed (server unreachable)', "warn"); }
       seedThreats();
     }));
   }
@@ -2747,6 +2660,7 @@ function pushTraffic(up, down) {
 async function refreshProcs() {
   try {
     const r = await fetch("/api/processes"); const d = await r.json();
+    window._lastProcs = d;
     const host = $("#proc-list"); if (!host) return;
     // show as many real processes as the card has room for (5–12)
     const fit = Math.max(5, Math.min(12, Math.floor((host.clientHeight || 120) / 22)));
@@ -2761,8 +2675,8 @@ async function refreshProcs() {
       if (d.gpu == null) { gv.textContent = "N/A"; if (gb) gb.style.width = "0%"; }
       else { gv.textContent = `${Math.round(d.gpu)}%`; if (gb) gb.style.width = `${Math.min(100, d.gpu)}%`; }
     }
-    host.innerHTML = rows.map(p => `
-      <div class="proc-row">
+    host.innerHTML = rows.map((p, i) => `
+      <div class="proc-row" data-i="${i}" role="button" tabindex="0" title="Process detail">
         <span class="proc-name">${escapeHTML(p.name)}${p.count > 1 ? " ×" + p.count : ""}</span>
         <span class="proc-cpu">${p.cpu.toFixed(0)}%</span>
         <span class="proc-mem">${p.mem_mb >= 1024 ? (p.mem_mb / 1024).toFixed(1) + " GB" : p.mem_mb.toFixed(0) + " MB"}</span>
@@ -2788,7 +2702,10 @@ function makeInteractive(el, fn, label) {
   });
 }
 
+// every open bumps the sequence, so a slow async fill can tell it was superseded
+window._mSeq = 0;
 function openCustomModal(title, sub, iconSvg, bodyHTML) {
+  window._mSeq++;
   const modal = $("#tool-modal"); if (!modal) return;
   $("#modal-title").textContent = title;
   $("#modal-sub").textContent = sub;
@@ -2803,8 +2720,10 @@ async function openProcModal(kind) {
     kind === "cpu" ? "PROCESS MONITOR" : "MEMORY SCANNER",
     kind === "cpu" ? "TOP CPU CONSUMERS · LIVE" : "TOP MEMORY CONSUMERS · LIVE",
     null, '<div style="color:var(--text-dim);font-style:italic">scanning…</div>');
+  const seq = window._mSeq;
   try {
     const d = await (await fetch("/api/processes")).json();
+    if (seq !== window._mSeq) return;
     const rows = (kind === "cpu" ? d.top_cpu : d.top_mem) || [];
     const max = Math.max(...rows.map(p => kind === "cpu" ? p.cpu : p.mem_mb), 1);
     $("#modal-body").innerHTML = '<div class="mb-list">' + rows.map(p => {
@@ -2859,8 +2778,10 @@ function openVoiceEngineModal() {
 async function openAgentModal(name) {
   openCustomModal((name || "").toUpperCase(), "AGENT OPERATIONS FILE", null,
     '<div style="color:var(--text-dim);font-style:italic">pulling agent telemetry…</div>');
+  const seq = window._mSeq;
   try {
     const d = await (await fetch("/api/status")).json();
+    if (seq !== window._mSeq) return;
     const a = (d.agents || []).find(x => x.name === name);
     if (!a) throw new Error("agent not found");
     $("#modal-title").textContent = a.codename;
@@ -2886,10 +2807,12 @@ async function openModelManager() {
   openCustomModal("LLM SWITCH", "CHOOSE THE BRAIN · PLUG IN ANY OPENAI-COMPATIBLE MODEL",
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z"/><circle cx="12" cy="11" r="3" fill="currentColor"/></svg>',
     '<div style="color:var(--text-dim);font-style:italic">querying providers…</div>');
+  const seq = window._mSeq;
   try {
     const [m, p] = await Promise.all([
       fetch("/api/models").then(r => r.json()),
       fetch("/api/llm/providers").then(r => r.json())]);
+    if (seq !== window._mSeq) return;           // the operator opened something else meanwhile
     renderModelManager(m, p);
   } catch (e) {
     $("#modal-body").innerHTML = `<div style="color:var(--error)">provider query failed: ${escapeHTML(e.message)}</div>`;
@@ -3415,9 +3338,9 @@ function initExtraInteractions() {
 
   // Live-operations & AI-ops cards → jump to their detailed rows
   makeInteractive($("#aiops-vision"), () => execDashCmd("camera"), "Vision — jump to operator view");
-  makeInteractive($("#intel-readiness"), () => {}, "Mission readiness");
+  makeInteractive($("#intel-readiness"), () => openSectionInfo("MISSION READINESS"), "Mission readiness: how it is computed");
   makeInteractive($(".bs-mission"), () => execDashCmd("agenda"), "Live ops — jump to agenda");
-  makeInteractive($(".bs-threat"), () => execDashCmd("threats"), "Threats — jump to threat center");
+  makeInteractive($(".bs-threat"), () => bucsJump("#tic-matrix"), "Threats: jump to the threat matrix");
 }
 initExtraInteractions();
 
@@ -3432,6 +3355,7 @@ function scheduleReconnect(reason) {
   wsReconnecting = true;
   $("#status-pill").classList.add("offline");
   $("#status-text").textContent = "RECONNECTING";
+  try { LinkState.down(); } catch (e) {}
   try { if (ws) ws.close(); } catch (e) {}
   setTimeout(() => { wsReconnecting = false; connect(); }, 1200);
 }
@@ -3443,6 +3367,7 @@ function connect() {
     wsLastMsg = Date.now();
     $("#status-pill").classList.remove("offline");
     $("#status-text").textContent = "ONLINE";
+    try { LinkState.up(); } catch (e) {}
     logEvent('<span class="tag">[net]</span> uplink established');
     refreshPills();
     setPill("#sp-voice", "OFF", "warn");
@@ -3479,7 +3404,7 @@ function handle(msg) {
       ConversationMode.set(!!msg.on);
       break;
     case "micmode":
-      MicMode.set(msg.mode, msg.armed);
+      MicMode.set(msg.mode, msg.armed, msg.status);
       if (msg.source === "voice") logEvent(`<span class="tag">[voice]</span> microphone mode → ${escapeHTML(msg.mode.toUpperCase())} (by voice)`);
       break;
     case "dev":
@@ -3640,7 +3565,7 @@ function handle(msg) {
     case "insight":
       addInsight(msg);
       pushTicker(`AI: ${msg.insight || ""}`.slice(0, 140));
-      setConfidence(msg.confidence);
+      setConfidence(msg.confidence ?? null);
       { const src = $("#insight-source");
         if (src) src.textContent = (msg.source || "—").toUpperCase(); }
       logEvent(`<span class="tag">[jarvis-ai]</span> ${escapeHTML(msg.insight)}`,
@@ -4743,8 +4668,9 @@ function humanSeen(sec) {
 
 // plot the live fleet on the world map (real projected coordinates)
 function renderFleetOnMap(nodes) {
+  // legacy world SVG only; skipped once globalmap.js owns the panel
   const host = document.getElementById("map-fleet");
-  if (!host || typeof projectCity !== "function") return;
+  if (!host || window.GlobalMap || !mapProjection) return;
   host.innerHTML = "";
   // command-link lines: host node → every other node (a live command network)
   const local = nodes.find(n => n.is_local && n.lat != null);
@@ -5255,6 +5181,7 @@ function _sectionKey(el) {
 async function openSectionInfo(key) {
   const def = SECTION_INFO[key]; if (!def) return;
   openCustomModal(key, "SECTION INFO · LIVE DATA", null, `<div style="color:var(--text-dim);font-style:italic">reading live data…</div>`);
+  const seq = window._mSeq;
   let d = {}, err = null;
   if (def.api) {
     try { const r = await fetch(def.api); d = r.ok ? await r.json() : {}; if (!r.ok) err = `HTTP ${r.status}`; }
@@ -5263,6 +5190,7 @@ async function openSectionInfo(key) {
   let stats = [], list = [];
   try { stats = (def.stats ? def.stats(d) : []).filter(([, v]) => v !== undefined); } catch (e) {}
   try { list = (def.list ? def.list(d) : []).filter(Boolean).slice(0, 12); } catch (e) {}
+  if (seq !== window._mSeq) return;              // another detail view replaced this one
   if (!def.stats && def.api && !err) {           // generic: top-level scalars only
     stats = Object.entries(d).filter(([, v]) => v == null || typeof v !== "object").slice(0, 8)
       .map(([k, v]) => [k.replace(/_/g, " ").toUpperCase(), v]);
@@ -5442,3 +5370,472 @@ $("#heal-toggle")?.addEventListener("click", async () => {
 // the header's live status lights open the self-healing panel
 $("#sys-mod .sm-status")?.addEventListener("click", () => $("#heal-card")?.scrollIntoView({ behavior: "smooth", block: "center" }));
 refreshHeal(); setInterval(refreshHeal, 30000);
+
+
+/* ═══ DASHBOARD PASS · link state, measured AI performance, detail views, map linkage ═══
+   Every value below is read from a live endpoint at render/click time. A failed read shows
+   "unavailable", never an invented number. Detail views end with their source + read time. */
+
+function bucsJump(sel) {
+  const el = typeof sel === "string" ? document.querySelector(sel) : sel;
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("flash-target");
+  setTimeout(() => el.classList.remove("flash-target"), 2200);
+}
+window.bucsJump = bucsJump;
+const _srcFoot = (src, api) => `<div class="si-src"><span class="lbl">DATA SOURCE</span> ${escapeHTML(src)}
+  ${api ? `<code>${escapeHTML(api)}</code>` : ""} · read ${new Date().toLocaleTimeString()}</div>`;
+const _getJSON = async (u) => { const r = await fetch(u, { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); };
+
+/* — live link: values on screen are frozen while /ws is down — */
+const LinkState = {
+  since: null, timer: null,
+  down() {
+    if (this.since) return;
+    this.since = Date.now();
+    clearTimeout(this.timer);
+    // brief blips (reconnect within 3 s) don't flash the banner
+    this.timer = setTimeout(() => {
+      if (!this.since) return;
+      document.body.classList.add("link-down");
+      const b = $("#link-banner"); if (b) b.hidden = false;
+      this.paint();
+    }, 3000);
+  },
+  up() {
+    clearTimeout(this.timer);
+    const was = this.since; this.since = null;
+    document.body.classList.remove("link-down");
+    const b = $("#link-banner"); if (b) b.hidden = true;
+    if (was && Date.now() - was > 3000) {     // catch up on everything that was frozen
+      try { seedThreats(); refreshAiPerf(); refreshSocResponse(); refreshFooterHealth(); } catch (e) {}
+    }
+  },
+  paint() {
+    const t = $("#link-banner-txt"); if (!t || !this.since) return;
+    const s = Math.round((Date.now() - this.since) / 1000);
+    t.textContent = `LIVE LINK LOST · values frozen since ${new Date(this.since).toLocaleTimeString()} (${s}s) · retrying`;
+  },
+};
+setInterval(() => LinkState.paint(), 1000);
+$("#link-banner-retry")?.addEventListener("click", () => { try { scheduleReconnect("manual"); } catch (e) {} });
+
+/* — AI PERFORMANCE: measured command outcomes, latency and route usage — */
+let _aiPerf = null;
+async function refreshAiPerf() {
+  const card = $("#ai-perf-card"); if (!card) return;
+  try {
+    const d = _aiPerf = await _getJSON("/api/dashboard/ai-performance");
+    card.classList.remove("is-error");
+    const pct = d.success_pct;
+    $("#aip-success").innerHTML = pct == null ? "—" : `${Math.round(pct)}<span>%</span>`;
+    const arc = $("#ai-arc");
+    if (arc) {
+      arc.setAttribute("stroke-dasharray", AI_CIRC.toFixed(1));
+      arc.setAttribute("stroke-dashoffset", String((AI_CIRC * (1 - (pct == null ? 0 : pct / 100))).toFixed(1)));
+    }
+    $("#aip-cmds").textContent = d.commands ? `${d.commands} · ${d.failed} failed` : "none yet";
+    $("#ai-rt").textContent = d.first_token_p50_ms != null ? `${(d.first_token_p50_ms / 1000).toFixed(2)} s` : "—";
+    $("#aip-replies").textContent = d.replies ? String(d.replies) : "none yet";
+    const ie = d.insight_engine || {};
+    $("#aip-ins").textContent = ie.source ? String(ie.source).toUpperCase() : "—";
+    $("#aip-when").textContent = d.commands ? `UPDATED ${new Date(d.ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "NO COMMANDS YET";
+  } catch (e) {
+    card.classList.add("is-error");
+    $("#aip-when").textContent = "UNAVAILABLE";
+  }
+}
+refreshAiPerf(); setInterval(refreshAiPerf, 15000);
+makeInteractive($("#ai-perf-card"), async () => {
+  openCustomModal("AI PERFORMANCE", "MEASURED · THIS SESSION", null, '<div class="tf-empty">reading…</div>');
+  const seq = window._mSeq;
+  try {
+    const d = await _getJSON("/api/dashboard/ai-performance");
+    if (seq !== window._mSeq) return;
+    const routes = Object.entries(d.routes || {});
+    const ie = d.insight_engine || {}, lm = d.local_model || {};
+    $("#modal-body").innerHTML = `<div class="mb-grid">
+        ${_stat("COMMAND SUCCESS", d.success_pct == null ? "— (no commands yet)" : d.success_pct + "%", d.success_pct >= 90 ? "ok" : "")}
+        ${_stat("COMMANDS", d.commands)}${_stat("FAST PATH", d.fast)}${_stat("VIA LLM", d.llm)}
+        ${_stat("FAILED", d.failed, d.failed ? "warn" : "ok")}${_stat("CANCELLED", d.cancelled)}
+        ${_stat("FIRST TOKEN p50", d.first_token_p50_ms != null ? d.first_token_p50_ms + " ms" : "—")}
+        ${_stat("FIRST SPEECH p50", d.first_speech_p50_ms != null ? d.first_speech_p50_ms + " ms" : "—")}
+        ${_stat("ACTIVE PROVIDER", (d.active_provider || "—").toUpperCase())}
+        ${_stat("LOCAL MODEL tok/s", lm.tokens_per_sec ?? "—")}
+      </div><div class="mb-list">
+        ${routes.length ? routes.map(([k, n]) => _row(`${escapeHTML(k)} — ${n} replies`, `LAST ${d.route_ms?.[k] ?? "—"} ms`)).join("") : _none("No AI replies yet this session. Ask JARVIS something to start measuring.")}
+        ${_row(`Insights engine: ${escapeHTML(ie.source || "—")} ${ie.model ? "· " + escapeHTML(ie.model) : ""}`, `LAST RUN ${_ago(ie.last_run)}`)}
+      </div>
+      <div class="mb-actions"><button class="cmd-btn" type="button" data-jump="#router-card">OPEN AI BRAIN ROUTER</button>
+        <button class="cmd-btn" type="button" data-jump="#lai-card">LOCAL AI CONTROL</button></div>
+      ${_srcFoot((d.sources || []).join(" · "), "/api/dashboard/ai-performance")}`;
+  } catch (e) { $("#modal-body").innerHTML = `<div class="mb-row" style="color:var(--error)">unavailable: ${escapeHTML(e.message)}</div>`; }
+}, "AI performance detail");
+
+/* — SOC response status: what the decision engine may do on its own — */
+async function refreshSocResponse() {
+  const host = $("#soc-response"), txt = $("#soc-response-txt"); if (!host || !txt) return;
+  const dot = host.querySelector(".rr-dot");
+  try {
+    const d = await _getJSON("/api/decisions");
+    const n = (d.proposals || []).length;
+    txt.textContent = `${d.autonomy ? "AUTONOMY ON · low-risk whitelist" : "AUTONOMY OFF · you approve every action"} · ${n} PROPOSAL${n === 1 ? "" : "S"} WAITING`;
+    if (dot) dot.className = "rr-dot" + (d.autonomy ? " ok" : "");
+  } catch (e) { txt.textContent = "decision engine unavailable"; if (dot) dot.className = "rr-dot"; }
+}
+refreshSocResponse(); setInterval(refreshSocResponse, 30000);
+makeInteractive($("#soc-response"), () => bucsJump("#dec-card"), "Open DECISION SUPPORT");
+
+/* — footer: real self-healing status instead of a fixed "ALL SYSTEMS NOMINAL" — */
+async function refreshFooterHealth() {
+  const el = $("#foot-health"); if (!el) return;
+  try {
+    const d = await _getJSON("/api/health");
+    const checks = Object.values(d.checks || {});
+    const ok = checks.filter(c => c.status === "ok").length;
+    const ov = String(d.overall || "unknown").toUpperCase();
+    el.textContent = checks.length ? `⌖ HEALTH ${ov} · ${ok}/${checks.length} CHECKS OK` : "⌖ HEALTH · first check pending";
+    el.className = "foot-l " + (d.overall === "fail" ? "bad" : d.overall === "warn" ? "warn" : "");
+  } catch (e) { el.textContent = "⌖ HEALTH UNAVAILABLE"; el.className = "foot-l warn"; }
+}
+refreshFooterHealth(); setInterval(refreshFooterHealth, 30000);
+makeInteractive($("#foot-health"), () => bucsJump("#heal-card"), "Open SELF-HEALING");
+
+/* — incident detail (threat feed, response timeline, response queue) — */
+const ON_HOST = new Set(["system", "network", "ai", "productivity", "operations"]);
+async function openIncident(id) {
+  openCustomModal("INCIDENT", "THREAT INTELLIGENCE · LIVE", null, '<div class="tf-empty">reading…</div>');
+  let d; const seq = window._mSeq;
+  try { d = await _getJSON("/api/threats"); if (seq !== window._mSeq) return; }
+  catch (e) { if (seq !== window._mSeq) return; $("#modal-body").innerHTML = `<div class="mb-row" style="color:var(--error)">threat engine unavailable: ${escapeHTML(e.message)}</div>`; return; }
+  const ev = (d.events || []).find(e => e.id === id);
+  if (!ev) { $("#modal-body").innerHTML = _none("This incident has rolled off the board (the engine keeps the latest 20).") + _srcFoot("threats.py", "/api/threats"); return; }
+  $("#modal-title").textContent = ev.title;
+  const g = window._geo;
+  const mappable = ON_HOST.has(ev.category) && g && g.lat != null;
+  const stageNote = {
+    active: ev.auto_check ? "condition still true in live telemetry" : "observed; no automatic clear signal for this kind of incident",
+    resolved: ev.resolved_note || "condition cleared in live telemetry",
+    acknowledged: "acknowledged by an operator",
+    expired: "older than 30 min with no clear signal; no longer counts toward risk",
+  }[ev.stage] || "";
+  $("#modal-body").innerHTML = `<div class="mb-grid">
+      ${_stat("SEVERITY", (ev.severity || "").toUpperCase(), ev.severity === "low" ? "" : "warn")}
+      ${_stat("CATEGORY", (ev.category || "").toUpperCase())}
+      ${_stat("STATE", (ev.stage || "").toUpperCase(), ev.stage === "active" ? "warn" : "ok")}
+      ${_stat("ASSIGNED", (ev.agent || "jarvis").toUpperCase())}
+      ${_stat("DETECTED", new Date(ev.ts * 1000).toLocaleTimeString())}
+      ${_stat("AGE", _ago(ev.ts))}
+    </div><div class="mb-list">
+      ${ev.detail ? _row(escapeHTML(ev.detail), "DETAIL") : ""}
+      ${_row(escapeHTML(stageNote), "LIFECYCLE")}
+      ${ON_HOST.has(ev.category) ? _row("Measured on this machine" + (g && g.city ? ` (${escapeHTML(g.city)}, IP-geolocated)` : ""), "WHERE") : ""}
+    </div>
+    <div class="mb-actions">
+      ${["active", "resolved"].includes(ev.stage) ? `<button class="cmd-btn" type="button" data-ack="${escapeHTML(ev.id)}">ACKNOWLEDGE</button>` : ""}
+      ${mappable ? `<button class="cmd-btn" type="button" data-map-lat="${g.lat}" data-map-lon="${g.lon}" data-map-id="${escapeHTML(ev.id)}" data-map-layer="threats" data-map-label="${escapeHTML(ev.title)}">SHOW ON MAP</button>` : ""}
+      <button class="cmd-btn" type="button" data-jump="#tic-analytics">RESPONSE QUEUE</button>
+    </div>
+    ${_srcFoot("threats.py incident engine (live telemetry, news, agenda)", "/api/threats")}`;
+}
+
+/* — matrix domain detail — */
+async function openDomain(key) {
+  openCustomModal(`THREAT DOMAIN · ${key.toUpperCase()}`, "SIX-DOMAIN RISK MATRIX", null, '<div class="tf-empty">reading…</div>');
+  const seq = window._mSeq;
+  try {
+    const d = await _getJSON("/api/threats");
+    if (seq !== window._mSeq) return;
+    const m = (d.matrix || {})[key] || {};
+    const cat = { operational: "operations", infrastructure: "system", network: "network", ai: "ai", resource: "system", security: "external" }[key];
+    const evs = (d.events || []).filter(e => e.category === cat).slice(0, 8);
+    $("#modal-body").innerHTML = `<div class="mb-grid">
+        ${_stat("SCORE", `${m.score ?? "—"} / 100`, m.score >= 60 ? "warn" : "ok")}
+        ${_stat("TREND", (m.trend || "—").toUpperCase())}
+        ${_stat("SIGNALS · 30 MIN", m.signals ?? 0)}
+      </div><div class="mb-list">
+        ${_row(escapeHTML(m.basis || "—"), "HOW THIS SCORE IS BUILT")}
+        ${evs.length ? evs.map(e => `<div class="mb-row mb-click" data-incident="${escapeHTML(e.id)}" role="button" tabindex="0">${escapeHTML(e.title)}<div class="mb-row-meta">${escapeHTML((e.severity || "").toUpperCase())} · ${escapeHTML((e.stage || "").toUpperCase())} · ${_hm(e.ts)}</div></div>`).join("")
+          : _none("No incidents in this domain right now.")}
+      </div>${_srcFoot("threats.py matrix()", "/api/threats")}`;
+  } catch (e) { $("#modal-body").innerHTML = `<div class="mb-row" style="color:var(--error)">unavailable: ${escapeHTML(e.message)}</div>`; }
+}
+
+/* — insight detail — */
+function openInsight(d) {
+  openCustomModal("JARVIS INSIGHT", `${String(d.source || "—").toUpperCase()} · ${new Date((d.ts || 0) * 1000).toLocaleTimeString()}`, null,
+    `<div class="mb-list">${_row(escapeHTML(d.insight || ""), (d.severity || "info").toUpperCase())}
+      ${d.recommendation ? _row(escapeHTML(d.recommendation), "RECOMMENDATION") : ""}
+      ${_row(d.confidence != null ? `${d.confidence}% (reported by the model)` : "Rule-based insight: deterministic, no confidence score", "CONFIDENCE")}</div>
+     <div class="mb-actions"><button class="cmd-btn" type="button" data-ask="${escapeHTML(d.insight || "")}">ASK JARVIS ABOUT THIS</button>
+       <button class="cmd-btn" type="button" data-jump="#recs-card">RECOMMENDATIONS</button></div>
+     ${_srcFoot("insights.py (local LLM → Claude → rules)", "/api/insights")}`);
+}
+
+/* — process detail — */
+function openProcess(p) {
+  openCustomModal(p.name, "PROCESS MONITOR · TOP CPU", null, `<div class="mb-grid">
+      ${_stat("CPU · 100% = 1 CORE", `${p.cpu}%`, p.cpu > 50 ? "warn" : "")}
+      ${_stat("MEMORY", p.mem_mb >= 1024 ? (p.mem_mb / 1024).toFixed(1) + " GB" : Math.round(p.mem_mb) + " MB")}
+      ${_stat("INSTANCES", p.count || 1)}
+    </div><div class="mb-list">${_row("Read-only view. BUCS does not kill processes from the dashboard; use Task Manager if you need to end one.", "NOTE")}</div>
+    ${_srcFoot("procscan.py (psutil sweep, cached)", "/api/processes")}`);
+}
+
+/* one delegated handler for every detail trigger on the page */
+function _detailFrom(el) {
+  if (el.closest("#tool-modal") && !el.closest(".mb-click, [data-ack], [data-map-lat], [data-jump], [data-ask]")) return false;
+  const inc = el.closest("[data-incident]");
+  if (inc && !el.closest("button.ta-q-ack")) { openIncident(inc.dataset.incident); return true; }
+  const dom = el.closest(".mx-row[data-domain]");
+  if (dom) { openDomain(dom.dataset.domain); return true; }
+  const ins = el.closest(".insight-item");
+  if (ins && ins._data) { openInsight(ins._data); return true; }
+  const pr = el.closest(".proc-row[data-i]");
+  if (pr && window._lastProcs) { const p = (window._lastProcs.top_cpu || [])[+pr.dataset.i]; if (p) openProcess(p); return true; }
+  const city = el.closest(".region-marker[data-lat]");
+  if (city) { bucsShowOnMap({ lat: +city.dataset.lat, lon: +city.dataset.lon, id: "city:" + city.dataset.name, layer: "places", label: city.dataset.name }); return true; }
+  const ack = el.closest("[data-ack]");
+  if (ack) {
+    ack.disabled = true; ack.textContent = "…";
+    fetch("/api/threats/ack/" + encodeURIComponent(ack.dataset.ack), { method: "POST" }).then(r => r.json()).then(r => {
+      if (r.ok === false) { ack.textContent = "REFUSED"; logEvent(`<span class="tag">[threat]</span> ACK refused: ${escapeHTML(r.error || "observer role")}`, "warn"); }
+      else { ack.textContent = "ACKNOWLEDGED"; seedThreats(); }
+    }).catch(() => { ack.textContent = "FAILED"; ack.disabled = false; });
+    return true;
+  }
+  const mp = el.closest("[data-map-lat]");
+  if (mp) { closeToolModal(); bucsShowOnMap({ lat: +mp.dataset.mapLat, lon: +mp.dataset.mapLon, id: mp.dataset.mapId, layer: mp.dataset.mapLayer, label: mp.dataset.mapLabel }); return true; }
+  const jp = el.closest("[data-jump]");
+  if (jp && jp.closest("#tool-modal")) { closeToolModal(); bucsJump(jp.dataset.jump); return true; }
+  const ask = el.closest("[data-ask]");
+  if (ask) { closeToolModal(); const i = $("#ask-input"); if (i) { i.value = "@jarvis explain and advise: " + ask.dataset.ask; i.focus(); bucsJump("#ask-form"); } return true; }
+  return false;
+}
+document.addEventListener("click", (e) => {
+  if (e.target.closest("a, input, select, textarea")) return;
+  if (_detailFrom(e.target)) e.stopPropagation();      // capture phase: the card-level jump handlers stay quiet
+}, true);
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  if (e.target.matches("[data-incident], .insight-item, .proc-row[data-i], .mb-click")) { e.preventDefault(); _detailFrom(e.target); }
+});
+
+/* — section info for the feature sections (they mount after initSectionInfo first ran) — */
+Object.assign(SECTION_INFO, {
+  "AI PERFORMANCE": { about: "How the AI is actually performing this session: command outcomes, latency and which brain answered.",
+    api: "/api/dashboard/ai-performance", source: "realtime engine + brain route counters + insights engine status",
+    stats: d => [["SUCCESS", d.success_pct == null ? "—" : d.success_pct + "%"], ["COMMANDS", d.commands], ["FAILED", d.failed],
+      ["FIRST TOKEN p50", _siNum(d.first_token_p50_ms, " ms")], ["REPLIES", d.replies], ["PROVIDER", d.active_provider]] },
+  "DISASTER RESPONSE": { about: "Natural hazards and digital outages from public feeds, ranked by severity and distance from you. Click any event for detail and to show it on the map.",
+    api: "/api/disaster", source: "disaster.py: USGS, GDACS, NASA EONET, NDMA SACHET, CISA KEV, public statuspages, IODA. Every item names its feed and fetch time.",
+    stats: d => [["EVENTS", d.counts?.total], ["CRITICAL", d.counts?.by_severity?.CRITICAL], ["HIGH", d.counts?.by_severity?.HIGH],
+      ["NEAR YOU", d.counts?.near], ["FEEDS LIVE", `${(d.sources || []).filter(s => s.status === "ok").length}/${(d.sources || []).length}`]],
+    list: d => (d.sources || []).map(s => `${s.label} · ${String(s.status).toUpperCase()} · ${s.count} items`) },
+  "DEVICES & CONNECTIVITY": { about: "Smart devices you added (local protocols only) and the ways this node can link to your other machines.",
+    api: "/api/devices", source: "devices.py: Home Assistant / Hue / Shelly / Tasmota / ESPHome / WLED / MQTT adapters, mDNS + SSDP discovery. Every action is audited.",
+    stats: d => [["DEVICES", (d.devices || []).length], ["ONLINE", (d.devices || []).filter(x => x.status && x.status.online).length],
+      ["DISCOVERED", (d.discovery?.items || []).length], ["ROLE", d.commander ? "COMMANDER" : "OBSERVER"]],
+    list: d => (d.devices || []).map(x => `${x.name} · ${x.label} · ${x.status?.online ? "online" : "offline"}`) },
+  "CYBER ANALYST": { about: "Scans this install for vulnerable dependencies, leaked secrets, exposure and risky config, with live threat intel.",
+    api: "/api/secagent", source: "secagent.py: OSV.dev advisories, CISA KEV catalog, local checks. Fixes go through engineering mode and need your approval.",
+    stats: d => [["POSTURE", d.score], ["CRITICAL", d.counts?.critical], ["HIGH", d.counts?.high], ["MEDIUM", d.counts?.medium], ["LOW", d.counts?.low],
+      ["LAST FULL SCAN", _siAgo(d.last_scan?.full)]],
+    list: d => (d.findings || []).slice(0, 10).map(f => `${String(f.severity).toUpperCase()} · ${f.title}`) },
+});
+setTimeout(initSectionInfo, 1500);
+window.addEventListener("load", () => setTimeout(initSectionInfo, 400));
+
+
+/* ═══ TIME MODULE · header clock with a seconds ring; click for world clocks, sun times,
+   the next calendar event and a timer/stopwatch. Zones are remembered in localStorage
+   (per browser); sun times are computed locally from the IP-geolocated lat/lon. ═══ */
+const TimeModule = (() => {
+  const KEY = "bucs.timezones";
+  const DEFAULT_ZONES = ["UTC", "Europe/London", "America/New_York", "Asia/Tokyo"];
+  const localTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "local"; } catch (e) { return "local"; } })();
+  let zones = DEFAULT_ZONES.slice();
+  try { const z = JSON.parse(localStorage.getItem(KEY) || "null"); if (Array.isArray(z)) zones = z.filter(x => typeof x === "string").slice(0, 8); } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(zones)); } catch (e) {} };
+  const validTz = (tz) => { try { new Intl.DateTimeFormat("en-GB", { timeZone: tz }); return true; } catch (e) { return false; } };
+  const fmt = (d, tz, opt) => { try { return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz, ...(opt || {}) }); } catch (e) { return "--:--"; } };
+  const tzShort = (tz) => { try { return new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" }).formatToParts(new Date()).find(p => p.type === "timeZoneName").value; } catch (e) { return tz; } };
+  const label = (tz) => tz === "UTC" ? "UTC" : tz.split("/").pop().replace(/_/g, " ");
+  // whole-day difference vs local, so "+1" / "−1" shows across midnight
+  const dayDiff = (tz) => {
+    try {
+      const k = (t) => new Date().toLocaleDateString("en-CA", { timeZone: t });
+      const a = new Date(k(tz)), b = new Date(k(localTz));
+      const d = Math.round((a - b) / 864e5); return d ? (d > 0 ? ` +${d}d` : ` −${-d}d`) : "";
+    } catch (e) { return ""; }
+  };
+
+  // sunrise / sunset (SunCalc-style NOAA approximation, ±1–2 min)
+  function sunTimes(date, lat, lon) {
+    const rad = Math.PI / 180, dayMs = 864e5, J1970 = 2440588, J2000 = 2451545;
+    const toJ = d => d.valueOf() / dayMs - 0.5 + J1970, fromJ = j => new Date((j + 0.5 - J1970) * dayMs);
+    const d = toJ(date) - J2000, lw = rad * -lon, phi = rad * lat;
+    const n = Math.round(d - 0.0009 - lw / (2 * Math.PI));
+    const ds = 0.0009 + lw / (2 * Math.PI) + n;
+    const M = rad * (357.5291 + 0.98560028 * ds);
+    const C = rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M));
+    const L = M + C + rad * 102.9372 + Math.PI;
+    const dec = Math.asin(Math.sin(L) * Math.sin(rad * 23.4397));
+    const Jnoon = J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+    const cosw = (Math.sin(rad * -0.833) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec));
+    if (cosw < -1 || cosw > 1) return { polar: cosw < -1 ? "sun up all day" : "sun down all day" };
+    const w = Math.acos(cosw);
+    const Jset = J2000 + 0.0009 + (w + lw) / (2 * Math.PI) + n + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+    return { rise: fromJ(Jnoon - (Jset - Jnoon)), set: fromJ(Jset), noon: fromJ(Jnoon) };
+  }
+
+  // timer + stopwatch keep running while the popover is closed
+  const sw = { start: 0, acc: 0, running: false };
+  const tm = { end: 0, running: false, total: 0 };
+  const two = n => String(n).padStart(2, "0");
+  const dur = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${s >= 3600 ? Math.floor(s / 3600) + ":" : ""}${two(Math.floor(s / 60) % 60)}:${two(s % 60)}`; };
+  const swMs = () => sw.acc + (sw.running ? Date.now() - sw.start : 0);
+  function beep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.25, 0.5].forEach(t => { const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = 880; g.gain.value = (typeof AudioCtl !== "undefined" && AudioCtl.muted) ? 0 : 0.08;
+        o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.15); });
+    } catch (e) {}
+  }
+
+  const pop = () => document.getElementById("time-pop");
+  const btn = () => document.getElementById("time-mod");
+  let open = false, mode = "sw";
+
+  function tick() {
+    const now = new Date();
+    const r = document.getElementById("tm-ring");
+    if (r) r.setAttribute("stroke-dasharray", `${now.getSeconds() + 1} 60`);
+    const z = document.getElementById("tm-tz"); if (z && z.textContent === "—") z.textContent = tzShort(localTz);
+    if (tm.running && Date.now() >= tm.end) {
+      tm.running = false; beep();
+      try { logEvent(`<span class="tag">[timer]</span> ${dur(tm.total)} timer finished`, "warn"); } catch (e) {}
+      btn()?.classList.add("tm-done"); setTimeout(() => btn()?.classList.remove("tm-done"), 6000);
+    }
+    btn()?.classList.toggle("tm-active", sw.running || tm.running);
+    if (open) paintLive();
+  }
+
+  function paintLive() {
+    const now = new Date();
+    const set = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
+    set("tp-local", now.toTimeString().slice(0, 8));
+    document.querySelectorAll("#tp-zones [data-tz]").forEach(el => { el.querySelector(".tp-z-t").textContent = fmt(now, el.dataset.tz) + dayDiff(el.dataset.tz); });
+    set("tp-sw", dur(swMs()));
+    set("tp-tm", tm.running ? dur(tm.end - Date.now()) : (tm.total ? "done" : "--:--"));
+  }
+
+  function render() {
+    const now = new Date(), g = window._geo || {};
+    const lat = g.lat ?? (typeof userLat !== "undefined" ? userLat : null), lon = g.lon ?? (typeof userLon !== "undefined" ? userLon : null);
+    let sunHTML = `<div class="tp-muted">location unknown: sun times need the IP-geolocated position</div>`;
+    if (lat != null && lon != null) {
+      const s = sunTimes(now, +lat, +lon);
+      if (s.polar) sunHTML = `<div class="tp-muted">${s.polar}</div>`;
+      else {
+        const dl = s.set - s.rise, up = now > s.rise && now < s.set;
+        sunHTML = `<div class="tp-sun"><span>☀ RISE <b>${fmt(s.rise, localTz)}</b></span><span>☾ SET <b>${fmt(s.set, localTz)}</b></span>
+          <span>DAYLIGHT <b>${Math.floor(dl / 36e5)}h ${two(Math.round(dl / 6e4) % 60)}m</b></span></div>
+          <div class="tp-sunbar" title="${up ? "sun is up" : "sun is down"}"><i style="left:${Math.max(0, Math.min(100, (now - s.rise) / dl * 100)).toFixed(1)}%"></i></div>
+          <div class="tp-muted">computed for ${escapeHTML(g.city || "your location")} (${(+lat).toFixed(2)}, ${(+lon).toFixed(2)}, IP-geolocated)</div>`;
+      }
+    }
+    // next calendar event: only when real agenda data exists
+    let evHTML = "";
+    try {
+      const evs = ((typeof lastAgenda !== "undefined" && lastAgenda) ? lastAgenda.events : null) || [];
+      const nx = evs.filter(e => e.start_ts && e.start_ts * 1000 > Date.now()).sort((a, b) => a.start_ts - b.start_ts)[0];
+      if (nx) evHTML = `<div class="tp-sec"><div class="tp-h">NEXT EVENT</div><button type="button" class="tp-ev" data-tp-jump="#agenda-list">
+        <b>${escapeHTML(nx.title || "event")}</b><span>${new Date(nx.start_ts * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })} · in ${dur(nx.start_ts * 1000 - Date.now())}</span></button></div>`;
+    } catch (e) {}
+    let all = [];
+    try { all = Intl.supportedValuesOf ? Intl.supportedValuesOf("timeZone") : []; } catch (e) {}
+    pop().innerHTML = `
+      <div class="tp-head"><div><div class="tp-big" id="tp-local">${now.toTimeString().slice(0, 8)}</div>
+        <div class="tp-muted">${now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${escapeHTML(localTz)} (${escapeHTML(tzShort(localTz))})${g.city ? " · " + escapeHTML(g.city) : ""}</div></div>
+        <button type="button" class="tp-x" data-tp-close aria-label="Close">×</button></div>
+      <div class="tp-sec"><div class="tp-h">WORLD CLOCKS <span class="tp-muted">· saved in this browser</span></div>
+        <div class="tp-zones" id="tp-zones">${zones.map(z => `<div class="tp-z" data-tz="${escapeHTML(z)}"><span class="tp-z-n" title="${escapeHTML(z)}">${escapeHTML(label(z))}</span>
+          <span class="tp-z-t">${fmt(now, z)}${dayDiff(z)}</span><button type="button" class="tp-z-x" data-tp-rm="${escapeHTML(z)}" aria-label="Remove ${escapeHTML(z)}">×</button></div>`).join("") || `<div class="tp-muted">no zones: add one below</div>`}</div>
+        <form class="tp-add" id="tp-add" autocomplete="off"><input id="tp-add-in" list="tp-tzlist" placeholder="add a zone, e.g. Asia/Dubai" maxlength="40"/>
+          <datalist id="tp-tzlist">${all.map(t => `<option value="${t}">`).join("")}</datalist><button type="submit" class="cmd-btn">ADD</button>
+          ${zones.join() !== DEFAULT_ZONES.join() ? `<button type="button" class="ft-link" data-tp-reset>RESET</button>` : ""}</form>
+        <div class="tp-err" id="tp-err"></div></div>
+      ${evHTML}
+      <div class="tp-sec"><div class="tp-h">SUN</div>${sunHTML}</div>
+      <div class="tp-sec"><div class="tp-h"><span class="tp-mode${mode === "sw" ? " on" : ""}" data-tp-mode="sw" role="button" tabindex="0">STOPWATCH</span> · <span class="tp-mode${mode === "tm" ? " on" : ""}" data-tp-mode="tm" role="button" tabindex="0">TIMER</span></div>
+        ${mode === "sw" ? `<div class="tp-clockrow"><span class="tp-mid" id="tp-sw">${dur(swMs())}</span>
+            <button type="button" class="cmd-btn" data-tp-sw="toggle">${sw.running ? "PAUSE" : swMs() ? "RESUME" : "START"}</button>
+            <button type="button" class="cmd-btn" data-tp-sw="reset" ${swMs() ? "" : "disabled"}>RESET</button></div>`
+        : `<div class="tp-clockrow"><span class="tp-mid" id="tp-tm">${tm.running ? dur(tm.end - Date.now()) : "--:--"}</span>
+            ${tm.running ? `<button type="button" class="cmd-btn" data-tp-tm="cancel">CANCEL</button>`
+              : `<input id="tp-tm-min" type="number" min="1" max="600" value="${Math.round(tm.total / 6e4) || 25}" aria-label="minutes"/><span class="tp-muted">min</span>
+                 <button type="button" class="cmd-btn" data-tp-tm="start">START</button>`}</div>`}
+      </div>`;
+  }
+
+  function place() {
+    const b = btn(), p = pop(); if (!b || !p) return;
+    const r = b.getBoundingClientRect(), w = Math.min(340, window.innerWidth - 16);
+    p.style.width = w + "px";
+    p.style.top = Math.round(r.bottom + 8) + "px";
+    p.style.left = Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w))) + "px";
+  }
+  function show(on) {
+    open = on; const p = pop(), b = btn(); if (!p || !b) return;
+    if (on) { render(); p.hidden = false; place(); } else p.hidden = true;
+    b.setAttribute("aria-expanded", String(on));
+  }
+
+  function init() {
+    const b = btn(), p = pop(); if (!b || !p) return;
+    b.addEventListener("click", (e) => { e.stopPropagation(); show(!open); });
+    window.addEventListener("resize", () => { if (open) place(); });
+    window.addEventListener("scroll", () => { if (open) place(); }, { passive: true });
+    document.addEventListener("click", (e) => { const path = e.composedPath ? e.composedPath() : []; if (open && !path.includes(p) && !path.includes(b)) show(false); });
+    document.addEventListener("keydown", (e) => { if (open && e.key === "Escape") { show(false); b.focus(); } });
+    p.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t.closest("[data-tp-close]")) return show(false);
+      const rm = t.closest("[data-tp-rm]"); if (rm) { zones = zones.filter(z => z !== rm.dataset.tpRm); save(); return render(); }
+      if (t.closest("[data-tp-reset]")) { zones = DEFAULT_ZONES.slice(); save(); return render(); }
+      const md = t.closest("[data-tp-mode]"); if (md) { mode = md.dataset.tpMode; return render(); }
+      const s = t.closest("[data-tp-sw]");
+      if (s) {
+        if (s.dataset.tpSw === "toggle") { if (sw.running) { sw.acc += Date.now() - sw.start; sw.running = false; } else { sw.start = Date.now(); sw.running = true; } }
+        else { sw.acc = 0; sw.running = false; }
+        return render();
+      }
+      const tt = t.closest("[data-tp-tm]");
+      if (tt) {
+        if (tt.dataset.tpTm === "start") {
+          const m = Math.max(1, Math.min(600, parseInt(document.getElementById("tp-tm-min")?.value, 10) || 0));
+          tm.total = m * 6e4; tm.end = Date.now() + tm.total; tm.running = true;
+        } else { tm.running = false; }
+        return render();
+      }
+      const j = t.closest("[data-tp-jump]"); if (j) { show(false); try { bucsJump(j.dataset.tpJump); } catch (e2) {} }
+    });
+    p.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const v = (document.getElementById("tp-add-in")?.value || "").trim();
+      const err = document.getElementById("tp-err");
+      if (!v) return;
+      const tz = v.toUpperCase() === "UTC" ? "UTC" : v;
+      if (!validTz(tz)) { if (err) err.textContent = `"${v}" is not a time zone (use Region/City, e.g. Asia/Dubai)`; return; }
+      if (zones.includes(tz)) { if (err) err.textContent = "already in the list"; return; }
+      if (zones.length >= 8) { if (err) err.textContent = "up to 8 zones"; return; }
+      zones.push(tz); save(); render();
+    });
+    setInterval(tick, 1000); tick();
+  }
+  return { init, sunTimes, show };
+})();
+TimeModule.init();

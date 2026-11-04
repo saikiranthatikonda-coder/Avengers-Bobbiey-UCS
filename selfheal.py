@@ -201,6 +201,18 @@ class SelfHeal:
         if persistent and repair and any(k in ("event_loop", "cpu", "memory") for k in persistent):
             await self._restart("persistent failure: " + ", ".join(persistent))
 
+    CORE_CHECKS = ("event_loop", "cpu", "memory", "tasks", "scheduler")
+
+    def catastrophic(self) -> list[str]:
+        """Core checks that have FAILED for >= 3 consecutive measurements (~90 s). Used by
+        AUTONOMOUS EVOLUTION: only this condition lets a just-deployed change be reverted
+        without the commander's click — then the guarded restart below applies as usual."""
+        return [k for k, n in self._strikes.items() if n >= 3 and k in self.CORE_CHECKS]
+
+    async def restart_guarded(self, why: str) -> None:
+        """Public entry to the guarded restart (launcher only, max once per RESTART_COOLDOWN)."""
+        await self._restart(why)
+
     async def _restart(self, why: str) -> None:
         if os.getenv("BUCS_LAUNCHER") != "1":
             await self._note("hold", f"would restart ({why}) but BUCS isn't running under its launcher", "warn")

@@ -1,4 +1,4 @@
-/* DISASTER RESPONSE · REAL-TIME EVENTS (static/disaster.js) */
+/* DISASTER RESPONSE (static/disaster.js) · shared .ft-* tile styles live in style.css */
 #disaster-mount { padding: 0 1rem 0.8rem; }
 .dis-card { --dis-crit: #ff3b5c; --dis-high: #ff8c42; --dis-med: #ffd84d; --dis-low: var(--accent); --dis-info: var(--text-dim); min-width: 0; }
 .dis-card a { color: inherit; text-decoration: none; border-bottom: 1px dotted color-mix(in srgb, var(--accent) 50%, transparent); }
@@ -97,3 +97,39 @@
   .dis-stat { min-width: 3.6rem; }
   .dis-head { flex-wrap: wrap; }
 }
+
+/* ── v8 layout: tiles + chips filter, clickable events and map points, tabbed lower half ── */
+.dis-types { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.1rem 0 0.7rem; }
+button.dis-chip { background: transparent; cursor: pointer; font: inherit; font-size: 0.66rem; transition: border-color 0.2s, color 0.2s; }
+button.dis-chip b { color: var(--text); font-weight: 600; margin-left: 0.15rem; }
+button.dis-chip:hover, button.dis-chip.on { color: var(--text); border-color: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
+.dis-mapbox { border-radius: 10px; }
+.dis-map-loc { position: absolute; left: 0.5rem; bottom: 0.35rem; font-family: var(--font-display); font-size: 0.44rem; letter-spacing: 0.16em;
+  color: var(--accent); background: rgba(2, 10, 20, 0.7); padding: 0.12rem 0.35rem; border-radius: 3px; pointer-events: none; }
+.dis-pt { cursor: pointer; }
+.dis-pt .dis-hit { fill: transparent; stroke: none; }
+.dis-pt:hover circle:not(.dis-hit):not(.dis-pulse), .dis-pt:focus circle:not(.dis-hit):not(.dis-pulse) { stroke: #fff; stroke-width: 1.4; }
+.dis-pt:focus { outline: none; }
+.dis-pt.dim { opacity: 0.22; }
+.dis-tl-head { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; margin-bottom: 0.35rem; }
+.dis-tl-lab { font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.2em; color: var(--text-dim); }
+.dis-tl-lab b { color: var(--accent); font-weight: 700; }
+button.dis-ev { width: 100%; border-top: 0; border-right: 0; border-bottom: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  grid-template-columns: 2.2rem minmax(0, 1fr) 0.8rem; align-items: center; transition: background 0.2s; }
+button.dis-ev:hover, button.dis-ev:focus-visible { background: linear-gradient(90deg, color-mix(in srgb, var(--c) 18%, transparent), transparent 85%); outline: none; }
+.dis-ev-body { display: flex; flex-direction: column; }
+.dis-ev-t { display: block; }
+.dis-ev-m { display: block; }
+.dis-go { color: var(--text-dim); font-size: 1rem; line-height: 1; }
+button.dis-ev:hover .dis-go { color: var(--accent); }
+.dis-list { max-height: 360px; }
+a.dis-svc, a.dis-src { color: inherit; text-decoration: none; border-bottom: 0; }
+a.dis-svc:hover, a.dis-src:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.dis-src { padding: 0.3rem 0.45rem; border: 1px solid var(--panel-edge); border-radius: 6px; }
+.dis-src b { font-weight: 500; }
+button.dis-digi-row { background: none; border: 0; padding: 0.15rem 0; text-align: left; cursor: pointer; font: inherit; font-size: 0.7rem; color: var(--text-dim); }
+button.dis-digi-row:hover { color: var(--text); }
+.dis-prep-tabs button { text-transform: uppercase; }
+.dis-card.is-error .ft-kicker { color: var(--error); }
+.dis-card.is-degraded .ft-kicker { color: var(--warn); }
+@media (max-width: 900px) { .dis-main { grid-template-columns: minmax(0, 1fr); } }

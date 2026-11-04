@@ -1,0 +1,11 @@
+{
+  "about": "Local plugin catalogue. First-party plugins ship with BUCS; third-party plugins install from a folder or an https .zip with commander approval into .update/agentos/plugins.",
+  "plugins": [
+    {
+      "folder": "hn_digest"
+    },
+    {
+      "folder": "unit_converter"
+    }
+  ]
+}

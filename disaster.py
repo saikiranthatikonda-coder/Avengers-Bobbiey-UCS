@@ -568,7 +568,10 @@ class Disaster:
                                      headers={"User-Agent": UA, "Accept": "application/json"}) as c:
             r = await c.get(url)
             r.raise_for_status()
-            return r.json()
+            # JSON is UTF-8 (RFC 8259): parse the bytes, never a mislabelled charset header
+            # (one feed declared latin-1 and turned "·" into "Â·")
+            import json as _json
+            return _json.loads(r.content)
 
     async def _get(self, url: str):
         return await (self._fetch or self._client_get)(url)

@@ -64,3 +64,16 @@ select.dv-in option { background: #06121f; }
 .dv-steps { font-size: 0.66rem; line-height: 1.45; color: var(--text-dim); margin-top: 0.3rem; overflow-wrap: anywhere; }
 .dv-step { margin: 0.15rem 0; }
 .dv-link[open] { grid-column: 1 / -1; }
+
+/* ── v8: feature-tile layout (tabs + tiles from style.css .ft-*) ── */
+.dv-pane-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.45rem; font-family: var(--font-display);
+  font-size: 0.48rem; letter-spacing: 0.18em; color: var(--text-dim); }
+.dv-pane-head .ft-link { margin-left: auto; }
+button.dv-name { background: none; border: 0; padding: 0; cursor: pointer; text-align: left; font-family: var(--font-display); }
+button.dv-name:hover { color: var(--accent); text-decoration: underline; }
+.dv-empty { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem 1rem; border-radius: 10px; }
+.dv-empty-t { font-family: var(--font-display); font-size: 0.6rem; letter-spacing: 0.2em; color: var(--text); }
+.dv-empty-a { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.2rem; }
+.dv-form { max-width: 640px; }
+.dv-disc { max-height: 280px; }
+.dv-card.is-error .ft-kicker { color: var(--error); }

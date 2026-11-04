@@ -5,6 +5,53 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-04 — v8.0.0 · Desktop apps, Computer Use, Phone agent, Evolution loop, AI Core, Global Activity Map
+- **feat: DESKTOP APPS for Windows, macOS (Apple Silicon + Intel) and Linux:**
+  - Each installer bundles its own Python 3.11, so customers don't need to install anything first.
+  - Windows: per-user installer (no admin) with Start Menu and Desktop shortcuts and a clean uninstall that keeps your data.
+  - macOS: `BUCS.app` in a DMG, with a Dock menu (Open Dashboard, Show Logs, Quit).
+  - Linux: `BUCS-Linux-x64.AppImage` (glibc 2.35+), which adds a menu entry.
+  - Every installer is built and then install-, launch-, update-, rollback- and uninstall-tested on clean GitHub runners for every OS. It is published only when every test passes.
+  - The website detects your OS and offers the matching download, with install steps and system requirements.
+  - Signing status: the builds are not yet signed with Apple Developer ID or a Windows certificate, so macOS asks for "Open Anyway" once and Windows SmartScreen asks for "Run anyway" once. Signing switches on automatically once the owner's certificates are added.
+- **fix: macOS zip package:**
+  - `Start BUCS.command` is executable and finds Python 3.10+.
+  - It explains clearly when only Apple's Python 3.9 is present.
+  - Windows-only tools are no longer called on macOS or Linux.
+- **feat: COMPUTER USE agent:**
+  - Sees the screen and acts on it, using the Claude CLI, the Anthropic API or a local Ollama vision model.
+  - Before any sensitive action (payments, credentials, delete, send/submit, install, settings) it pauses and asks for your approval.
+  - Pause, Stop and Take over work at any time. It never types secrets, and private-file windows are never captured.
+- **feat: AI PHONE AGENT:**
+  - Real inbound and outbound calls through Twilio, with live transcripts, summaries, consent recording, a do-not-call list and calling hours. The AI discloses that it is an AI.
+  - Calls are shown only when Twilio reports them.
+  - Needs the owner's Twilio account and a public URL.
+- **feat: AUTONOMOUS EVOLUTION loop:**
+  - Observe → Analyze → Propose → Test in a sandbox → Request approval → Deploy → Evaluate.
+  - Nothing is deployed without the commander's explicit approval and a passing sandbox. Deploys run on the owner machine only, and `.update/` is protected.
+- **feat: AI CORE:**
+  - Provider registry covering Ollama, Claude and OpenAI-compatible providers, with routing that explains its decisions.
+  - Tool calling with permission tiers.
+  - RAG memory (semantic search after `ollama pull nomic-embed-text`).
+  - Agents and workflows.
+  - A plugin system; third-party plugins are never auto-enabled.
+- **feat: GLOBAL ACTIVITY MAP (BUPIS rebuilt):**
+  - Real, live layers: earthquakes, GDACS, NASA EONET, volcanoes, NWS/NDMA alerts, internet outages (IODA), live aircraft (OpenSky), satellites (CelesTrak, with AMSAT as fallback) and space weather (Kp, aurora).
+  - Every layer shows its source, time and status.
+- **Dashboard:**
+  - Every mock or simulated value is removed, and every card opens a detail view backed by real data, with loading, error and empty states.
+  - The new header clock opens world clocks, sunrise/sunset and a stopwatch/timer.
+  - The header temperature is removed; Weather has its own section.
+  - The "= AVENGERS" line is removed from the brand.
+- **fix: MIC ON / SLEEP / OFF:**
+  - TALK works even without conversation mode.
+  - OFF now actually releases the microphone, and ON reopens it.
+  - The control shows loading and error states with the real microphone status.
+- **Website:**
+  - New high-quality 3D Earth hero and 3D system showcase.
+  - Downloads for Windows, macOS and Linux.
+- **Security:** Twilio webhook signatures are verified, every new endpoint is commander/host-gated, and no endpoint returns a key.
+
 ## 2026-11-03 — v7.9.0 · Mic modes, live answers, disaster response, devices, cyber analyst
 - **Refocus:** Project Trillion / agent commerce is removed: the code, the dashboard card, its docs and its tests. The old ledger files stay on disk untouched.
 - **feat: MIC ON / SLEEP / OFF + TALK:**

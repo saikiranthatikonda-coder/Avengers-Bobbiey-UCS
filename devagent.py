@@ -36,7 +36,21 @@ PROTECTED = [".env", "credentials.json", "token.json", "auth.json", "fleet_token
              "pair_code.txt", "node_id.txt", "node_token.txt", "operators.json",
              "commander_memory.md", "operator_memory.json", "providers.json", "license.json",
              "license_signing.key", "licences_issued.json",
-             "commerce_test.db", "commerce_live.db"]
+             "commerce_test.db", "commerce_live.db",
+             # private runtime data under .update/ (phone credentials + call transcripts, device
+             # tokens, security state, mic preference); the whole of .update/ is PROTECTED_DIRS too
+             ".update/phone.json", ".update/phone.db", ".update/devices.json", ".update/secagent.json",
+             ".update/mic_pref.json"]
+# Directories the engineering CLI may never read or write and a fix may never touch
+# (.update/ holds every module's private state: agentos memory DB, phone, devices, backups…).
+PROTECTED_DIRS = (".update/",)
+# Written by the running app while a job runs: protected by tool denial + path refusal, but
+# never byte-restored after an apply (that would roll back live data such as new call logs).
+RUNTIME_DATA = {".update/phone.db", ".update/secagent.json"}
+# Claude CLI permission rules: deny every read/edit of protected files and directories (Edit rules
+# cover Write too; verified 2026-11-03 with the real CLI: a canary in .update/ was DENIED).
+DENY_RULES = [f"{t}(./{p})" for p in PROTECTED for t in ("Read", "Edit")] + \
+             [f"{t}(./{d}**)" for d in PROTECTED_DIRS for t in ("Read", "Edit")]
 DIAG_TOOLS = "Read,Grep,Glob"
 APPLY_TOOLS = "Read,Grep,Glob,Edit,Write"
 # A fix may never touch what runs automatically afterwards (the test suite, git
@@ -82,6 +96,19 @@ def _git(*args, timeout=30) -> str:
     return r.stdout
 
 
+def _protected_backup() -> dict[str, bytes]:
+    """Bytes of every protected FILE (restored if a job modified or deleted it)."""
+    out = {}
+    for p in PROTECTED:
+        f = ROOT / p
+        if p not in RUNTIME_DATA and f.is_file():
+            try:
+                out[p] = f.read_bytes()
+            except OSError:
+                pass
+    return out
+
+
 def _porcelain() -> dict[str, str]:
     out = {}
     for line in _git("status", "--porcelain", "--untracked-files=all").splitlines():
@@ -108,7 +135,7 @@ class DevAgent:
 
     def snapshot(self) -> dict:
         j = self.job or {}
-        return {"busy": self.lock.locked(), "job": {k: v for k, v in j.items() if k not in ("before", "backup")},
+        return {"busy": self.lock.locked(), "job": {k: v for k, v in j.items() if k not in ("before", "backup", "patch")},
                 "history": self.history[-10:]}
 
     # ── live context for the diagnosis ────────────────────────────
@@ -142,16 +169,17 @@ class DevAgent:
         return "\n".join("  " + l for l in lines)
 
     # ── Claude CLI in the repo (stream-json) ──────────────────────
-    async def _run_cli(self, prompt: str, tools: str, apply: bool, timeout: float) -> str:
+    async def _run_cli(self, prompt: str, tools: str, apply: bool, timeout: float, cwd: Path | None = None) -> str:
         brain = self.state.get("brain")
         exe = getattr(brain, "claude_bin", "claude")
         args = [exe, "-p", "--tools", tools, "--output-format", "stream-json",
-                "--include-partial-messages", "--verbose", "--strict-mcp-config"]
+                "--include-partial-messages", "--verbose", "--strict-mcp-config",
+                "--disallowedTools", ",".join(DENY_RULES)]
         if apply:
             args += ["--permission-mode", "acceptEdits"]
         args += ["--", prompt]
         proc = await asyncio.create_subprocess_exec(
-            *args, cwd=str(ROOT), stdin=asyncio.subprocess.DEVNULL,
+            *args, cwd=str(cwd or ROOT), stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, limit=1 << 22)
         text, final, pending, last = [], None, "", 0.0
 
@@ -242,7 +270,7 @@ class DevAgent:
             await self._emit("applying")
             await self._audit("dev.apply", job["request"][:120])
             before = _porcelain()
-            backup = {p: (ROOT / p).read_bytes() for p in PROTECTED if (ROOT / p).exists()}
+            backup = _protected_backup()
             try:
                 result = await self._run_cli(APPLY_PROMPT.format(request=job["request"], plan=job["plan"]),
                                              APPLY_TOOLS, apply=True, timeout=420)
@@ -256,7 +284,8 @@ class DevAgent:
             after = _porcelain()
             changed = sorted(f for f in after if after.get(f) != before.get(f))
             clean_before = [f for f in changed if f not in before]
-            forbidden = [f for f in changed if f.replace("\\", "/").startswith(FORBIDDEN_PREFIXES)]
+            forbidden = [f for f in changed if f.replace("\\", "/").startswith(FORBIDDEN_PREFIXES + PROTECTED_DIRS)
+                         or f.replace("\\", "/") in PROTECTED]
             job.update(changed=changed, revertable=clean_before, restored=restored, result=result)
             if forbidden:
                 # never run tests (code) the change itself wrote: revert everything it did
@@ -334,7 +363,7 @@ class DevAgent:
             return {"ok": False, "error": "nothing applied to ship"}
         if not job.get("tests", {}).get("ok"):
             return {"ok": False, "error": "tests are failing — fix or undo before shipping"}
-        files = [f for f in job["changed"] if f not in PROTECTED]
+        files = [f for f in job["changed"] if f not in PROTECTED and not f.replace("\\", "/").startswith(PROTECTED_DIRS)]
         if not files:
             return {"ok": False, "error": "no files to ship"}
         msg = f"fix: {job['summary'][:68]}\n\nApplied from the BUCS dashboard (JARVIS engineering mode).\nRequest: {job['request'][:200]}"
@@ -360,6 +389,214 @@ class DevAgent:
         self._close()
         return {"ok": True, "commit": sha, "pushed": push.returncode == 0,
                 "push_error": "" if push.returncode == 0 else push.stderr[-300:]}
+
+    # ── 5. sandbox → approval → deploy (AUTONOMOUS EVOLUTION, evolution.py) ──
+    # The candidate change is produced and validated in an ISOLATED COPY of the repo; the
+    # real working tree is only written by deploy_patch(), after the commander approved a
+    # PASSING sandbox result. deploy_patch() then hands over to the existing
+    # KEEP · UNDO · SHIP path (stage "applied"); revert_deploy() restores the pre-deploy
+    # bytes of exactly the files it wrote (and only while they are still what it wrote).
+    _NOT_OWNER = {"ok": False, "error": "code changes run only on the owner's machine (BUCS_OWNER=1); "
+                                        "customer installs observe and analyse only"}
+
+    def _owner(self) -> bool:
+        lic = self.state.get("licensing")
+        if lic is not None:
+            return bool(getattr(lic, "owner", False))
+        return os.getenv("BUCS_OWNER", "0") == "1"
+
+    @staticmethod
+    def _unsafe_path(f: str) -> bool:
+        f = f.replace("\\", "/")
+        p = Path(f)
+        return (p.is_absolute() or ".." in p.parts or ":" in f or f.startswith(FORBIDDEN_PREFIXES + PROTECTED_DIRS)
+                or p.name in PROTECTED or f in PROTECTED)
+
+    async def sandbox(self) -> dict:
+        if not self._commander():
+            return dict(self._LOCKED)
+        if not self._owner():
+            return dict(self._NOT_OWNER)
+        if not self.job or self.job.get("stage") != "proposed":
+            return {"ok": False, "error": "no proposal to test — diagnose first"}
+        if self.lock.locked():
+            return {"ok": False, "error": "busy"}
+        import base64
+        import evolution_sandbox as sbx
+        async with self.lock:
+            job = self.job
+            job["stage"] = "sandboxing"
+            await self._emit("sandboxing")
+            await self._audit("dev.sandbox", job["request"][:120])
+            t0, box = time.time(), None
+            sid = uuid.uuid4().hex[:10]
+            res: dict = {"id": sid, "ts": t0, "ok": False}
+            patch = None
+            try:
+                box, files = await asyncio.to_thread(sbx.make_copy, ROOT, PROTECTED)
+                try:
+                    result = await self._run_cli(APPLY_PROMPT.format(request=job["request"], plan=job["plan"]),
+                                                 APPLY_TOOLS, apply=True, timeout=420, cwd=box)
+                except asyncio.TimeoutError:
+                    result = "[error] sandbox apply timed out"
+                except FileNotFoundError:
+                    result = "[error] Claude CLI not found — engineering mode needs it"
+                d = await asyncio.to_thread(sbx.diff, ROOT, box, files)
+                changed = sorted(d["changes"])
+                forbidden = [f for f in changed if self._unsafe_path(f)]
+                res.update(changed=changed, added=d["added"], removed=d["removed"], diff=d["diff"][:20000],
+                           ops={f: v["op"] for f, v in d["changes"].items()}, cli=(result or "")[:1500])
+                if (result or "").startswith("[error]"):
+                    res["reason"] = result
+                elif forbidden:
+                    res["reason"] = "refused: the change touched protected areas (" + ", ".join(forbidden[:5]) + ")"
+                elif not changed:
+                    res["reason"] = "the engineering agent produced no change"
+                else:
+                    py = sbx.python_exe(ROOT)
+                    tests = await sbx.run_tests(box, sbx.related_tests(box, changed), py)
+                    boot = await sbx.boot_check(box, py)
+                    broken = [f for f in changed if f.endswith(".py")
+                              and any(f"] {Path(f).stem} not loaded" in l for l in boot.get("modules_not_loaded", []))]
+                    if broken:
+                        boot["ok"] = False
+                        boot["broken_modules"] = broken
+                    ok = tests.get("ok") is not False and boot.get("ok") is True
+                    res.update(tests=tests, boot=boot, ok=ok,
+                               reason="" if ok else ("unit tests failed" if tests.get("ok") is False
+                                                     else "the changed copy did not boot cleanly"))
+                    if ok:
+                        patch = {"id": sid, "job": job["id"], "request": job["request"][:300],
+                                 "summary": job.get("summary", "")[:200],
+                                 "files": {f: {"op": v["op"], "orig_sha": v["orig_sha"],
+                                               "new": None if v["new"] is None else base64.b64encode(v["new"]).decode()}
+                                           for f, v in d["changes"].items()}}
+            except Exception as e:
+                res["reason"] = f"sandbox error: {type(e).__name__}: {str(e)[:200]}"
+            finally:
+                await asyncio.to_thread(sbx.cleanup, box)
+            res["seconds"] = round(time.time() - t0, 1)
+            job.update(stage="sandboxed" if res["ok"] else "proposed", sandbox=res, patch=patch)
+            await self._emit("sandboxed", ok=res["ok"], reason=res.get("reason", ""), changed=res.get("changed", []))
+            await self._audit("dev.sandboxed", f"{sid} ok={res['ok']} {res.get('reason', '')[:80]}")
+            return {"ok": True, "sandbox": res, "patch": patch}
+
+    async def deploy_patch(self, patch: dict, approved_by: str = "commander") -> dict:
+        """Write an approved, sandbox-tested patch into the repo, then the existing path (tests →
+        stage 'applied' → KEEP · UNDO · SHIP). Refuses stale patches (repo changed since the test)."""
+        import base64
+        import evolution_sandbox as sbx
+        if not self._commander():
+            return dict(self._LOCKED)
+        if not self._owner():
+            return dict(self._NOT_OWNER)
+        files = (patch or {}).get("files") or {}
+        if not files:
+            return {"ok": False, "error": "empty patch"}
+        bad = [f for f in files if self._unsafe_path(f)]
+        if bad:
+            return {"ok": False, "error": "refused: patch touches protected areas (" + ", ".join(bad[:5]) + ")"}
+        if self.lock.locked():
+            return {"ok": False, "error": "an engineering job is running — try again when it finishes"}
+        if self.job and self.job.get("stage") in ("applied", "applying", "sandboxing", "diagnosing", "testing"):
+            return {"ok": False, "error": "the ENGINEERING panel has an unfinished job (" + self.job["stage"] +
+                                          ") — keep, undo or finish it first"}
+        async with self.lock:
+            def cur(f):
+                p = ROOT / f
+                return p.read_bytes() if p.is_file() else None
+            stale = [f for f, v in files.items() if sbx.sha(cur(f)) != v.get("orig_sha")]
+            if stale:
+                return {"ok": False, "error": "the code changed since the sandbox test (" + ", ".join(stale[:4]) +
+                                              ") — re-run the sandbox", "stale": stale}
+            before = await asyncio.to_thread(_porcelain)
+            pid = str(patch.get("id") or uuid.uuid4().hex[:10])
+            bdir = ROOT / ".update" / "evolution" / "deploys" / pid
+            prot = _protected_backup()
+            manifest, hashes = {}, {}
+            for f in files:
+                orig = cur(f)
+                manifest[f] = {"existed": orig is not None}
+                if orig is not None:
+                    dst = bdir / "files" / f
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    dst.write_bytes(orig)
+            for f, v in files.items():
+                p = ROOT / f
+                if v.get("new") is None:
+                    if p.exists():
+                        p.unlink()
+                    hashes[f] = None
+                else:
+                    data = base64.b64decode(v["new"])
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    p.write_bytes(data)
+                    hashes[f] = sbx.sha(data)
+            restored = []
+            for p, data in prot.items():
+                fp = ROOT / p
+                if not fp.exists() or fp.read_bytes() != data:
+                    fp.write_bytes(data)
+                    restored.append(p)
+            bdir.mkdir(parents=True, exist_ok=True)
+            (bdir / "manifest.json").write_text(json.dumps({"id": pid, "ts": time.time(), "files": manifest,
+                                                            "hashes": hashes, "approved_by": approved_by}),
+                                                encoding="utf-8")
+            changed = sorted(files)
+            self.job = {"id": pid, "request": patch.get("request", "evolution change"), "stage": "testing",
+                        "started": time.time(), "plan": "", "summary": patch.get("summary", ""), "changed": changed,
+                        "revertable": [f for f in changed if f not in before], "restored": restored,
+                        "result": f"deployed sandbox-tested patch {pid}, approved by {approved_by}",
+                        "deployed_from": "evolution"}
+            await self._emit("testing", changed=changed)
+            await self._audit("dev.deploy", f"{pid} · {len(changed)} files · approved by {approved_by}")
+            tests = await self._tests()
+            self.job.update(stage="applied", tests=tests,
+                            diffstat=(await asyncio.to_thread(_git, "diff", "--stat", "--", *changed))[-1500:])
+            await self._emit("applied", changed=changed, tests=tests, result=self.job["result"], restored=restored,
+                             diffstat=self.job["diffstat"])
+            return {"ok": True, "id": pid, "changed": changed, "tests": tests,
+                    "backup_dir": str(bdir.relative_to(ROOT)).replace("\\", "/"), "hashes": hashes}
+
+    async def revert_deploy(self, record: dict, reason: str = "", auto: bool = False) -> dict:
+        """Restore the pre-deploy bytes of the files a deploy wrote — only files still exactly as
+        deployed (the operator's later edits are never overwritten). Commander-only unless auto
+        (catastrophic health failure, decided by evolution.py under selfheal's rules)."""
+        if not auto and not self._commander():
+            return dict(self._LOCKED)
+        if not self._owner():
+            return dict(self._NOT_OWNER)
+        import evolution_sandbox as sbx
+        bdir = ROOT / str((record or {}).get("backup_dir") or "")
+        try:
+            if (ROOT / ".update" / "evolution" / "deploys").resolve() not in bdir.resolve().parents:
+                raise ValueError("bad backup dir")
+            man = json.loads((bdir / "manifest.json").read_text(encoding="utf-8"))
+        except Exception:
+            return {"ok": False, "error": "deploy backup not found — revert by hand (git)"}
+        reverted, skipped = [], []
+        for f, info in man.get("files", {}).items():
+            if self._unsafe_path(f):
+                skipped.append(f)
+                continue
+            p = ROOT / f
+            now = p.read_bytes() if p.is_file() else None
+            if sbx.sha(now) != man.get("hashes", {}).get(f):
+                skipped.append(f)
+                continue
+            if info.get("existed"):
+                p.write_bytes((bdir / "files" / f).read_bytes())
+            elif p.exists():
+                p.unlink()
+            reverted.append(f)
+        if self.job and self.job.get("id") == man.get("id") and self.job.get("stage") == "applied":
+            self.job["stage"] = "undone"
+            await self._emit("undone", reverted=reverted, skipped=skipped)
+            self._close()
+        await self._audit("dev.revert_deploy", f"{man.get('id')} reverted {len(reverted)} skipped {len(skipped)}"
+                          + (" (AUTO: health failure)" if auto else "") + (f" · {reason[:80]}" if reason else ""))
+        return {"ok": True, "reverted": reverted, "skipped": skipped}
+
 
     def _close(self) -> None:
         if self.job:

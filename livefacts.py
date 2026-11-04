@@ -48,11 +48,11 @@ def is_time_sensitive(q: str) -> bool:
     return bool(TIME_SENSITIVE.search(q or ""))
 
 
-def clock_block(state: dict | None = None) -> str:
+def clock_block(state: dict | None = None, location: bool = True) -> str:
     now = datetime.now().astimezone()
     off = now.strftime("%z")
     loc = ""
-    w = (state or {}).get("weather")
+    w = (state or {}).get("weather") if location else None
     if w is not None:
         loc = f" · operator location: {getattr(w, 'city', '?')}"
         latest = None
@@ -124,9 +124,11 @@ async def _crypto(c: httpx.AsyncClient, q: str) -> list[str]:
     return out
 
 
-async def ground(state: dict | None, question: str, client: httpx.AsyncClient | None = None) -> str:
-    """The grounding block to prepend to an LLM prompt. Never raises; never waits past BUDGET_S."""
-    block = clock_block(state)
+async def ground(state: dict | None, question: str, client: httpx.AsyncClient | None = None,
+                 location: bool = True) -> str:
+    """The grounding block to prepend to an LLM prompt. Never raises; never waits past BUDGET_S.
+    location=False leaves out the operator's city and weather (e.g. on calls with third parties)."""
+    block = clock_block(state, location)
     if not is_time_sensitive(question):
         return block
     key = search_terms(question)

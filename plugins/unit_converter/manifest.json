@@ -1,0 +1,38 @@
+{
+  "id": "unit_converter",
+  "name": "Unit converter",
+  "version": "1.0.0",
+  "author": "BUCS (first-party)",
+  "description": "Exact conversions for length, mass, volume, area, speed, time, data, energy, pressure and temperature. Works offline.",
+  "permissions": [],
+  "entrypoint": "plugin.py",
+  "sha256": "69a2a725d552ffc3ec7e59a4c557ccf71826980b011126978e5cb0776b7946bc",
+  "tools": [
+    {
+      "name": "convert_units",
+      "tier": "read",
+      "description": "Convert a value between units, e.g. 5 mi to km, 72 F to C, 2 GiB to MB.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "number"
+          },
+          "from_unit": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "to_unit": {
+            "type": "string",
+            "maxLength": 20
+          }
+        },
+        "required": [
+          "value",
+          "from_unit",
+          "to_unit"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "id": "hn_digest",
+  "name": "Hacker News digest",
+  "version": "1.0.0",
+  "author": "BUCS (first-party)",
+  "description": "Current Hacker News front page / best / new / Ask / Show stories, filterable by score and keyword.",
+  "permissions": [
+    "network"
+  ],
+  "entrypoint": "plugin.py",
+  "sha256": "25b609b760b3795ce8676ad3a34ef5efa3c7f85eb1cf577e61c4945bd23d44a4",
+  "tools": [
+    {
+      "name": "hn_top_stories",
+      "tier": "read",
+      "description": "Hacker News stories right now (title, score, comments, link). Optional feed (top|best|new|ask|show), limit, min_score, keyword.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "feed": {
+            "type": "string",
+            "enum": [
+              "top",
+              "best",
+              "new",
+              "ask",
+              "show"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "min_score": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "keyword": {
+            "type": "string",
+            "maxLength": 60
+          }
+        }
+      }
+    }
+  ]
+}

@@ -82,3 +82,34 @@
   border-radius: 4px; background: rgba(0, 217, 255, 0.04); min-height: 3.2rem; white-space: pre-wrap; }
 .sa-acts { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
 .sa-log { display: flex; flex-direction: column; gap: 0.22rem; max-height: 220px; overflow-y: auto; }
+
+/* ── v8: feature-tile layout · posture + severity tiles on top, findings, tabbed detail ── */
+.sa-top { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 1rem; align-items: center; margin-bottom: 0.4rem; }
+button.sa-gauge-wrap { background: none; border: 1px solid transparent; border-radius: 12px; padding: 0.2rem; cursor: pointer; }
+button.sa-gauge-wrap:hover { border-color: var(--panel-edge); }
+.sa-top-r { min-width: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.sa-top-r .ft-stats { margin-bottom: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ft-stat.sa-st.critical { border-top: 2px solid var(--sa-crit); } .ft-stat.sa-st.critical b { color: var(--sa-crit); }
+.ft-stat.sa-st.high { border-top: 2px solid var(--error); } .ft-stat.sa-st.high b { color: var(--error); }
+.ft-stat.sa-st.medium { border-top: 2px solid var(--warn); } .ft-stat.sa-st.medium b { color: var(--warn); }
+.ft-stat.sa-st.low { border-top: 2px solid var(--accent); } .ft-stat.sa-st.low b { color: var(--accent); }
+.sa-trend { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.15rem; }
+.sa-spark { height: 34px; border-radius: 8px; }
+.sa-findings-head { display: flex; justify-content: space-between; align-items: center; margin: 0.6rem 0 0.35rem;
+  font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.2em; color: var(--text-dim); }
+.sa-findings-head b { color: var(--accent); }
+.sa-list { max-height: 340px; }
+.sa-f, .sa-grp { border-radius: 8px; }
+.sa-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 0.4rem; }
+.sa-chk { cursor: pointer; border-radius: 8px; padding: 0.4rem 0.55rem; }
+.sa-chk:hover, .sa-chk:focus-visible { border-color: var(--accent); outline: none; }
+.sa-chk-d { white-space: normal; }
+.sa-intel > div { grid-template-columns: 6rem auto 1fr; padding: 0.3rem 0; border-bottom: 1px dashed var(--panel-edge); }
+.sa-acts { align-items: center; }
+.sa-card.is-running .ft-kicker::after { content: " · SCAN RUNNING"; color: var(--warn); }
+.sa-card.is-error .ft-kicker { color: var(--error); }
+@media (max-width: 640px) {
+  .sa-top { grid-template-columns: minmax(0, 1fr); }
+  button.sa-gauge-wrap { max-width: 180px; margin: 0 auto; }
+  .sa-top-r .ft-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

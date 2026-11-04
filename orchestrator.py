@@ -73,7 +73,7 @@ class Orchestrator:
             "risk_score": thr.get("risk_score", 0),
             "risk_level": thr.get("level", "secure"),
             "open_incidents": len([e for e in (thr.get("events") or [])
-                                   if e.get("stage") != "resolved"]),
+                                   if e.get("stage") == "active"]),
             "next_meeting": (nxt or {}).get("title"),
             "next_meeting_min": (nxt or {}).get("minutes_until"),
             "conflicts": intel.get("conflicts", 0),

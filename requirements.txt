@@ -7,7 +7,7 @@ psutil==6.1.1
 apscheduler==3.11.0
 python-dotenv==1.0.1
 pydantic==2.10.4
-pyttsx3==2.98
+pyttsx3==2.98; sys_platform == "win32"
 google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
@@ -19,3 +19,12 @@ google-auth-httplib2
 # faster-whisper==1.1.0
 # onnxruntime==1.20.1
 cryptography>=42
+
+# Computer Use (screen capture + input); the module loads without them and says what's missing
+mss>=10.2.0
+pyautogui>=0.9.54
+pillow>=11.0
+# optional: Anthropic API adapter (native computer-use tool) — used only when ANTHROPIC_API_KEY is set
+anthropic>=2.4.0
+# timezone data for the phone agent's calling-hours checks on Windows
+tzdata>=2024.1
