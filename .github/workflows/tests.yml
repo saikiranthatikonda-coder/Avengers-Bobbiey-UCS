@@ -1,5 +1,6 @@
-# Runs the UCS test suite on every push and pull request. No credentials:
-# tests boot an isolated copy of the app with Claude/LLM/TTS/voice off.
+# Runs the UCS test suite on every push and pull request, on Linux, macOS and Windows
+# (the desktop installers ship to all three). No credentials: tests boot an isolated copy
+# of the app with Claude/LLM/TTS/voice off.
 name: Tests
 
 on:
@@ -10,7 +11,13 @@ on:
 
 jobs:
   unittest:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

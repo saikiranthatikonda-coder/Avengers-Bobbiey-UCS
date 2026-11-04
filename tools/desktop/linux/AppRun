@@ -1,0 +1,51 @@
+#!/bin/bash
+# BUCS AppImage entry point.
+#   BUCS-Linux-x64.AppImage              start BUCS (or open the running one's window)
+#   BUCS-Linux-x64.AppImage --stop       shut a running BUCS down
+#   BUCS-Linux-x64.AppImage --uninstall  remove the menu entry + icon (your data is kept in
+#                                        ~/.local/share/BUCS; delete that folder to remove it)
+HERE="$(dirname "$(readlink -f "$0")")"
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+HOMEDIR="$DATA/BUCS"
+PY="$HERE/usr/python/bin/python3"
+LAUNCHER="$HERE/usr/launcher/bucs_launcher.py"
+export PYTHONPYCACHEPREFIX="$HOMEDIR/.pycache" PYTHONNOUSERSITE=1
+unset PYTHONHOME PYTHONPATH
+
+case "${1:-}" in
+  --uninstall)
+    rm -f "$DATA/applications/bucs.desktop" "$DATA/icons/hicolor/256x256/apps/bucs.png"
+    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q "$DATA/applications" 2>/dev/null
+    echo "BUCS menu entry removed. Your data is still in $HOMEDIR (delete it to remove everything)."
+    echo "Delete the AppImage file itself to finish uninstalling."
+    exit 0 ;;
+  --stop)
+    exec "$PY" -s -B "$LAUNCHER" --home "$HOMEDIR" --stop ;;
+esac
+
+# menu entry + icon pointing at this AppImage (refreshed every launch, so moving the file works)
+if [ -n "${APPIMAGE:-}" ]; then
+  mkdir -p "$DATA/applications" "$DATA/icons/hicolor/256x256/apps"
+  cp -f "$HERE/bucs.png" "$DATA/icons/hicolor/256x256/apps/bucs.png" 2>/dev/null
+  esc="${APPIMAGE//\"/\\\"}"
+  cat > "$DATA/applications/bucs.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=BUCS
+GenericName=AI Command Dashboard
+Comment=Bobbiey Unified Command System
+Exec="$esc"
+Icon=bucs
+Terminal=false
+Categories=Utility;
+StartupWMClass=BUCS
+Actions=Stop;
+
+[Desktop Action Stop]
+Name=Stop BUCS
+Exec="$esc" --stop
+EOF
+  command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q "$DATA/applications" 2>/dev/null
+fi
+
+exec "$PY" -s -B "$LAUNCHER" --home "$HOMEDIR" --bundle "$HERE/usr/app"

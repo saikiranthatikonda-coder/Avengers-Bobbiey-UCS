@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>co.bobbiey.bucs</string>
+  <key>CFBundleName</key><string>BUCS</string>
+  <key>CFBundleDisplayName</key><string>BUCS</string>
+  <key>CFBundleExecutable</key><string>BUCS</string>
+  <key>CFBundleIconFile</key><string>BUCS</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleShortVersionString</key><string>__VERSION__</string>
+  <key>CFBundleVersion</key><string>__VERSION__</string>
+  <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSSupportsAutomaticTermination</key><false/>
+  <key>NSSupportsSuddenTermination</key><false/>
+  <key>NSHumanReadableCopyright</key><string>Bobbiey Unified Command System</string>
+  <key>NSMicrophoneUsageDescription</key><string>BUCS listens for "Jarvis" voice commands when you turn voice on.</string>
+  <key>NSCameraUsageDescription</key><string>BUCS uses the camera only for vision presence when you turn it on. Frames stay on this Mac.</string>
+  <key>NSAppleEventsUsageDescription</key><string>BUCS can open apps and adjust the volume when you ask it to.</string>
+  <key>NSLocalNetworkUsageDescription</key><string>BUCS shows your network status and connects to your own fleet nodes and local AI models.</string>
+  <key>NSBluetoothAlwaysUsageDescription</key><string>BUCS lists your connected Bluetooth devices on the dashboard.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>BUCS turns your voice commands into text on this Mac.</string>
+</dict>
+</plist>

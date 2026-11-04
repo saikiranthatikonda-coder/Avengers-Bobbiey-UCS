@@ -5,15 +5,24 @@ simply reports unavailable rather than crashing, so the dashboard runs on any OS
 """
 
 import asyncio
+import json
 import platform
+import time
 
 
 OS = platform.system()   # "Windows" | "Darwin" | "Linux"
+_MAC_WIFI_DEV: dict = {"dev": None, "ts": 0.0}     # Wi-Fi BSD name (en0/en1...), cached
+_MAC_BT: dict = {"ts": 0.0, "data": None}          # system_profiler is slow -> cache 60 s
 
 
 async def _run(*args, timeout=6) -> str:
-    proc = await asyncio.create_subprocess_exec(
-        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    """Run a fixed tool off the event loop. Raises FileNotFoundError when the tool
+    is missing (callers catch it and report the field as unavailable)."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    except NotImplementedError as e:     # event loop without subprocess support
+        raise FileNotFoundError(str(e)) from e
     try:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
@@ -29,17 +38,7 @@ async def wifi_info() -> dict:
         if OS == "Windows":
             return _parse_netsh(await _run("netsh", "wlan", "show", "interfaces", timeout=5))
         if OS == "Darwin":
-            ssid = ""
-            try:
-                out = await _run("/usr/sbin/networksetup", "-getairportnetwork", "en0", timeout=5)
-                if ":" in out:
-                    ssid = out.split(":", 1)[1].strip()
-            except Exception:
-                pass
-            ok = bool(ssid) and "not associated" not in ssid.lower()
-            return {"connected": ok, "ssid": ssid or None, "signal": None,
-                    "speed_rx_mbps": None, "channel": None,
-                    "state": "connected" if ok else "disconnected"}
+            return await _mac_wifi()
         # Linux
         try:
             out = await _run("nmcli", "-t", "-f", "active,ssid,signal,rate", "dev", "wifi", timeout=5)
@@ -57,6 +56,83 @@ async def wifi_info() -> dict:
         return {"connected": False, "reason": "wifi tool not available", "state": "unknown"}
     except Exception as e:
         return {"connected": False, "reason": str(e), "state": "unknown"}
+
+
+def parse_mac_hardware_ports(out: str) -> str | None:
+    """Wi-Fi device (en0/en1...) from `networksetup -listallhardwareports`."""
+    port = None
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("Hardware Port:"):
+            port = line.split(":", 1)[1].strip().lower()
+        elif line.startswith("Device:") and port in ("wi-fi", "airport"):
+            return line.split(":", 1)[1].strip() or None
+    return None
+
+
+async def _mac_wifi_device() -> str | None:
+    if _MAC_WIFI_DEV["dev"] and time.time() - _MAC_WIFI_DEV["ts"] < 600:
+        return _MAC_WIFI_DEV["dev"]
+    dev = parse_mac_hardware_ports(
+        await _run("/usr/sbin/networksetup", "-listallhardwareports", timeout=5))
+    _MAC_WIFI_DEV.update(dev=dev, ts=time.time())
+    return dev
+
+
+def _iface_ipv4(name: str) -> str | None:
+    """Routable IPv4 on an interface (link-local 169.254.x means no real network)."""
+    import socket
+    import psutil
+    try:
+        st = psutil.net_if_stats().get(name)
+        if st is not None and not st.isup:
+            return None
+        for a in psutil.net_if_addrs().get(name, []):
+            if a.family == socket.AF_INET and a.address and not a.address.startswith("169.254."):
+                return a.address
+    except Exception:
+        pass
+    return None
+
+
+async def _mac_wifi() -> dict:
+    """macOS Wi-Fi. Association is read from the interface itself (it has a routable
+    IPv4 address or not). The SSID comes from `networksetup -getairportnetwork`, which
+    macOS 14.4+ answers with "not associated" (or redacts) unless the app has Location
+    permission, so a missing SSID is reported as unknown, never as disconnected."""
+    try:
+        dev = await _mac_wifi_device()
+    except Exception:
+        dev = None
+    if not dev:
+        return {"connected": False, "reason": "no Wi-Fi interface found", "state": "unknown",
+                "ssid": None, "signal": None, "speed_rx_mbps": None, "channel": None}
+    power = None
+    try:
+        out = await _run("/usr/sbin/networksetup", "-getairportpower", dev, timeout=5)
+        if ":" in out:
+            power = out.rsplit(":", 1)[1].strip().lower()        # "on" | "off"
+    except Exception:
+        pass
+    if power == "off":
+        return {"connected": False, "reason": "Wi-Fi is turned off", "state": "off", "interface": dev,
+                "ssid": None, "signal": None, "speed_rx_mbps": None, "channel": None}
+    ip = _iface_ipv4(dev)
+    ssid = None
+    try:
+        out = (await _run("/usr/sbin/networksetup", "-getairportnetwork", dev, timeout=5)).strip()
+        if out.startswith("Current Wi-Fi Network:") or out.startswith("Current AirPort Network:"):
+            val = out.split(":", 1)[1].strip()
+            if val and "redacted" not in val.lower():
+                ssid = val
+    except Exception:
+        pass
+    res = {"connected": bool(ip), "ssid": ssid, "signal": None, "speed_rx_mbps": None,
+           "channel": None, "interface": dev,
+           "state": "connected" if ip else "disconnected"}
+    if ip and not ssid:
+        res["ssid_note"] = "network name hidden by macOS (needs Location permission)"
+    return res
 
 
 def _parse_netsh(out: str) -> dict:
@@ -96,10 +172,38 @@ async def bluetooth_info() -> dict:
             out = await _run("bluetoothctl", "devices", "Connected", timeout=5)
             names = [l.split(" ", 2)[2] for l in out.splitlines() if l.startswith("Device")]
             return {"count": len(names), "devices": names[:6]}
-        # macOS: system_profiler is slow; report adapter-only to stay responsive
-        return {"count": 0, "devices": [], "note": "n/a"}
+        if OS == "Darwin":
+            return await _mac_bluetooth()
+        return {"count": None, "devices": [], "available": False,
+                "note": f"Bluetooth listing is not available on {OS}"}
     except Exception:
-        return {"count": 0, "devices": []}
+        # tool missing / failed: unknown, not "zero devices"
+        return {"count": None, "devices": [], "available": False, "note": "Bluetooth tool not available"}
+
+
+def parse_mac_bluetooth(raw: str) -> dict:
+    """Connected devices from `system_profiler SPBluetoothDataType -json` (macOS 12+:
+    "device_connected": [{"<name>": {...}}, ...])."""
+    data = json.loads(raw or "{}")
+    names: list[str] = []
+    for ctl in data.get("SPBluetoothDataType") or []:
+        for entry in (ctl.get("device_connected") or []) if isinstance(ctl, dict) else []:
+            if isinstance(entry, dict):
+                names.extend(str(k) for k in entry.keys())
+    return {"count": len(names), "devices": names[:6]}
+
+
+async def _mac_bluetooth() -> dict:
+    if _MAC_BT["data"] is not None and time.time() - _MAC_BT["ts"] < 60:
+        return _MAC_BT["data"]
+    try:
+        d = parse_mac_bluetooth(await _run("/usr/sbin/system_profiler", "SPBluetoothDataType",
+                                           "-json", timeout=10))
+    except Exception:
+        d = {"count": None, "devices": [], "available": False,
+             "note": "Bluetooth devices could not be read on this Mac"}
+    _MAC_BT.update(ts=time.time(), data=d)
+    return d
 
 
 # ── Active uplink (the REAL primary connection, wifi or wired) ─────
@@ -131,7 +235,8 @@ def active_link() -> dict | None:
                 if a.family == socket.AF_INET and a.address == pip:
                     st = stats.get(name)
                     low = name.lower()
-                    is_wifi = any(k in low for k in ("wi-fi", "wifi", "wireless", "wlan"))
+                    is_wifi = any(k in low for k in ("wi-fi", "wifi", "wireless", "wlan")) or \
+                        (OS == "Darwin" and name == _MAC_WIFI_DEV["dev"])
                     return {
                         "name": name, "addr": a.address,
                         "type": "wifi" if is_wifi else "ethernet",

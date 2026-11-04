@@ -60,13 +60,20 @@ def _detect_ollama() -> dict:
         return {"available": False, "count": 0, "models": []}
 
 
+def _no_window() -> int:
+    # creationflags must be 0 on POSIX (any other value raises ValueError)
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0) if platform.system() == "Windows" else 0
+
+
 def _read_gpu():
+    if platform.system() == "Darwin":
+        return None                 # no nvidia-smi on macOS; GPU load isn't measured there
     try:
         r = subprocess.run(
             ["nvidia-smi", "--query-gpu=utilization.gpu",
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=4,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            creationflags=_no_window())
         if r.returncode == 0 and r.stdout.strip():
             return float(r.stdout.strip().splitlines()[0])
     except Exception:
@@ -87,7 +94,7 @@ def _scan_peripherals():
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
                            capture_output=True, text=True, timeout=9,
-                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                           creationflags=_no_window())
         if r.returncode != 0 or not r.stdout.strip():
             return []
         import json as _json
@@ -150,6 +157,9 @@ class NodeProbe:
         vols = []
         try:
             for part in psutil.disk_partitions(all=False):
+                # macOS APFS: skip the system's helper volumes (VM, Preboot, Update...)
+                if part.mountpoint.startswith("/System/Volumes/") and part.mountpoint != "/System/Volumes/Data":
+                    continue
                 try:
                     u = psutil.disk_usage(part.mountpoint)
                 except Exception:
@@ -190,8 +200,13 @@ class NodeProbe:
         up, down = self._net_rate()
         vm = psutil.virtual_memory()
         try:
-            disk_pct = psutil.disk_usage("/").percent if platform.system() != "Windows" \
-                else psutil.disk_usage("C:\\").percent
+            if platform.system() == "Windows":
+                root = "C:\\"
+            elif platform.system() == "Darwin" and Path("/System/Volumes/Data").is_dir():
+                root = "/System/Volumes/Data"     # APFS: "/" is the sealed read-only system volume
+            else:
+                root = "/"
+            disk_pct = psutil.disk_usage(root).percent
         except Exception:
             disk_pct = 0
         # peripherals are slow (spawns PowerShell) — refresh at most every 30s

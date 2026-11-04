@@ -154,7 +154,8 @@ class TTSPlayer:
 
     @staticmethod
     def _creation_flags() -> int:
-        return getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        # creationflags must be 0 on POSIX (any other value raises ValueError)
+        return getattr(subprocess, "CREATE_NO_WINDOW", 0) if OS == "Windows" else 0
 
     def _emit(self, event: str, **kw) -> None:
         if not (self.hub and self.loop):
@@ -234,7 +235,7 @@ class TTSPlayer:
 
     def warm(self) -> None:
         """Start the persistent speaker ahead of the first utterance."""
-        if getattr(self, "engine", None) == "windows" and self._persistent_ok:
+        if OS == "Windows" and getattr(self, "engine", None) == "windows" and self._persistent_ok:
             threading.Thread(target=self._ensure_ps, daemon=True).start()
 
     def _speak_persistent(self, text: str) -> bool:
@@ -270,9 +271,32 @@ class TTSPlayer:
             self.cancels += 1
         return was
 
+    def _run_cancellable(self, args: list, stdin_text: str | None = None) -> None:
+        """POSIX speech process tracked in self._cur so cancel() can kill it (barge-in)."""
+        try:
+            proc = subprocess.Popen(args, stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            print(f"tts: {args[0]} unavailable: {e}")
+            return
+        self._cur = proc
+        try:
+            if stdin_text is not None:
+                try:
+                    proc.stdin.write(stdin_text.encode("utf-8"))
+                    proc.stdin.close()
+                except (OSError, ValueError):
+                    pass                          # killed by cancel() mid-write
+            try:
+                proc.wait(timeout=120)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        finally:
+            self._cur = None
+
     def _speak_blocking(self, text: str) -> None:
-        eng = getattr(self, "engine", "windows")
-        if eng == "windows":
+        eng = getattr(self, "engine", None)
+        if eng == "windows" and OS == "Windows":
             if self._persistent_ok and self._speak_persistent(text):
                 return
             proc = subprocess.Popen(["powershell", "-NoProfile", "-Command", self._build_ps_command(text)],
@@ -284,20 +308,26 @@ class TTSPlayer:
             finally:
                 self._cur = None
         elif eng == "macos":
-            # macOS `say` — rate in words/min (~180 default)
-            wpm = os.getenv("JARVIS_VOICE_RATE", "180")
+            # macOS `say` — rate in words/min (~180 default). Text goes in on stdin
+            # (`-f -`) so a reply starting with "-" can never be read as an option;
+            # volume uses say's embedded [[volm]] command.
+            try:
+                wpm = max(80, min(400, int(os.getenv("JARVIS_VOICE_RATE", "180"))))
+            except ValueError:
+                wpm = 180
             args = ["say", "-r", str(wpm)]
             voice = os.getenv("JARVIS_MAC_VOICE", "")   # e.g. "Daniel", "Samantha"
             if voice:
                 args += ["-v", voice]
-            args.append(text)
-            subprocess.run(args, capture_output=True, text=True, timeout=120)
+            args += ["-f", "-"]
+            vol = "" if self.volume >= 100 else f"[[volm {self.volume / 100:.2f}]] "
+            self._run_cancellable(args, vol + text)
         elif eng == "linux-spd":
-            subprocess.run(["spd-say", "-w", "-r", "0", text],
-                           capture_output=True, text=True, timeout=120)
+            self._run_cancellable(["spd-say", "-w", "-r", "0", "--", text])
         elif eng == "linux-espeak":
             exe = shutil.which("espeak-ng") or shutil.which("espeak")
-            subprocess.run([exe, text], capture_output=True, text=True, timeout=120)
+            if exe:
+                self._run_cancellable([exe, "--stdin"], text)
 
     def _worker(self) -> None:
         while True:

@@ -139,9 +139,12 @@ async def _run(*args, timeout: float = 10) -> str:
     """Run a command off the event loop with a hard timeout (connectivity.py pattern)."""
     kw = {}
     if OS == "Windows":
-        kw["creationflags"] = 0x08000000          # CREATE_NO_WINDOW
-    proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE,
-                                                stderr=asyncio.subprocess.PIPE, cwd=str(HERE), **kw)
+        kw["creationflags"] = 0x08000000          # CREATE_NO_WINDOW (must stay 0/absent on POSIX)
+    try:
+        proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE,
+                                                    stderr=asyncio.subprocess.PIPE, cwd=str(HERE), **kw)
+    except NotImplementedError as e:              # loop without subprocess support
+        raise FileNotFoundError(str(e)) from e
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
@@ -415,6 +418,22 @@ def parse_netstat(text: str) -> list[dict]:
     return out
 
 
+def parse_bsd_netstat(text: str) -> list[dict]:
+    """LISTEN rows of macOS/BSD `netstat -an -p tcp` ("tcp4 0 0 *.8765 *.* LISTEN";
+    the port follows the LAST dot; no pid in this output)."""
+    out = []
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) >= 6 and parts[0].lower().startswith("tcp") and parts[-1].upper() == "LISTEN":
+            ip, _, port = parts[3].rpartition(".")
+            if not port.isdigit():
+                continue
+            if ip == "*":
+                ip = "::" if parts[0].lower() == "tcp6" else "0.0.0.0"
+            out.append({"ip": ip, "port": int(port), "pid": None})
+    return out
+
+
 def _psutil_listeners() -> list[dict] | None:
     try:
         import psutil
@@ -445,6 +464,31 @@ def is_loopback(ip: str) -> bool:
     return ip.startswith("127.") or ip in ("::1", "localhost") or ip.startswith("::ffff:127.")
 
 
+def parse_mac_firewall(text: str) -> dict:
+    """{"Application": "ON"|"OFF"} from macOS `socketfilterfw --getglobalstate`
+    ("Firewall is enabled. (State = 1)" / "Firewall is disabled. (State = 0)"); {} if unparseable."""
+    low = (text or "").lower()
+    if "firewall is enabled" in low or "state = 1" in low or "state = 2" in low:
+        return {"Application": "ON"}
+    if "firewall is disabled" in low or "state = 0" in low:
+        return {"Application": "OFF"}
+    return {}
+
+
+def _git_usable() -> bool:
+    """False when git is missing. On macOS /usr/bin/git is a stub that pops the
+    "install Command Line Developer Tools" dialog when the tools aren't installed,
+    so it only counts when a real git (CLT/Xcode/Homebrew) is present."""
+    import shutil
+    g = shutil.which("git")
+    if not g:
+        return False
+    if OS == "Darwin" and os.path.realpath(g) == "/usr/bin/git":
+        return (os.path.exists("/Library/Developer/CommandLineTools/usr/bin/git")
+                or os.path.exists("/Applications/Xcode.app/Contents/Developer/usr/bin/git"))
+    return True
+
+
 def parse_firewall(text: str) -> dict:
     """{"Domain": "ON", ...} from `netsh advfirewall show allprofiles state`."""
     out, cur = {}, None
@@ -465,6 +509,12 @@ def exposure_findings(listeners: list[dict], names: dict, bind_host: str, bucs_p
     out = []
     fw_off = [p for p, s in firewall.items() if s == "OFF"]
     for p in fw_off:
+        if p == "Application":                     # macOS application firewall
+            out.append(_finding("exposure:firewall:macos", "exposure", "firewall_off", "medium",
+                                "macOS firewall is OFF",
+                                "socketfilterfw --getglobalstate → Firewall is disabled",
+                                "System Settings → Network → Firewall → turn it on"))
+            continue
         out.append(_finding(f"exposure:firewall:{p.lower()}", "exposure", "firewall_off", "high",
                             f"Windows Firewall {p} profile is OFF",
                             f"netsh advfirewall show allprofiles state → {p} Profile State OFF",
@@ -796,7 +846,7 @@ class SecAgent:
             return r.json()
 
     async def git_tracked(self) -> list[str] | None:
-        if not (self.root / ".git").exists():
+        if not (self.root / ".git").exists() or not await asyncio.to_thread(_git_usable):
             return None
         out = await _run("git", "-c", "core.quotepath=off", "ls-files", "-z", timeout=20)
         return [p for p in out.split("\0") if p]
@@ -818,9 +868,21 @@ class SecAgent:
         ls = await asyncio.to_thread(_psutil_listeners)
         if ls is None and OS == "Windows":
             ls = parse_netstat(await _run("netstat", "-ano", "-p", "TCP", timeout=10))
+        elif ls is None and OS == "Darwin":
+            # psutil.net_connections needs root on macOS; netstat lists every socket unprivileged
+            try:
+                ls = parse_bsd_netstat(await _run("/usr/sbin/netstat", "-an", "-p", "tcp", timeout=10))
+            except (OSError, asyncio.TimeoutError):
+                ls = None
+        self.listeners_known = ls is not None
         return ls or []
 
     async def firewall(self) -> dict:
+        if OS == "Darwin":
+            fw = "/usr/libexec/ApplicationFirewall/socketfilterfw"
+            if not os.path.exists(fw):
+                return {}
+            return parse_mac_firewall(await _run(fw, "--getglobalstate", timeout=8))
         if OS != "Windows":
             return {}
         return parse_firewall(await _run("netsh", "advfirewall", "show", "allprofiles", "state", timeout=8))
@@ -885,7 +947,7 @@ class SecAgent:
     async def scan_secrets(self) -> None:
         tracked = await self.git_tracked()
         if tracked is None:
-            self._check("secrets", "unknown", "not a git checkout — secret hygiene needs git")
+            self._check("secrets", "unknown", "not a git checkout (or git not installed) — secret hygiene needs git")
             self.findings["secrets"] = []
             return
         ignored = await self.git_ignored(PROTECTED_FILES)
@@ -910,7 +972,10 @@ class SecAgent:
         except ValueError:
             port = 8765
         out += exposure_findings(ls, names, bind, port, self._password_set(), bool(os.getenv("JARVIS_PIN")), fw)
-        notes.append(f"{sum(1 for l in ls if not is_loopback(l['ip']))} network listeners")
+        if getattr(self, "listeners_known", True):
+            notes.append(f"{sum(1 for l in ls if not is_loopback(l['ip']))} network listeners")
+        else:
+            notes.append("network listeners unknown (socket list not readable)")
         hotfix = None
         try:
             d = await self.defender()
@@ -940,7 +1005,7 @@ class SecAgent:
                     continue
                 if _BYPASS_FLAG in txt(rel):
                     hits.append(rel)
-            return txt("main.py"), txt("run.ps1") + "\n" + txt("start-jarvis.cmd"), hits
+            return txt("main.py"), txt("run.ps1") + "\n" + txt("start-jarvis.cmd") + "\n" + txt("start-jarvis.sh"), hits
         main_text, launcher, hits = await asyncio.to_thread(read)
         up = self.state.get("updater")
         snap = None

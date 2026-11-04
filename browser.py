@@ -1,9 +1,12 @@
 import os
+import platform
 import re
 import shutil
 import subprocess
 import webbrowser
 from pathlib import Path
+
+OS = platform.system()   # "Windows" | "Darwin" | "Linux"
 
 CHROME_PATHS = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -15,8 +18,35 @@ EDGE_PATHS = [
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
 ]
 
+# macOS: Chromium-family app bundles (all accept --new-window / --app= / --start-fullscreen),
+# looked up in /Applications and ~/Applications.
+MAC_BROWSERS = [
+    ("chrome",   "Google Chrome.app/Contents/MacOS/Google Chrome"),
+    ("edge",     "Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+    ("chromium", "Chromium.app/Contents/MacOS/Chromium"),
+    ("brave",    "Brave Browser.app/Contents/MacOS/Brave Browser"),
+]
+
+
+def _mac_dirs() -> list[Path]:
+    return [Path("/Applications"), Path.home() / "Applications"]
+
 
 def _find_browser() -> tuple[str | None, str | None]:
+    if OS == "Darwin":
+        for kind, rel in MAC_BROWSERS:
+            for d in _mac_dirs():
+                exe = d / rel
+                if exe.exists():
+                    return (kind, str(exe))
+        return (None, None)
+    if OS != "Windows":
+        for cand in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+                     "microsoft-edge", "brave-browser"):
+            w = shutil.which(cand)
+            if w:
+                return (cand, w)
+        return (None, None)
     for p in CHROME_PATHS:
         if p and Path(p).exists():
             return ("chrome", p)
@@ -40,8 +70,7 @@ def open_url(url: str, fullscreen: bool = False, app_mode: bool = True) -> dict:
         return {"opened": False, "error": "only http:// or https:// web addresses can be opened"}
     kind, exe = _find_browser()
     if not exe:
-        webbrowser.open(url, new=2)
-        return {"opened": True, "kind": "default", "fullscreen": False, "app_mode": False}
+        return _open_default(url)
 
     args: list[str] = [exe, "--new-window"]
     if fullscreen:
@@ -51,11 +80,35 @@ def open_url(url: str, fullscreen: bool = False, app_mode: bool = True) -> dict:
     else:
         args += ["--", url]                     # "--": the URL can never be read as a switch
 
-    flags = 0
-    if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
-        flags = subprocess.CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen(args, shell=False, creationflags=flags, close_fds=True)
+    kw: dict = {"shell": False, "close_fds": True}
+    if OS == "Windows":
+        kw["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        kw["start_new_session"] = True           # detach from the server's process group
+        kw["stdin"] = kw["stdout"] = kw["stderr"] = subprocess.DEVNULL
+    try:
+        subprocess.Popen(args, **kw)
+    except OSError:
+        return _open_default(url)
     return {"opened": True, "kind": kind, "fullscreen": fullscreen, "app_mode": app_mode}
+
+
+def _open_default(url: str) -> dict:
+    """No Chromium-family browser found: hand the URL to the OS default browser."""
+    if OS == "Darwin":
+        try:
+            r = subprocess.run(["open", url], capture_output=True, timeout=10)
+            if r.returncode == 0:
+                return {"opened": True, "kind": "default", "fullscreen": False, "app_mode": False}
+        except (OSError, subprocess.SubprocessError):
+            pass
+    try:
+        ok = bool(webbrowser.open(url, new=2))
+    except Exception:
+        ok = False
+    if not ok:
+        return {"opened": False, "error": "no browser could be found on this machine"}
+    return {"opened": True, "kind": "default", "fullscreen": False, "app_mode": False}
 
 
 # ── intent parsing ──────────────────────────────────────────────────

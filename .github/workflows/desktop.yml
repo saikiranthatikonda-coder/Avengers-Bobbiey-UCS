@@ -1,0 +1,459 @@
+# Desktop installers: build -> install + test on clean runners -> publish to a GitHub Release.
+#
+#   tag v*              build, test, then publish BUCS-Windows-x64-Setup.exe, BUCS-macOS-AppleSilicon.dmg,
+#                       BUCS-macOS-Intel.dmg and SHA256SUMS.txt to the release for that tag
+#   tag desktop-test-*  build + test, then rehearse the publish on a throw-away PRE-release
+#                       (the website ignores pre-releases) and delete it again
+#   workflow_dispatch   build + test only
+#
+#   Linux:   AppImage is unsigned (users verify SHA256SUMS.txt)
+# Nothing is published unless EVERY platform's install/launch/update/uninstall tests passed.
+# Signing is optional and gated on secrets (see tools/desktop/README in the workflow summary):
+#   macOS:   APPLE_DEVELOPER_ID_CERT_P12, APPLE_CERT_PASSWORD, APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD
+#   Windows: WINDOWS_CERT_PFX (base64 .pfx), WINDOWS_CERT_PASSWORD
+name: Desktop installers
+
+on:
+  push:
+    tags: ["v*", "desktop-test-*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  # ─────────────────────────────── Windows ───────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Stage bundled Python + dependencies + app files
+        run: python tools/desktop/build.py --target windows-x64
+      - name: Icon
+        run: python tools/desktop/make_icon.py build/desktop/icon
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          if (-not (Test-Path $iscc)) { Write-Output "::error::Inno Setup not available"; exit 1 }
+          "ISCC=$iscc" | Out-File -Append $env:GITHUB_ENV
+      - name: Build installer (signed when WINDOWS_CERT_PFX is set)
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $ver = (Get-Content build/desktop/windows-x64/version.txt -Raw).Trim()
+          $args = @("/DStageDir=$PWD\build\desktop\windows-x64\stage", "/DAppVersion=$ver",
+                    "/DIconFile=$PWD\build\desktop\icon\bucs.ico", "/DOutputDir=$PWD\dist")
+          $signing = "unsigned"
+          if ($env:WINDOWS_CERT_PFX) {
+            $pfx = Join-Path $env:RUNNER_TEMP "bucs.pfx"
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
+            $st = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+            $cmd = "`"$($st.FullName)`" sign /f `"$pfx`" /p `"$env:WINDOWS_CERT_PASSWORD`" /fd sha256 /tr http://timestamp.digicert.com /td sha256 `$f"
+            $args += @("/DSignIt=1", "/Sbucssign=$cmd")
+            $signing = "authenticode"
+          } else {
+            Write-Output "::warning::No WINDOWS_CERT_PFX secret: the installer is unsigned (SmartScreen: More info > Run anyway)"
+          }
+          & $env:ISCC @args tools\desktop\windows\bucs.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          "signing=$signing" | Out-File dist\BUCS-Windows-x64-Setup.exe.signing.txt -Encoding ascii
+          Get-ChildItem dist | Format-Table Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-windows
+          path: dist/*
+          if-no-files-found: error
+
+  test-windows:
+    needs: build-windows
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      BUCS_NO_BROWSER: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/download-artifact@v4
+        with: { name: installer-windows, path: dist }
+      - name: Install the previous published release first (upgrade test), if there is one
+        shell: pwsh
+        run: |
+          $prev = Join-Path $env:RUNNER_TEMP "prev-setup.exe"
+          try {
+            Invoke-WebRequest "https://github.com/${{ github.repository }}/releases/latest/download/BUCS-Windows-x64-Setup.exe" -OutFile $prev -UseBasicParsing
+            Start-Process $prev -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+            Write-Output "previous release installed: upgrade path will be tested"
+          } catch { Write-Output "no previous Windows release published yet: fresh install only" }
+      - name: Install (silent, per-user)
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\BUCS-Windows-x64-Setup.exe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`"$env:RUNNER_TEMP\install.log`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\install.log" -Tail 40; Write-Output "::error::installer exit code $($p.ExitCode)"; exit 1 }
+          $app = "$env:LOCALAPPDATA\Programs\BUCS"
+          $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\BUCS\BUCS.lnk"
+          foreach ($f in @("$app\python\python.exe", "$app\python\pythonw.exe", "$app\launcher\bucs_launcher.py", "$app\main.py", "$app\VERSION", $lnk, "$env:USERPROFILE\Desktop\BUCS.lnk")) {
+            if (-not (Test-Path $f)) { Write-Output "::error::missing after install: $f"; exit 1 }
+          }
+          "APPDIR=$app" | Out-File -Append $env:GITHUB_ENV
+          "LAUNCH=[`"cmd`", `"/c`", `"start`", `"`", `"$($lnk -replace '\\','\\')`"]" | Out-File -Append $env:GITHUB_ENV
+          "PYEXE=$app\python\python.exe" | Out-File -Append $env:GITHUB_ENV
+          "EXPECT=$((Get-Content "$app\VERSION" -Raw).Trim())" | Out-File -Append $env:GITHUB_ENV
+          Write-Output "installed to $app"
+      - name: Port 8765 busy -> BUCS picks another port
+        run: python tools/desktop/e2e_test.py port --home "$env:APPDIR"
+      - name: Launch from the Start Menu shortcut (first-run / unlicensed state)
+        run: python tools/desktop/e2e_test.py boot --home "$env:APPDIR" --expect-version "$env:EXPECT"
+      - name: User data marker
+        run: python tools/desktop/e2e_test.py datamark --home "$env:APPDIR"
+      - name: Single instance
+        run: python tools/desktop/e2e_test.py single --home "$env:APPDIR"
+      - name: In-app update (pip with bundled Python) + automatic rollback
+        run: python tools/desktop/e2e_test.py update --home "$env:APPDIR" --python "$env:PYEXE"
+      - name: Shutdown from the dashboard
+        run: python tools/desktop/e2e_test.py shutdown --home "$env:APPDIR"
+      - name: Reinstall over an existing install (upgrade) keeps user data
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\BUCS-Windows-x64-Setup.exe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Output "::error::reinstall exit code $($p.ExitCode)"; exit 1 }
+          python tools/desktop/e2e_test.py datacheck --home "$env:APPDIR"; if ($LASTEXITCODE) { exit 1 }
+          python tools/desktop/e2e_test.py boot --home "$env:APPDIR" --expect-version "$env:EXPECT"; if ($LASTEXITCODE) { exit 1 }
+          python tools/desktop/e2e_test.py shutdown --home "$env:APPDIR"; if ($LASTEXITCODE) { exit 1 }
+      - name: Uninstall (silent) keeps user data, removes the program
+        shell: pwsh
+        run: |
+          $u = "$env:APPDIR\unins000.exe"
+          if (-not (Test-Path $u)) { Write-Output "::error::uninstaller missing"; exit 1 }
+          $p = Start-Process $u -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
+          Start-Sleep 5
+          foreach ($gone in @("$env:APPDIR\main.py", "$env:APPDIR\python", "$env:APPDIR\launcher", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\BUCS\BUCS.lnk", "$env:USERPROFILE\Desktop\BUCS.lnk")) {
+            if (Test-Path $gone) { Write-Output "::error::still present after uninstall: $gone"; exit 1 }
+          }
+          python tools/desktop/e2e_test.py datacheck --home "$env:APPDIR"; if ($LASTEXITCODE) { exit 1 }
+          Write-Output "PASS uninstall removed the program and kept the user's data"
+      - name: Collect logs
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force e2e-logs | Out-Null
+          Copy-Item "$env:LOCALAPPDATA\Programs\BUCS\logs\*" e2e-logs -ErrorAction SilentlyContinue
+          Copy-Item "$env:RUNNER_TEMP\install.log" e2e-logs -ErrorAction SilentlyContinue
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: e2e-logs-windows, path: e2e-logs, if-no-files-found: ignore }
+
+  # ──────────────────────────────── macOS ────────────────────────────────
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: macos-arm64, runner: macos-14, dmg: BUCS-macOS-AppleSilicon.dmg }
+          - { target: macos-x64, runner: macos-15-intel, dmg: BUCS-macOS-Intel.dmg }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Stage bundled Python + dependencies + app files
+        run: python tools/desktop/build.py --target ${{ matrix.target }}
+      - name: Build, sign and package BUCS.app
+        env:
+          APPLE_DEVELOPER_ID_CERT_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: bash tools/desktop/macos/build_app.sh ${{ matrix.target }} dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  test-macos:
+    needs: build-macos
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: macos-arm64, runner: macos-14, dmg: BUCS-macOS-AppleSilicon.dmg }
+          - { target: macos-x64, runner: macos-15-intel, dmg: BUCS-macOS-Intel.dmg }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      HOMEDIR: /Users/runner/Library/Application Support/BUCS
+      LAUNCH: '["open", "/Applications/BUCS.app"]'
+      PYEXE: /Applications/BUCS.app/Contents/Resources/python/bin/python3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/download-artifact@v4
+        with: { name: "installer-${{ matrix.target }}", path: dist }
+      - name: Install from the DMG
+        run: |
+          set -euo pipefail
+          uname -m; sw_vers
+          cat "dist/${{ matrix.dmg }}.signing.txt"
+          launchctl setenv BUCS_NO_BROWSER 1
+          MNT=$(hdiutil attach -nobrowse -readonly "dist/${{ matrix.dmg }}" | tail -1 | awk -F'\t' '{print $NF}')
+          ls -la "$MNT"
+          test -L "$MNT/Applications" && test -d "$MNT/BUCS.app"
+          ditto "$MNT/BUCS.app" /Applications/BUCS.app
+          hdiutil detach "$MNT"
+          codesign --verify --deep --strict --verbose=2 /Applications/BUCS.app
+          file /Applications/BUCS.app/Contents/MacOS/BUCS /Applications/BUCS.app/Contents/Resources/python/bin/python3.11
+          echo "EXPECT=$(cat /Applications/BUCS.app/Contents/Resources/app/VERSION)" >> "$GITHUB_ENV"
+      - name: Gatekeeper report for a downloaded (quarantined) copy
+        run: |
+          set +e
+          xattr -w com.apple.quarantine "0081;$(printf %x $(date +%s));Safari;$(uuidgen)" /Applications/BUCS.app
+          spctl -a -vv -t exec /Applications/BUCS.app; echo "spctl exit $?"
+          syspolicy_check distribution /Applications/BUCS.app 2>&1 | tail -5
+          open /Applications/BUCS.app
+          for i in $(seq 1 30); do [ -f "$HOMEDIR/.update/launcher.json" ] && break; sleep 2; done
+          if [ -f "$HOMEDIR/.update/launcher.json" ]; then
+            echo "quarantined app launched (signed+notarized, or Gatekeeper allowed it)"
+            python tools/desktop/e2e_test.py shutdown --home "$HOMEDIR"
+          else
+            echo "::notice::${{ matrix.dmg }}: Gatekeeper blocked the quarantined app (expected without notarization: users click Open Anyway once)"
+            if grep -q "notarized=1" "dist/${{ matrix.dmg }}.signing.txt"; then echo "::error::notarized app was blocked"; exit 1; fi
+          fi
+          pkill -f CoreServicesUIAgent
+          pgrep -f "Contents/MacOS/BUCS" && osascript -e 'quit app "BUCS"'; sleep 3
+          xattr -dr com.apple.quarantine /Applications/BUCS.app   # = the user's one-time "Open Anyway"
+          exit 0
+      - name: Port 8765 busy -> BUCS picks another port
+        run: python tools/desktop/e2e_test.py port --home "$HOMEDIR"
+      - name: Launch (first-run / unlicensed state)
+        run: python tools/desktop/e2e_test.py boot --home "$HOMEDIR" --expect-version "$EXPECT"
+      - name: App files were installed into the writable home; bundle untouched
+        run: |
+          set -e
+          test -f "$HOMEDIR/main.py" && test -f "$HOMEDIR/.env"
+          test ! -e /Applications/BUCS.app/Contents/Resources/app/.env
+          python tools/desktop/e2e_test.py datamark --home "$HOMEDIR"
+      - name: Single instance
+        run: python tools/desktop/e2e_test.py single --home "$HOMEDIR"
+      - name: In-app update (pip into the overlay) + automatic rollback
+        run: python tools/desktop/e2e_test.py update --home "$HOMEDIR" --python "$PYEXE"
+      - name: Quit from the Dock/menu stops the server
+        run: |
+          set -e
+          PORT=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['port'])" "$HOMEDIR/.update/launcher.json")
+          osascript -e 'quit app "BUCS"'
+          for i in $(seq 1 45); do [ ! -f "$HOMEDIR/.update/launcher.json" ] && break; sleep 1; done
+          sleep 2
+          if [ -f "$HOMEDIR/.update/launcher.json" ] || curl -s -m 2 "http://127.0.0.1:$PORT/api/license" >/dev/null; then
+            echo "::error::quitting BUCS did not stop the server"; exit 1; fi
+          pgrep -f "Contents/MacOS/BUCS" && { echo "::error::app still running"; exit 1; } || true
+          echo "PASS quitting the app stopped the server"
+      - name: Relaunch keeps the in-app updated version (no downgrade from the bundle)
+        run: |
+          set -e
+          python tools/desktop/e2e_test.py boot --home "$HOMEDIR" --expect-version 99.0.0
+          python tools/desktop/e2e_test.py shutdown --home "$HOMEDIR"
+      - name: Bundle upgrade (newer app over older installed files) keeps user data and verifies the code seal
+        run: |
+          set -e
+          echo "0.0.1" > "$HOMEDIR/VERSION"          # installed files older than the app bundle
+          ditto "dist/${{ matrix.dmg }}" /tmp/x.dmg
+          MNT=$(hdiutil attach -nobrowse -readonly /tmp/x.dmg | tail -1 | awk -F'\t' '{print $NF}')
+          rm -rf /Applications/BUCS.app && ditto "$MNT/BUCS.app" /Applications/BUCS.app && hdiutil detach "$MNT"
+          python tools/desktop/e2e_test.py boot --home "$HOMEDIR" --expect-version "$EXPECT"
+          python tools/desktop/e2e_test.py datacheck --home "$HOMEDIR"
+          test ! -d "$HOMEDIR/.pydeps" || { echo "::error::stale dependency overlay kept after an app upgrade"; exit 1; }
+          python tools/desktop/e2e_test.py shutdown --home "$HOMEDIR"
+          codesign --verify --deep --strict /Applications/BUCS.app && echo "PASS app bundle signature still intact after running + updating"
+      - name: Uninstall (drag to Trash) keeps user data
+        run: |
+          set -e
+          rm -rf /Applications/BUCS.app
+          python tools/desktop/e2e_test.py datacheck --home "$HOMEDIR"
+      - name: Collect logs
+        if: always()
+        run: |
+          mkdir -p e2e-logs; cp "$HOMEDIR"/logs/* e2e-logs/ 2>/dev/null || true
+          log show --last 20m --predicate 'process == "BUCS" OR subsystem == "com.apple.syspolicy"' --style compact > e2e-logs/system.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: "e2e-logs-${{ matrix.target }}", path: e2e-logs, if-no-files-found: ignore }
+
+  # ──────────────────────────────── Linux ────────────────────────────────
+  build-linux:
+    # oldest supported runner: wheels pip picks here (manylinux glibc tags) run on newer distros too
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Stage bundled Python + dependencies + app files
+        run: python tools/desktop/build.py --target linux-x64
+      - name: Build AppImage
+        run: bash tools/desktop/linux/build_appimage.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-linux-x64
+          path: dist/*
+          if-no-files-found: error
+
+  test-linux:
+    needs: build-linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      BUCS_NO_BROWSER: "1"
+      HOMEDIR: /home/runner/.local/share/BUCS
+      APPIMG: /home/runner/Applications/BUCS-Linux-x64.AppImage
+      LAUNCH: '["/home/runner/Applications/BUCS-Linux-x64.AppImage"]'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/download-artifact@v4
+        with: { name: installer-linux-x64, path: dist }
+      - name: Install (download -> chmod +x, as a user would)
+        run: |
+          set -euo pipefail
+          # desktop Ubuntu ships FUSE 3; the minimal runner image may not
+          sudo apt-get install -y -qq fuse3 >/dev/null 2>&1 || true
+          mkdir -p "$(dirname "$APPIMG")"
+          cp dist/BUCS-Linux-x64.AppImage "$APPIMG"; chmod +x "$APPIMG"
+          if ! timeout 60 "$APPIMG" --stop; then      # mounts the AppImage and runs the launcher
+            echo "::notice::the AppImage could not mount (no FUSE): using extract-and-run mode"
+            echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
+          fi
+          (cd /tmp && "$APPIMG" --appimage-extract >/dev/null)
+          echo "PYEXE=/tmp/squashfs-root/usr/python/bin/python3" >> "$GITHUB_ENV"
+          echo "EXPECT=$(cat /tmp/squashfs-root/usr/app/VERSION)" >> "$GITHUB_ENV"
+          ldd --version | head -1
+      - name: Port 8765 busy -> BUCS picks another port
+        run: python tools/desktop/e2e_test.py port --home "$HOMEDIR"
+      - name: Launch (first-run / unlicensed state) + menu entry
+        run: |
+          set -e
+          python tools/desktop/e2e_test.py boot --home "$HOMEDIR" --expect-version "$EXPECT"
+          grep -q "Exec=\"$APPIMG\"" ~/.local/share/applications/bucs.desktop
+          test -f ~/.local/share/icons/hicolor/256x256/apps/bucs.png
+          test -f "$HOMEDIR/main.py" && test -f "$HOMEDIR/.env"
+          echo "PASS desktop entry + icon installed, app files in ~/.local/share/BUCS"
+          python tools/desktop/e2e_test.py datamark --home "$HOMEDIR"
+      - name: Single instance
+        run: python tools/desktop/e2e_test.py single --home "$HOMEDIR"
+      - name: In-app update (pip into the overlay) + automatic rollback
+        run: python tools/desktop/e2e_test.py update --home "$HOMEDIR" --python "$PYEXE"
+      - name: Stop from the menu action (--stop)
+        run: |
+          set -e
+          "$APPIMG" --stop
+          sleep 3
+          test ! -f "$HOMEDIR/.update/launcher.json" || { echo "::error::--stop did not stop BUCS"; exit 1; }
+          echo "PASS --stop shut BUCS down"
+      - name: Relaunch keeps the in-app updated version (no downgrade from the AppImage)
+        run: |
+          set -e
+          python tools/desktop/e2e_test.py boot --home "$HOMEDIR" --expect-version 99.0.0
+          python tools/desktop/e2e_test.py shutdown --home "$HOMEDIR"
+      - name: Upgrade (newer AppImage over older installed files) keeps user data
+        run: |
+          set -e
+          echo "0.0.1" > "$HOMEDIR/VERSION"
+          cp dist/BUCS-Linux-x64.AppImage "$APPIMG"; chmod +x "$APPIMG"
+          python tools/desktop/e2e_test.py boot --home "$HOMEDIR" --expect-version "$EXPECT"
+          python tools/desktop/e2e_test.py datacheck --home "$HOMEDIR"
+          test ! -d "$HOMEDIR/.pydeps" || { echo "::error::stale dependency overlay kept after an upgrade"; exit 1; }
+          python tools/desktop/e2e_test.py shutdown --home "$HOMEDIR"
+      - name: Uninstall keeps user data
+        run: |
+          set -e
+          "$APPIMG" --uninstall
+          test ! -f ~/.local/share/applications/bucs.desktop
+          rm -f "$APPIMG"
+          python tools/desktop/e2e_test.py datacheck --home "$HOMEDIR"
+      - name: Collect logs
+        if: always()
+        run: mkdir -p e2e-logs; cp "$HOMEDIR"/logs/* e2e-logs/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: e2e-logs-linux-x64, path: e2e-logs, if-no-files-found: ignore }
+
+  # ─────────────────────────────── Publish ───────────────────────────────
+  publish:
+    needs: [test-windows, test-macos, test-linux]
+    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/desktop-test-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts, pattern: installer-*, merge-multiple: true }
+      - name: Assemble assets + checksums
+        run: |
+          set -euo pipefail
+          mkdir release
+          for f in BUCS-Windows-x64-Setup.exe BUCS-macOS-AppleSilicon.dmg BUCS-macOS-Intel.dmg BUCS-Linux-x64.AppImage; do
+            test -s "artifacts/$f" || { echo "::error::missing tested asset $f"; exit 1; }
+            cp "artifacts/$f" release/
+          done
+          (cd release && sha256sum BUCS-* > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          { echo "Signing:"; cat artifacts/*.signing.txt | sed 's/^/  /'; } | tee signing.txt
+          VER=$(cat VERSION)
+          if [[ "$TAG" == v* && "$TAG" != "v$VER" ]]; then
+            echo "::warning::tag $TAG does not match VERSION $VER"; fi
+          cat > notes.md <<EOF
+          BUCS $VER desktop installers (tested on clean Windows, Apple Silicon and Intel Mac runners).
+
+          - **Windows 10/11 (64-bit):** BUCS-Windows-x64-Setup.exe. Installs for your user only, no admin needed.
+            If SmartScreen appears: More info > Run anyway.
+          - **Mac with Apple Silicon (M1-M4):** BUCS-macOS-AppleSilicon.dmg
+          - **Mac with Intel:** BUCS-macOS-Intel.dmg. Open the DMG and drag BUCS to Applications.
+            If macOS says it cannot verify BUCS: System Settings > Privacy & Security > Open Anyway (once).
+          - **Linux (x86_64, glibc 2.35+):** BUCS-Linux-x64.AppImage. Make it executable
+            (chmod +x BUCS-Linux-x64.AppImage) and run it; it adds itself to your app menu.
+
+          Verify downloads with SHA256SUMS.txt. In-app updates keep installed apps current.
+          EOF
+      - name: Publish release (v* tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" release/* --title "BUCS ${TAG#v}" --notes-file notes.md --latest
+          fi
+          gh release view "$TAG" --json assets --jq '.assets[].name'
+      - name: Rehearse publish on a throw-away pre-release (desktop-test-* tag), then delete it
+        if: startsWith(github.ref, 'refs/tags/desktop-test-')
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" release/* --prerelease --title "desktop installer test $TAG" --notes "CI rehearsal: deleted automatically"
+          names=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.assets[].name' | sort | tr '\n' ' ')
+          echo "assets: $names"
+          for f in BUCS-Windows-x64-Setup.exe BUCS-macOS-AppleSilicon.dmg BUCS-macOS-Intel.dmg BUCS-Linux-x64.AppImage SHA256SUMS.txt; do
+            echo "$names" | grep -qw "$f" || { echo "::error::asset $f missing from the release"; exit 1; }
+          done
+          echo "::notice::publish rehearsal OK ($names); deleting pre-release + tag"
+          gh release delete "$TAG" --cleanup-tag --yes

@@ -45,7 +45,7 @@ PRESERVE = {
     "fleet_token.txt", "pair_code.txt", "node_id.txt", "governance.json", "audio_pref.json",
     "audit.log", "model_pref.json", "billing.json", "productivity.json", "team_memory.json",
 }
-SKIP_DIRS = (".venv/", ".git/", ".update/", "__pycache__/")
+SKIP_DIRS = (".venv/", ".git/", ".update/", "__pycache__/", ".pydeps/", ".pycache/")   # + desktop overlay/caches
 
 
 def read_version(root: Path = HERE) -> str:
@@ -196,9 +196,12 @@ class Updater:
             res = await asyncio.to_thread(apply_package, self.root, data, m["sha256"], self.current, m["version"])
             if not res.get("ok"):
                 raise ValueError(res.get("error"))
-            if res.get("requirements_changed"):
+            # desktop installs (BUCS_DESKTOP=1): the launcher installs dependencies with the
+            # bundled Python after this process exits (macOS: into a writable overlay, never
+            # into the signed app bundle), so nothing is loaded while pip replaces it
+            if res.get("requirements_changed") and os.getenv("BUCS_DESKTOP") != "1":
                 self.state["phase"] = "installing dependencies"
-                py = self.root / ".venv" / "Scripts" / "python.exe"
+                py = self.root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
                 py = py if py.exists() else Path(sys.executable)
                 await asyncio.to_thread(subprocess.run, [str(py), "-m", "pip", "install", "-q", "-r",
                                                          str(self.root / "requirements.txt")], check=False)

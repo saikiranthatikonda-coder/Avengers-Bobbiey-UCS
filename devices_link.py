@@ -32,11 +32,28 @@ _WIN_PATHS = {
 }
 
 
+# macOS: an app launched from Finder/Dock gets PATH=/usr/bin:/bin:/usr/sbin:/sbin, so
+# Homebrew and the vendors' app bundles are looked up explicitly.
+_MAC_DIRS = ("/opt/homebrew/bin", "/usr/local/bin")
+_MAC_PATHS = {
+    "tailscale":    ["/Applications/Tailscale.app/Contents/MacOS/Tailscale"],
+    "zerotier-cli": ["/Library/Application Support/ZeroTier/One/zerotier-cli"],
+}
+
+JOIN = "join-fleet.cmd" if OS == "Windows" else "./join-fleet.sh"
+
+
 def find_bin(name: str) -> str | None:
     p = shutil.which(name)
     if p:
         return p
-    for c in _WIN_PATHS.get(name, []) if OS == "Windows" else []:
+    if OS == "Windows":
+        cands = _WIN_PATHS.get(name, [])
+    elif OS == "Darwin":
+        cands = [os.path.join(d, name) for d in _MAC_DIRS] + _MAC_PATHS.get(name, [])
+    else:
+        cands = []
+    for c in cands:
         if os.path.exists(c):
             return c
     return None
@@ -168,10 +185,15 @@ async def probe_lan() -> dict:
         status = "connected" if exposed else "available"
         detail = ", ".join(f"{i['name']} {i['ip']}" for i in ifs[:4]) + \
                  ("" if exposed else f" · BUCS bound to {BIND} (this PC only)")
-    steps = ([] if exposed else ["Set JARVIS_HOST=0.0.0.0 in .env and restart BUCS so other machines can reach it.",
-                                 f"Allow TCP {PORT} once in Windows Firewall (elevated shell): "
-                                 f"New-NetFirewallRule -DisplayName \"Bobbiey UCS\" -Direction Inbound -Action Allow -Protocol TCP -LocalPort {PORT}"]) + \
-            ([f"On the other machine (same network): join-fleet.cmd {url}"] if url else []) + \
+    if OS == "Windows":
+        fw = (f"Allow TCP {PORT} once in Windows Firewall (elevated shell): "
+              f"New-NetFirewallRule -DisplayName \"Bobbiey UCS\" -Direction Inbound -Action Allow -Protocol TCP -LocalPort {PORT}")
+    elif OS == "Darwin":
+        fw = "If the macOS firewall is on, allow incoming connections for BUCS when macOS asks (System Settings → Network → Firewall)."
+    else:
+        fw = f"Allow TCP {PORT} in the host firewall (e.g. sudo ufw allow {PORT}/tcp)."
+    steps = ([] if exposed else ["Set JARVIS_HOST=0.0.0.0 in .env and restart BUCS so other machines can reach it.", fw]) + \
+            ([f"On the other machine (same network): {JOIN} {url}"] if url else []) + \
             ["Office Wi-Fi often isolates clients; a phone hotspot or a mesh VPN (Tailscale) avoids that."]
     return _entry("lan", "LAN", status, detail, steps, url if exposed else None, {"interfaces": ifs[:8]})
 
@@ -180,7 +202,7 @@ async def probe_tailscale() -> dict:
     b = find_bin("tailscale")
     steps = ["Install Tailscale on this host and on every node (tailscale.com/download), sign in to the same tailnet.",
              "Set JARVIS_HOST=0.0.0.0 here (Tailscale traffic arrives on the 100.x interface).",
-             f"On a remote node: join-fleet.cmd http://<this-host-100.x-IP>:{PORT}"]
+             f"On a remote node: {JOIN} http://<this-host-100.x-IP>:{PORT}"]
     if not b:
         return _entry("tailscale", "Tailscale", "not_installed", "tailscale CLI not found", steps)
     d = parse_tailscale(await _run(b, "status", "--json", timeout=6))
@@ -190,7 +212,7 @@ async def probe_tailscale() -> dict:
         return _entry("tailscale", "Tailscale", "available", f"installed · {d['state']} (run: tailscale up)", steps)
     ip = d["ips"][0] if d["ips"] else None
     url = f"http://{d['dns'] or ip}:{PORT}" if (d["dns"] or ip) else None
-    steps = [f"Remote nodes in the tailnet join with: join-fleet.cmd {url}",
+    steps = [f"Remote nodes in the tailnet join with: {JOIN} {url}",
              "Requires JARVIS_HOST=0.0.0.0 on this host (BUCS currently binds " + BIND + ")."]
     return _entry("tailscale", "Tailscale", "connected",
                   f"{ip or '—'} · {d['dns'] or d['host']} · peers {d['peers_online']}/{d['peers']} online",
@@ -202,7 +224,7 @@ async def probe_wireguard() -> dict:
     svcs = await asyncio.to_thread(_svc_prefix, "WireGuardTunnel$")
     running = [n.split("$", 1)[1] for n, st in svcs if st == "running"]
     steps = ["Install WireGuard (wireguard.com/install) on this host and each node; give each a tunnel with a peer for the host.",
-             "Activate the tunnel, then from a node: join-fleet.cmd http://<this-host-tunnel-IP>:" + PORT]
+             f"Activate the tunnel, then from a node: {JOIN} http://<this-host-tunnel-IP>:" + PORT]
     if running:
         return _entry("wireguard", "WireGuard", "connected", "tunnel(s) up: " + ", ".join(running[:4]), steps)
     if b or svcs or await asyncio.to_thread(_svc, "WireGuardManager"):
@@ -216,7 +238,7 @@ async def probe_wireguard() -> dict:
 async def probe_zerotier() -> dict:
     b = find_bin("zerotier-cli")
     steps = ["Install ZeroTier (zerotier.com/download) on this host and the nodes; join the same network ID and authorise members at my.zerotier.com.",
-             "From a node: join-fleet.cmd http://<this-host-ZeroTier-IP>:" + PORT]
+             f"From a node: {JOIN} http://<this-host-ZeroTier-IP>:" + PORT]
     if not b:
         st = await asyncio.to_thread(_svc, "ZeroTierOneService")
         if st:
@@ -235,7 +257,7 @@ async def probe_cloudflared() -> dict:
     svc = await asyncio.to_thread(_svc, "Cloudflared")
     steps = ["Create a tunnel in the Cloudflare Zero Trust dashboard and install it as a service: cloudflared service install <token>.",
              f"Route a hostname to http://localhost:{PORT} and protect it with Cloudflare Access (BUCS remote login still applies).",
-             "Nodes then join with: join-fleet.cmd https://<your-hostname>"]
+             f"Nodes then join with: {JOIN} https://<your-hostname>"]
     if svc == "running":
         return _entry("cloudflared", "Cloudflare Tunnel", "connected", "cloudflared service running", steps)
     if b or svc:
@@ -248,11 +270,16 @@ async def probe_cloudflared() -> dict:
 async def probe_ssh() -> dict:
     svc = await asyncio.to_thread(_svc, "sshd")
     listening = await asyncio.to_thread(_port_open, 22)
-    steps = (["Windows: Settings → System → Optional features → add OpenSSH Server, then (elevated): "
-              "Start-Service sshd; Set-Service sshd -StartupType Automatic"] if OS == "Windows" else
-             ["Install and enable openssh-server (sudo systemctl enable --now ssh)."]) + \
+    if OS == "Windows":
+        how = ["Windows: Settings → System → Optional features → add OpenSSH Server, then (elevated): "
+               "Start-Service sshd; Set-Service sshd -StartupType Automatic"]
+    elif OS == "Darwin":
+        how = ["macOS: System Settings → General → Sharing → turn on Remote Login."]
+    else:
+        how = ["Install and enable openssh-server (sudo systemctl enable --now ssh)."]
+    steps = how + \
             [f"From a node, tunnel BUCS without exposing it: ssh -N -L {PORT}:127.0.0.1:{PORT} <user>@<this-host>, "
-             f"then join-fleet.cmd http://127.0.0.1:{PORT}"]
+             f"then {JOIN} http://127.0.0.1:{PORT}"]
     if listening:
         return _entry("ssh", "SSH server", "connected", "port 22 listening" + (f" · sshd {svc}" if svc else ""), steps)
     if svc:
@@ -275,6 +302,8 @@ async def probe_bluetooth() -> dict:
         det = (ok or d["adapters"])[0]["name"] + f" · {bt.get('count', 0)} connected device(s)"
         return _entry("bluetooth", "Bluetooth", "connected" if ok else "available", det, steps)
     bt = await connectivity.bluetooth_info()
+    if bt.get("count") is None:
+        return _entry("bluetooth", "Bluetooth", "unknown", bt.get("note") or "Bluetooth could not be read", steps)
     return _entry("bluetooth", "Bluetooth", "available" if bt.get("count") else "unknown",
                   f"{bt.get('count', 0)} connected device(s)", steps)
 
@@ -283,7 +312,7 @@ async def probe_wifi() -> dict:
     w = await connectivity.wifi_info()
     steps = ["Nodes on the same Wi-Fi can join directly over LAN unless the access point isolates clients."]
     if w.get("connected"):
-        det = f"{w.get('ssid')} · signal {w.get('signal') or '—'} · {w.get('auth') or ''}".rstrip(" ·")
+        det = f"{w.get('ssid') or 'network name unknown'} · signal {w.get('signal') or '—'} · {w.get('auth') or ''}".rstrip(" ·")
         return _entry("wifi", "Wi-Fi", "connected", det, steps)
     if w.get("reason") == "no wifi adapter":
         return _entry("wifi", "Wi-Fi", "not_installed", "no Wi-Fi adapter", steps)
@@ -292,15 +321,19 @@ async def probe_wifi() -> dict:
 
 
 async def probe_cellular() -> dict:
-    steps = ["A phone hotspot is the reliable fallback when office Wi-Fi isolates clients: connect host and nodes to it, then use the LAN URL.",
-             "Windows Mobile Hotspot on this PC also works: nodes join http://192.168.137.1:" + PORT]
+    steps = ["A phone hotspot is the reliable fallback when office Wi-Fi isolates clients: connect host and nodes to it, then use the LAN URL."]
+    if OS != "Windows":
+        # Windows Mobile Hotspot (192.168.137.1) and `netsh mbn` don't exist here; don't guess.
+        return _entry("cellular", "Cellular / Hotspot", "unknown",
+                      f"mobile-broadband / hotspot detection is not available on {'macOS' if OS == 'Darwin' else OS}", steps)
+    steps.append("Windows Mobile Hotspot on this PC also works: nodes join http://192.168.137.1:" + PORT)
     hotspot = False
     try:
         d = await asyncio.to_thread(_lan_sync)
         hotspot = any(i["ip"] == "192.168.137.1" for i in d["interfaces"])
     except Exception:
         pass
-    mbn = parse_mbn(await _run("netsh", "mbn", "show", "interfaces", timeout=5)) if OS == "Windows" else {"present": False}
+    mbn = parse_mbn(await _run("netsh", "mbn", "show", "interfaces", timeout=5))
     if hotspot:
         return _entry("cellular", "Cellular / Hotspot", "connected", "Windows Mobile Hotspot is sharing (192.168.137.1)", steps,
                       f"http://192.168.137.1:{PORT}")
