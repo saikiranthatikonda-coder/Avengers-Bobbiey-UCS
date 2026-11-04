@@ -4,6 +4,7 @@
 #                       BUCS-macOS-Intel.dmg and SHA256SUMS.txt to the release for that tag
 #   tag desktop-test-*  build + test, then rehearse the publish on a throw-away PRE-release
 #                       (the website ignores pre-releases) and delete it again
+#   tag desktop-publish-test-*  publish rehearsal only (placeholder files, no builds)
 #   workflow_dispatch   build + test only
 #
 #   Linux:   AppImage is unsigned (users verify SHA256SUMS.txt)
@@ -15,7 +16,7 @@ name: Desktop installers
 
 on:
   push:
-    tags: ["v*", "desktop-test-*"]
+    tags: ["v*", "desktop-test-*", "desktop-publish-test-*"]
   workflow_dispatch:
 
 permissions:
@@ -31,6 +32,7 @@ env:
 jobs:
   # ─────────────────────────────── Windows ───────────────────────────────
   build-windows:
+    if: ${{ !startsWith(github.ref, 'refs/tags/desktop-publish-test-') }}
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
@@ -159,6 +161,7 @@ jobs:
 
   # ──────────────────────────────── macOS ────────────────────────────────
   build-macos:
+    if: ${{ !startsWith(github.ref, 'refs/tags/desktop-publish-test-') }}
     strategy:
       fail-fast: false
       matrix:
@@ -303,6 +306,7 @@ jobs:
 
   # ──────────────────────────────── Linux ────────────────────────────────
   build-linux:
+    if: ${{ !startsWith(github.ref, 'refs/tags/desktop-publish-test-') }}
     # oldest supported runner: wheels pip picks here (manylinux glibc tags) run on newer distros too
     runs-on: ubuntu-22.04
     timeout-minutes: 40
@@ -403,17 +407,32 @@ jobs:
   # ─────────────────────────────── Publish ───────────────────────────────
   publish:
     needs: [test-windows, test-macos, test-linux]
-    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/desktop-test-')
+    # v* / desktop-test-*: only after EVERY platform's install tests passed.
+    # desktop-publish-test-*: rehearse only the publish mechanics with placeholder files (no builds).
+    if: >-
+      always() && (startsWith(github.ref, 'refs/tags/desktop-publish-test-') ||
+      ((startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/desktop-test-')) &&
+       needs.test-windows.result == 'success' && needs.test-macos.result == 'success' &&
+       needs.test-linux.result == 'success'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v6
+        if: ${{ !startsWith(github.ref, 'refs/tags/desktop-publish-test-') }}
         with: { path: artifacts, pattern: installer-*, merge-multiple: true }
+      - name: Placeholder assets (publish-only rehearsal)
+        if: startsWith(github.ref, 'refs/tags/desktop-publish-test-')
+        run: |
+          mkdir -p artifacts
+          for f in BUCS-Windows-x64-Setup.exe BUCS-macOS-AppleSilicon.dmg BUCS-macOS-Intel.dmg BUCS-Linux-x64.AppImage; do
+            echo "placeholder $f" > "artifacts/$f"; echo "signing=placeholder" > "artifacts/$f.signing.txt"
+          done
       - name: Assemble assets + checksums
         run: |
           set -euo pipefail
@@ -423,12 +442,13 @@ jobs:
             cp "artifacts/$f" release/
           done
           (cd release && sha256sum BUCS-* > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          ls -la release
           { echo "Signing:"; cat artifacts/*.signing.txt | sed 's/^/  /'; } | tee signing.txt
           VER=$(cat VERSION)
           if [[ "$TAG" == v* && "$TAG" != "v$VER" ]]; then
             echo "::warning::tag $TAG does not match VERSION $VER"; fi
-          cat > notes.md <<EOF
-          BUCS $VER desktop installers (tested on clean Windows, Apple Silicon and Intel Mac runners).
+          cat > notes.md <<NOTES
+          BUCS $VER desktop installers, each tested on a clean Windows, Apple Silicon Mac, Intel Mac and Ubuntu runner.
 
           - **Windows 10/11 (64-bit):** BUCS-Windows-x64-Setup.exe. Installs for your user only, no admin needed.
             If SmartScreen appears: More info > Run anyway.
@@ -439,26 +459,34 @@ jobs:
             (chmod +x BUCS-Linux-x64.AppImage) and run it; it adds itself to your app menu.
 
           Verify downloads with SHA256SUMS.txt. In-app updates keep installed apps current.
-          EOF
+          NOTES
       - name: Publish release (v* tag)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          set -euo pipefail
+          set -uo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" release/* --clobber
+            out=$(gh release upload "$TAG" release/* --clobber 2>&1) || { echo "::error::asset upload failed: $(echo "$out" | tr '\n' ' ' | tail -c 1500)"; exit 1; }
           else
-            gh release create "$TAG" release/* --title "BUCS ${TAG#v}" --notes-file notes.md --latest
+            out=$(gh release create "$TAG" release/* --title "BUCS ${TAG#v}" --notes-file notes.md --latest 2>&1) \
+              || { echo "::error::release create failed: $(echo "$out" | tr '\n' ' ' | tail -c 1500)"; exit 1; }
           fi
           gh release view "$TAG" --json assets --jq '.assets[].name'
-      - name: Rehearse publish on a throw-away pre-release (desktop-test-* tag), then delete it
-        if: startsWith(github.ref, 'refs/tags/desktop-test-')
+      - name: Rehearse publish on a throw-away pre-release, then delete it
+        if: startsWith(github.ref, 'refs/tags/desktop-test-') || startsWith(github.ref, 'refs/tags/desktop-publish-test-')
         run: |
-          set -euo pipefail
-          gh release create "$TAG" release/* --prerelease --title "desktop installer test $TAG" --notes "CI rehearsal: deleted automatically"
-          names=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.assets[].name' | sort | tr '\n' ' ')
+          set -uo pipefail
+          gh --version | head -1
+          out=$(gh release create "$TAG" release/* --prerelease --title "desktop installer test $TAG" \
+                  --notes "CI rehearsal: deleted automatically" 2>&1) \
+            || { echo "::error::gh release create failed: $(echo "$out" | tr '\n' ' ' | tail -c 1500)"; exit 1; }
+          echo "$out"
+          names="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '.assets[].name' 2>&1)"
           echo "assets: $names"
+          missing=""
           for f in BUCS-Windows-x64-Setup.exe BUCS-macOS-AppleSilicon.dmg BUCS-macOS-Intel.dmg BUCS-Linux-x64.AppImage SHA256SUMS.txt; do
-            echo "$names" | grep -qw "$f" || { echo "::error::asset $f missing from the release"; exit 1; }
+            case $'\n'"$names"$'\n' in *$'\n'"$f"$'\n'*) ;; *) missing="$missing $f" ;; esac
           done
-          echo "::notice::publish rehearsal OK ($names); deleting pre-release + tag"
-          gh release delete "$TAG" --cleanup-tag --yes
+          out=$(gh release delete "$TAG" --cleanup-tag --yes 2>&1) \
+            || { echo "::error::gh release delete failed: $(echo "$out" | tr '\n' ' ' | tail -c 1500)"; exit 1; }
+          [ -z "$missing" ] || { echo "::error::assets missing from the release:$missing"; exit 1; }
+          echo "::notice::publish rehearsal OK: all 5 assets uploaded to pre-release $TAG, then the pre-release and tag were deleted"
