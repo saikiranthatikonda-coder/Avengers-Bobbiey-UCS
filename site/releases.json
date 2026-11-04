@@ -1,13 +1,13 @@
 {
   "kind": "bucs-release",
-  "version": "8.0.1",
+  "version": "8.1.0",
   "date": "2026-11-04",
-  "commit": "3e41424",
+  "commit": "16334c0",
   "notes": [
-    "v8.0.1: LLM CORE badge follows the active brain instantly; every setting change updates all sections and open tabs and is saved; forms keep unsaved edits; typed brain/mic commands; remembered view choices; Evolution loop settings; cyber findings in the threat matrix."
+    "v8.1.0: UNIFIED COMMAND SYSTEM stays exactly centred at every window size; redesigned version chip and power button with an in-theme shutdown confirmation; the mic ON/SLEEP/OFF/TALK controls are removed (the mic always listens for its wake words)."
   ],
-  "url": "releases/bucs-8.0.1.zip",
-  "sha256": "9e28bbb70dc924d06ecb8968a322b7bcf612b06dd707ec6a32502a3ce132070c",
-  "size": 797397,
-  "sig": "hrAfcBVTQYzDFbOJqjNI-ZmMrisuL8ZlFZTDOjHS7ksAHE7NzOgvyafX-InGf1pXynVmp_dgyD82QzLWr3neAw"
+  "url": "releases/bucs-8.1.0.zip",
+  "sha256": "9350243d6a9d745a9fa0380b85ed71995da4ac1c819c992bd6cadf1a0d60f59c",
+  "size": 796163,
+  "sig": "Jt7cbJaU1ptHVz_s4M8gYBN8wiRCXc-DPLmIvioRCa1s497_SKiYlI58NMEuQZQNmvTp3fP0g8pDnp_DEW2wCQ"
 }
