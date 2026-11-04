@@ -1,18 +1,13 @@
 {
   "kind": "bucs-release",
-  "version": "7.9.0",
-  "date": "2026-11-03",
-  "commit": "3437120",
+  "version": "8.0.0",
+  "date": "2026-11-04",
+  "commit": "f908a79",
   "notes": [
-    "Microphone ON / SLEEP / OFF with push-to-talk: in Sleep, JARVIS acts only when you say 'Jarvis…' or press TALK (Ctrl+Space)",
-    "More accurate real-time answers: live news, Wikipedia and prices, cited, instead of guesses",
-    "New: Disaster Response with live earthquakes, cyclones, floods, Indian alerts and digital outages",
-    "New: Devices & Connectivity: control Home Assistant, Hue, Shelly, Tasmota, MQTT, ESPHome devices; node links via LAN, Tailscale, WireGuard, Cloudflare Tunnel",
-    "New: Cyber Analyst agent: continuous security scans, fixes proposed for your approval",
-    "Security: critical web-framework vulnerability fixed (dependencies update automatically)"
+    "v8.0.0: Desktop apps for Windows, macOS (Apple Silicon + Intel) and Linux; Computer Use agent with approval gate; AI Phone agent (Twilio); autonomous evolution loop with sandbox + approval; AI Core (providers, routing, tools, memory, plugins); Global Activity Map with real live layers; dashboard shows only real data with clickable detail views; header clock module; mic ON/SLEEP/OFF fixes."
   ],
-  "url": "releases/bucs-7.9.0.zip",
-  "sha256": "92725559d4d0fbd63fe9ed74021d00d742af03e799a0743f6e9918d62993b50a",
-  "size": 501765,
-  "sig": "a3OvH9F_87SKWzobuFANgxGU41platvWlI-6ZNYczIipAtmw_2CHoLMT_Yv6RfmR6PuZli9ZZoutLhVimxynAg"
+  "url": "releases/bucs-8.0.0.zip",
+  "sha256": "55255246356e9183cf65d1840c8484f50323840fe61394374b6862d90efe4544",
+  "size": 785759,
+  "sig": "hbNZLheGqxTwJe8FgoNxUQqLtO4zQTk4MW78M80uA9jUwNGOx0vGd2BThY9i6OI63F_q9qdRgYXPn5xlUTUNBw"
 }
