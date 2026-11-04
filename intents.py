@@ -59,26 +59,6 @@ async def i_conversation(ctx, text, low):
               action={"name": "voice.conversation_mode", "target": "on" if on else "off"})
 
 
-async def i_micmode(ctx, text, low):
-    """Typed (command bar) or engine-routed "Jarvis, mic off" / "go to sleep" / "wake up".
-    Spoken ones are already switched inside voice.py before they reach the engine; both
-    paths end in VoiceLoop.set_mic_mode, which persists the mode and broadcasts "micmode"."""
-    from voice import mic_command
-    want = mic_command(text)
-    if not want:
-        return None
-    rest = re.sub(r"\b(hey |ok |okay )?jarvis\b[,.!]*", " ", low).strip(" .!,?")
-    if len(rest.split()) > 5:                      # a sentence that merely contains "wake up"
-        return None
-    v = ctx.get("voice")
-    if v is None or not hasattr(v, "set_mic_mode"):
-        return _r("Voice input is disabled on this install, sir. Set JARVIS_VOICE=1 to use the microphone.",
-                  action={"name": "voice.mic", "target": want, "ok": False})
-    await v.set_mic_mode(want, source="command")
-    return _r({"on": "Microphone on. I'm listening, sir.",
-               "sleep": "Going to sleep. Say \"Jarvis\" when you need me.",
-               "off": "Microphone off. It's released."}[want],
-              action={"name": "voice.mic", "target": want})
 
 
 _BRAIN_ALIASES = {"claude": "claude", "claude cli": "claude", "claude code": "claude", "cloud": "claude",
@@ -425,7 +405,7 @@ async def i_dashboard(ctx, text, low):
 
 # order matters: actions that start with "open" (apps, sites) before dashboard
 # sections, specific questions before broad ones
-HANDLERS = [i_conversation, i_micmode, i_brain, i_dev, i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
+HANDLERS = [i_conversation, i_brain, i_dev, i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
             i_inbox, i_threats, i_news, i_memory, i_vision, i_missions, i_dashboard]
 
 

@@ -146,24 +146,6 @@ class ClapDetector:
         return fired
 
 
-MIC_PREF = Path(__file__).resolve().parent / ".update" / "mic_pref.json"
-MIC_MODES = ("on", "sleep", "off")
-ARM_S = 10.0          # TALK button / bare "Jarvis" in sleep mode: the next utterance is a command
-
-
-def mic_command(text: str) -> str | None:
-    """Spoken mode switches: "go to sleep" → sleep, "wake up" → on, "mic off" → off."""
-    t = re.sub(r"[^a-z ]", " ", (text or "").lower())
-    t = re.sub(r"\s+", " ", t).strip()
-    if re.search(r"\b(go to sleep|sleep mode|start sleeping)\b", t):
-        return "sleep"
-    if re.search(r"\b(wake up|stay awake|listen to everything|sleep mode off)\b", t):
-        return "on"
-    if re.search(r"\b(mic off|microphone off|stop listening|turn off (the )?(mic|microphone))\b", t):
-        return "off"
-    return None
-
-
 class VoiceLoop:
     def __init__(self, hub, brain, team, services: dict | None = None) -> None:
         self.hub = hub
@@ -182,34 +164,7 @@ class VoiceLoop:
         self.diag: deque = deque(maxlen=30)      # per-utterance diagnostics (/api/voice/diagnostics)
         self.echo_rms = 0.0                      # learned level of our own voice in the mic
         self.barge_ins = 0
-        # mic mode: on (normal) · sleep (only "Jarvis …"/wake phrases, clap or TALK) · off (mic closed)
-        self.mic_mode = "on"                     # the saved choice is restored when the mic loop starts
-        self.status = "starting"                 # starting · loading model · listening · sleeping · mic off · error: …
-        self.armed_until = 0.0
-        self._mode_event = asyncio.Event()
-
-    async def set_mic_mode(self, mode: str, source: str = "ui") -> str:
-        if mode not in MIC_MODES:
-            raise ValueError("mode must be on | sleep | off")
-        self.mic_mode = mode
-        self.armed_until = 0.0
-        try:
-            MIC_PREF.parent.mkdir(parents=True, exist_ok=True)
-            from atomicio import atomic_write_text
-            atomic_write_text(MIC_PREF, json.dumps({"mode": mode}))
-        except Exception:
-            pass
-        self._mode_event.set()
-        if not self.status.startswith(("starting", "loading", "error")):
-            self.status = {"on": "listening", "sleep": "sleeping", "off": "mic off"}[mode]
-        await self.hub.broadcast({"type": "micmode", "mode": mode, "source": source, "status": self.status})
-        return mode
-
-    async def arm(self, seconds: float = ARM_S) -> None:
-        """TALK: the next utterance is taken as a command, no wake word (works in sleep mode)."""
-        self.armed_until = time.time() + seconds
-        await self.hub.broadcast({"type": "micmode", "mode": self.mic_mode, "armed": seconds})
-        await self.hub.broadcast({"type": "voice", "event": "engaged", "agent": "jarvis", "seconds": seconds})
+        self.status = "starting"                 # starting · loading model · listening · error: …
 
     async def run(self) -> None:
         try:
@@ -224,13 +179,6 @@ class VoiceLoop:
             })
             return
 
-        try:                                      # restore the operator's last mic mode (on / sleep / off)
-            m = json.loads(MIC_PREF.read_text(encoding="utf-8")).get("mode")
-            if m in MIC_MODES:
-                self.mic_mode = m
-                await self.hub.broadcast({"type": "micmode", "mode": m, "source": "restore"})
-        except Exception:
-            pass
         asyncio.create_task(self._hub_listener())
         # transcription runs in its own worker so capture NEVER pauses: before
         # this, the mic loop waited on Whisper (1-14 s) — readings stalled,
@@ -244,7 +192,6 @@ class VoiceLoop:
         model_name = os.getenv("JARVIS_WHISPER_MODEL", "small")
         self.model_name = model_name
         self.status = f"loading speech model ({model_name})"
-        await self.hub.broadcast({"type": "micmode", "mode": self.mic_mode, "status": self.status})
         await self.hub.broadcast({
             "type": "log", "level": "info",
             "msg": f"loading whisper {model_name} (first run downloads model — ~500 MB for 'small')…",
@@ -289,17 +236,7 @@ class VoiceLoop:
 
         try:
             while True:
-                if self.mic_mode == "off":
-                    while not q.empty():
-                        q.get_nowait()
-                    self.status = "mic off"
-                    await self.hub.broadcast({"type": "mic", "off": True, "peak": 0, "rms": 0})
-                    await self.hub.broadcast({"type": "micmode", "mode": "off", "status": self.status})
-                    while self.mic_mode == "off":
-                        self._mode_event.clear()
-                        await self._mode_event.wait()
-                self.status = "listening" if self.mic_mode == "on" else "sleeping"
-                await self.hub.broadcast({"type": "micmode", "mode": self.mic_mode, "status": self.status})
+                self.status = "listening"
                 with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16",
                                     blocksize=chunk_samples, callback=cb) as stream:
                     buffer: list = []
@@ -309,8 +246,6 @@ class VoiceLoop:
                     silence_count = 0
 
                     while True:
-                        if self.mic_mode == "off":            # leave the `with`: the device is closed and released
-                            break
                         pkt = await q.get()
                         if self.muted:
                             # mic is muted while BUCS speaks (no self-triggering), but
@@ -393,7 +328,6 @@ class VoiceLoop:
                                 await self.hub.broadcast({"type": "voice", "event": "listening"})
         except Exception as e:
             self.status = f"error: {e}"[:160]
-            await self.hub.broadcast({"type": "micmode", "mode": self.mic_mode, "status": self.status})
             await self.hub.broadcast({
                 "type": "log", "level": "error",
                 "msg": f"voice loop crashed: {e}",
@@ -488,25 +422,6 @@ class VoiceLoop:
             if is_cancel(text) and (self.engine.active or getattr(self.engine.state.get("tts"), "speaking", False)):
                 entry["outcome"] = "cancel"
                 await self.engine.submit(text, source="voice")
-                return
-            # spoken mic-mode switches ("Jarvis, go to sleep" / "Jarvis, wake up" / "mic off")
-            named_any, _rest_any = self._mentions_jarvis(text)
-            wanted = mic_command(text)
-            if wanted and (named_any or self.mic_mode == "on" or time.time() < self.armed_until):
-                entry["outcome"] = f"mic → {wanted}"
-                await self.set_mic_mode(wanted, source="voice")
-                tts = self.engine.state.get("tts")
-                if tts is not None:
-                    asyncio.get_running_loop().create_task(tts.say(
-                        {"sleep": "Going to sleep. Say Jarvis when you need me.", "on": "I'm awake and listening.",
-                         "off": "Microphone off."}[wanted], channel="conversation"))
-                await self.hub.broadcast({"type": "voice", "event": "idle"})
-                return
-            self._consume_arm()
-            if not self._sleep_allows(text, entry):
-                await self.hub.broadcast({"type": "voice", "event": "unrouted", "text": text,
-                                          "hint": "sleep mode — say “Jarvis …”, double-clap, or press TALK"})
-                await self.hub.broadcast({"type": "voice", "event": "idle"})
                 return
             # Conversation Mode: one agent (JARVIS). Say "Jarvis" anywhere to
             # start; then no wake word is needed while the conversation is
@@ -692,36 +607,6 @@ class VoiceLoop:
 
     ENGAGED_S = 20.0
 
-    def _consume_arm(self) -> bool:
-        """TALK pressed in ON mode: route the next utterance to JARVIS without a wake word."""
-        if self.mic_mode == "on" and time.time() < self.armed_until:
-            self.armed_until = 0.0
-            self.follow_agent = "jarvis"
-            self.follow_until = time.time() + 2.0
-            return True
-        return False
-
-    def _sleep_allows(self, text: str, entry: dict) -> bool:
-        """Sleep mode: only a deliberate command gets through — "Jarvis …", an agent wake
-        phrase, or an utterance right after TALK / a bare "Jarvis" (one command per arm).
-        Follow-up windows don't apply, so background talk is never taken as a command."""
-        if self.mic_mode != "sleep":
-            return True
-        named, rest = self._mentions_jarvis(text)
-        agent_key, command = self._match_agent(text)
-        if time.time() < self.armed_until:
-            self.armed_until = 0.0
-            self.follow_agent = self.follow_agent or "jarvis"
-            self.follow_until = time.time() + 2.0          # let this one utterance through as engaged
-            return True
-        if named and not rest or (agent_key and not command):
-            self.armed_until = time.time() + ARM_S          # bare wake word → arm for the next utterance
-            return True
-        if named or agent_key:
-            self.follow_until = 0.0
-            return True
-        entry["outcome"] = "ignored (sleep mode — say 'Jarvis …')"
-        return False
 
     @staticmethod
     def _mentions_jarvis(text: str) -> tuple[bool, str]:
@@ -742,7 +627,7 @@ class VoiceLoop:
         return {"model": getattr(self, "model_name", None), "noise_rms": round(self.noise_rms),
                 "echo_rms": round(self.echo_rms), "barge_ins": self.barge_ins,
                 "dropped_stale": getattr(self, "dropped_stale", 0),
-                "conversation_mode": self._conversation(), "mic_mode": self.mic_mode, "status": self.status,
+                "conversation_mode": self._conversation(), "status": self.status,
                 "utterances": list(self.diag)[::-1]}
 
     def _open_followup(self, agent_key: str, seconds: float = 12.0) -> None:

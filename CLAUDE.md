@@ -313,9 +313,6 @@ X isn't working, fix it", or the ENGINEERING panel's input). Contract, never wea
   `evolution.py`, `agentos.py`, `globalmap.py`) plug in via `build_router(ctx)` and
   optional `async start(ctx)`; ctx = state, audit, commander(), host_only(request). A module that
   fails to import must never take the dashboard down. Each renders into `#<name>-mount`.
-- Voice mic modes (`voice.py`): ON · SLEEP (only "Jarvis …", agent wake phrases, double-clap or
-  TALK; follow-up windows don't apply) · OFF (input stream stopped, device released). The choice
-  persists in `.update/mic_pref.json`. Mode switches by voice never reach the LLM.
 - Real-time answers (`livefacts.py`): every LLM prompt gets the real clock/location/weather;
   time-sensitive questions get live Google News RSS / Wikipedia / CoinGecko under a 3.5 s budget,
   and the model must answer current facts only from those sources or say it can't verify.

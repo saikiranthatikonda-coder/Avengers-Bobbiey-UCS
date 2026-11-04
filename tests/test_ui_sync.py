@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -95,31 +96,20 @@ class Broadcasts(unittest.TestCase):
             SERVER.post("/api/llm/active", {"id": "auto"})
 
 
-class SpokenOrTypedMicSwitch(unittest.TestCase):
-    """"Jarvis mic off" typed in the command bar goes through the same VoiceLoop.set_mic_mode
-    as the buttons: persisted + broadcast."""
+class MicModesRemoved(unittest.TestCase):
+    """The mic ON/SLEEP/OFF/TALK feature was removed (owner decision, v8.1.0): the mic always
+    listens for its wake words, and nothing in the UI or the API can switch it."""
 
-    def test_mic_off_by_command(self):
-        class Hub:
-            def __init__(self):
-                self.msgs = []
-
-            async def broadcast(self, m):
-                self.msgs.append(m)
-
-        with tempfile.TemporaryDirectory() as d, \
-                mock.patch.object(voice, "MIC_PREF", Path(d) / "mic.json"):
-            hub = Hub()
-            v = voice.VoiceLoop(hub=hub, brain=None, team={})
-            res = asyncio.run(intents.match({"voice": v, "hub": hub}, "Jarvis, mic off"))
-            self.assertEqual(res["intent"], "micmode")
-            self.assertEqual(v.mic_mode, "off")
-            self.assertIn({"type": "micmode", "mode": "off", "source": "command", "status": v.status}, hub.msgs)
-            self.assertIn('"off"', (Path(d) / "mic.json").read_text())
-
-    def test_sentence_with_wake_up_is_not_a_mic_command(self):
-        self.assertIsNone(asyncio.run(intents.i_micmode(
-            {}, "", "remind me to wake up at seven tomorrow and call the bank about the loan")))
+    def test_no_mic_mode_code_left(self):
+        self.assertFalse(hasattr(voice.VoiceLoop, "set_mic_mode"))
+        self.assertFalse(hasattr(voice, "mic_command"))
+        self.assertFalse(hasattr(intents, "i_micmode"))
+        html = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+        js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+        for s in ("mic-modes", "mic-talk"):
+            self.assertNotIn(s, html)
+        self.assertNotIn("MicMode", js)
+        self.assertNotIn("/api/voice/mic", (ROOT / "main.py").read_text(encoding="utf-8"))
 
 
 class Persistence(unittest.TestCase):

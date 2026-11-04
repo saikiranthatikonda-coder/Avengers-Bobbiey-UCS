@@ -5,6 +5,20 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-04 — v8.1.0 · Cleaner header: centred UCS title, new system controls, mic modes removed
+- **Removed: the mic ON / SLEEP / OFF / TALK section (owner decision).**
+  - The microphone always listens for its wake words, as before v7.9.
+  - Removed with it: the header buttons, the keyboard shortcuts, the `/api/voice/mic` and `/api/voice/talk` endpoints, and the spoken and typed "mic off / go to sleep / wake up" commands.
+  - A previously saved mic choice is no longer read.
+- **UNIFIED COMMAND SYSTEM is pinned to the exact centre of the header** at every window width, and glides as the window is resized.
+  - On narrower windows it moves to its own centred row instead of disappearing.
+  - The header never makes the page scroll sideways.
+- **Redesigned system controls:**
+  - The version chip has a hex emblem and status light, and shows UP TO DATE, UPDATE (pulsing green) or DEV BUILD.
+  - The power core has an orbiting ring and a crisp power icon.
+  - Shutting down now asks in an in-theme confirmation instead of the browser's pop-up. It closes with Esc, Cancel or a click outside.
+- **Dashboard:** the logo tooltip no longer carries the old "= Avengers" collaboration line.
+
 ## 2026-11-04 — v8.0.1 · Every click updates everywhere and is saved
 - **fix: LLM CORE badge under the orb now follows the active brain.**
   - It used to show the insights engine's model, and `/api/models` took about 18 s whenever Ollama wasn't running. The model list is now cached briefly and fails fast.

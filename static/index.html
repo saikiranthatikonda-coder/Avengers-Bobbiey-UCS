@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=8.0.1" />
-  <link rel="stylesheet" href="/static/disaster.css?v=8.0.1" />
-  <link rel="stylesheet" href="/static/devices.css?v=8.0.1" />
-  <link rel="stylesheet" href="/static/secagent.css?v=8.0.1" />
-  <link rel="stylesheet" href="/static/computeruse.css?v=8.0.1" />
-  <link rel="stylesheet" href="/static/phone.css?v=8.0.1" />
-  <link rel="stylesheet" href="/static/evolution.css?v=8.0.1" />
-  <link rel="stylesheet" href="/static/agentos.css?v=8.0.1" />
-  <link rel="stylesheet" href="/static/globalmap.css?v=8.0.1" />
+  <link rel="stylesheet" href="/static/style.css?v=8.1.0" />
+  <link rel="stylesheet" href="/static/disaster.css?v=8.1.0" />
+  <link rel="stylesheet" href="/static/devices.css?v=8.1.0" />
+  <link rel="stylesheet" href="/static/secagent.css?v=8.1.0" />
+  <link rel="stylesheet" href="/static/computeruse.css?v=8.1.0" />
+  <link rel="stylesheet" href="/static/phone.css?v=8.1.0" />
+  <link rel="stylesheet" href="/static/evolution.css?v=8.1.0" />
+  <link rel="stylesheet" href="/static/agentos.css?v=8.1.0" />
+  <link rel="stylesheet" href="/static/globalmap.css?v=8.1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
@@ -29,7 +29,7 @@
 
   <header class="hud-header">
     <div class="hud-title">
-      <h1 class="logo-eq" aria-label="Stark Industries times Bobbiey" title="Stark Industries × Bobbiey: a collaboration that puts the power of the Avengers AI agents in your hands, so people and AI work as one team.">
+      <h1 class="logo-eq" aria-label="Stark Industries times Bobbiey" title="Stark Industries × Bobbiey">
         <span class="le-row le-terms">
           <span class="le-stark">STARK INDUSTRIES</span>
           <span class="le-op le-x" aria-hidden="true">×</span>
@@ -44,8 +44,22 @@
           <span class="sm-tag" id="sm-telemetry" title="Live telemetry stream from this machine"><i></i><b class="sm-full">LIVE TELEMETRY</b><b class="sm-short">LIVE</b></span>
         </div>
         <div class="sm-ctl">
-          <button class="ver-pill" id="sys-version" title="BUCS version: click for updates">v—</button>
-          <button class="power-btn" id="sys-power" title="Shut down BUCS" aria-label="Shut down BUCS">⏻</button>
+          <button class="ver-chip" id="sys-version" data-state="idle" title="BUCS version: click for updates">
+            <svg class="vc-hex" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20.5 7.3v9.4L12 21.5 3.5 16.7V7.3z"/><path class="vc-hex-in" d="M12 7.2 16.2 9.6v4.8L12 16.8 7.8 14.4V9.6z"/></svg>
+            <span class="vc-txt"><span class="vc-k" id="sys-ver-k">BUILD</span><span class="vc-v" id="sys-ver-v">v—</span></span>
+            <span class="vc-led" aria-hidden="true"></span>
+          </button>
+          <div class="power-wrap">
+            <button class="power-core" id="sys-power" title="Shut down BUCS" aria-label="Shut down BUCS" aria-haspopup="dialog" aria-expanded="false">
+              <svg class="pc-ring" viewBox="0 0 40 40" aria-hidden="true"><circle class="pc-track" cx="20" cy="20" r="17"/><circle class="pc-arc" cx="20" cy="20" r="17"/></svg>
+              <svg class="pc-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.05 6.6a7.5 7.5 0 1 0 9.9 0"/></svg>
+            </button>
+            <div class="power-pop" id="power-pop" role="dialog" aria-label="Shut down BUCS" hidden>
+              <div class="pp-head"><span class="pp-dot"></span>SHUT DOWN BUCS?</div>
+              <p class="pp-text">Agents, voice and schedules stop and the BUCS window closes. Start it again any time from the BUCS shortcut.</p>
+              <div class="pp-acts"><button class="pp-cancel" id="power-cancel">CANCEL</button><button class="pp-go" id="power-go">⏻ SHUT DOWN</button></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -66,13 +80,6 @@
       </div>
       <button class="conv-btn" id="conv-toggle" aria-pressed="true"
               title="Conversation Mode — ON: one agent (JARVIS); say 'Jarvis…' once, then just talk; background agent voices stay silent (text only). OFF: wake words for every agent and all voices. Click to switch."><span class="cv-full">CONVERSATION · ON</span><span class="cv-short">CONV · ON</span></button>
-      <div class="mic-modes" id="mic-modes" role="radiogroup" aria-label="Microphone mode"
-           title="MIC ON: JARVIS hears everything addressed to it. SLEEP: only deliberate commands: start with “Jarvis…”, double-clap, or press TALK. OFF: the microphone is released.">
-        <button class="mic-mode" data-mic="on" role="radio" aria-checked="false">● ON</button>
-        <button class="mic-mode" data-mic="sleep" role="radio" aria-checked="false">☾ SLEEP</button>
-        <button class="mic-mode" data-mic="off" role="radio" aria-checked="false">✕ OFF</button>
-        <button class="mic-talk" id="mic-talk" title="Push-to-talk (Ctrl+Space): your next sentence is a command, no wake word">TALK</button>
-      </div>
       <div class="audio-ctl" id="audio-ctl" title="Dashboard audio">
         <button class="audio-btn" id="audio-mute" aria-label="Mute dashboard audio">🔊</button>
         <input type="range" class="audio-vol" id="audio-vol" min="0" max="100" value="100" aria-label="Volume"/>
@@ -1587,14 +1594,14 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=8.0.1"></script>
-  <script src="/static/disaster.js?v=8.0.1"></script>
-  <script src="/static/devices.js?v=8.0.1"></script>
-  <script src="/static/secagent.js?v=8.0.1"></script>
-  <script src="/static/computeruse.js?v=8.0.1"></script>
-  <script src="/static/phone.js?v=8.0.1"></script>
-  <script src="/static/evolution.js?v=8.0.1"></script>
-  <script src="/static/agentos.js?v=8.0.1"></script>
-  <script src="/static/globalmap.js?v=8.0.1"></script>
+  <script src="/static/app.js?v=8.1.0"></script>
+  <script src="/static/disaster.js?v=8.1.0"></script>
+  <script src="/static/devices.js?v=8.1.0"></script>
+  <script src="/static/secagent.js?v=8.1.0"></script>
+  <script src="/static/computeruse.js?v=8.1.0"></script>
+  <script src="/static/phone.js?v=8.1.0"></script>
+  <script src="/static/evolution.js?v=8.1.0"></script>
+  <script src="/static/agentos.js?v=8.1.0"></script>
+  <script src="/static/globalmap.js?v=8.1.0"></script>
 </body>
 </html>

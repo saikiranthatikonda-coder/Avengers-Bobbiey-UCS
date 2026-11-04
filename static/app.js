@@ -475,62 +475,6 @@ var ConversationMode = {
 document.addEventListener("click", e => { if (e.target && e.target.closest && e.target.closest("#conv-toggle")) ConversationMode.toggle(); });
 setTimeout(() => ConversationMode.load(), 500);
 
-// ═══ MIC MODES · on / sleep (deliberate commands only) / off (mic released) + TALK ═══
-var MicMode = {
-  mode: "on",
-  set(mode, armed, status) {
-    this.mode = mode;
-    if (status) this.status = status;
-    const s = this.status || "";
-    const box0 = document.getElementById("mic-modes");
-    if (box0) {
-      box0.title = "Microphone: " + (s ? s.toUpperCase() : mode.toUpperCase()) +
-        ". ON hears everything addressed to JARVIS · SLEEP only “Jarvis…”, double-clap or TALK (Ctrl+Space) · OFF releases the mic.";
-      box0.classList.toggle("loading", /^(starting|loading)/.test(s));
-      box0.classList.toggle("error", /^error/.test(s));
-    }
-    if (/^error/.test(s)) { const st0 = document.getElementById("mm-state"); if (st0) { st0.textContent = "VOICE ERROR"; st0.className = "mm-state off"; } }
-    if (/^(starting|loading)/.test(s) && mode !== "off") { const st0 = document.getElementById("mm-state"); if (st0) { st0.textContent = "LOADING VOICE…"; st0.className = "mm-state"; } }
-    document.querySelectorAll(".mic-mode").forEach(b => b.setAttribute("aria-checked", b.dataset.mic === mode ? "true" : "false"));
-    const box = document.getElementById("mic-modes"); if (box) box.dataset.mode = mode;
-    const talk = document.getElementById("mic-talk");
-    if (talk) { talk.disabled = mode === "off"; talk.classList.toggle("armed", !!armed); if (armed) setTimeout(() => talk.classList.remove("armed"), armed * 1000); }
-    const st = document.getElementById("mm-state");
-    if (st && mode !== "on") { st.textContent = mode === "off" ? "MIC OFF" : "SLEEP · say “Jarvis…”"; st.className = "mm-state " + mode; }
-    // the header VOICE pill shows the same mode (it otherwise kept saying READY with the mic off)
-    const pill = mode === "off" ? (this.enabled === false ? "OFF" : "MIC OFF") : mode === "sleep" ? "SLEEP" : null;
-    if (pill) setPill("#sp-voice", pill, "warn");
-    else if (this._pill) setPill("#sp-voice", "READY", "ok");
-    this._pill = pill;
-  },
-  async load() {
-    try {
-      const d = await (await fetch("/api/voice/mic")).json();
-      this.enabled = !!d.enabled;
-      this.set(d.enabled ? d.mode : "off", 0, d.enabled ? d.status : "voice disabled: set JARVIS_VOICE=1 in .env");
-    } catch (e) {}
-  },
-  async choose(mode) {
-    const r = await fetch("/api/voice/mic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode }) })
-      .then(x => x.json()).catch(err => ({ ok: false, error: "mic change failed: " + err.message }));
-    if (r.ok) this.set(r.mode, 0, r.status); else logEvent(`<span class="tag">[voice]</span> ${escapeHTML(r.error || "mic change failed")}`, "warn");
-    if (r.ok) logEvent(`<span class="tag">[voice]</span> microphone ${mode === "on" ? "ON: listening" : mode === "sleep" ? "SLEEP: only “Jarvis …”, double-clap or TALK" : "OFF: released"}`);
-  },
-  async talk() {
-    const r = await fetch("/api/voice/talk", { method: "POST" }).then(x => x.json()).catch(err => ({ ok: false, error: "talk failed: " + err.message }));
-    if (r.ok) { this.set(this.mode, r.armed_s); logEvent(`<span class="tag">[voice]</span> TALK: speak your command now (${r.armed_s} s)`); }
-    else logEvent(`<span class="tag">[voice]</span> ${escapeHTML(r.error || "talk unavailable")}`, "warn");
-  },
-};
-document.addEventListener("click", e => {
-  const b = e.target && e.target.closest && e.target.closest(".mic-mode"); if (b) MicMode.choose(b.dataset.mic);
-  if (e.target && e.target.closest && e.target.closest("#mic-talk")) MicMode.talk();
-});
-document.addEventListener("keydown", e => {
-  if (e.ctrlKey && e.code === "Space") { e.preventDefault(); MicMode.talk(); }
-  if (e.ctrlKey && e.shiftKey && e.code === "KeyM") { e.preventDefault(); MicMode.choose(MicMode.mode === "off" ? "on" : "off"); }
-});
-setTimeout(() => MicMode.load(), 600);
 
 // ═══ JARVIS · ENGINEERING panel (devagent.py events: {"type":"dev"}) ═══
 var DevPanel = {
@@ -3481,7 +3425,7 @@ function connect() {
     setPill("#sp-voice", "OFF", "warn");
     // broadcasts sent while the link was down are lost: re-read the shared settings once
     if (window._wsWasUp) {
-      try { ConversationMode.load(); MicMode.load(); AudioCtl.load(); onBrainChanged(true); } catch (e) {}
+      try { ConversationMode.load(); AudioCtl.load(); onBrainChanged(true); } catch (e) {}
       ["notes", "productivity", "enterprise", "decisions"].forEach(uiSyncRun);
     }
     window._wsWasUp = true;
@@ -3517,11 +3461,6 @@ function handle(msg) {
     case "conversation":
       ConversationMode.set(!!msg.on);
       break;
-    case "micmode":
-      MicMode.set(msg.mode, msg.armed, msg.status);
-      if (msg.source === "voice" || msg.source === "command")
-        logEvent(`<span class="tag">[voice]</span> microphone mode → ${escapeHTML(msg.mode.toUpperCase())} (by ${msg.source})`);
-      break;
     case "dev":
     case "dev-open":
       DevPanel.on(msg);
@@ -3531,10 +3470,9 @@ function handle(msg) {
       // log scale so quiet speech is visible: 100 → 0 %, 32767 → 100 %
       const pct = v => Math.max(0, Math.min(100, (Math.log10(Math.max(v, 100)) - 2) / (Math.log10(32767) - 2) * 100));
       const f = document.getElementById("mm-fill"), t = document.getElementById("mm-trig"), st = document.getElementById("mm-state");
-      if (msg.off) { if (f) f.style.width = "0%"; MicMode.set("off"); break; }
       if (f) f.style.width = pct(msg.peak) + "%";
       if (t) t.style.left = pct(msg.trigger) + "%";
-      if (st && MicMode.mode === "on") {
+      if (st) {
         // judge only actual speech (rms over the trigger); room noise just reads as listening
         const s = msg.rms < msg.trigger ? ["listening", ""] : msg.peak < 3000 ? ["QUIET · closer", "quiet"] : ["GOOD", "good"];
         st.textContent = s[0]; st.className = "mm-state " + s[1];
@@ -5374,13 +5312,17 @@ function renderVersion(v) {
   _sysVer = { ...(_sysVer || {}), ...v };
   const pill = $("#sys-version"); if (!pill) return;
   const fv = $("#footer-ver"); if (fv && _sysVer.version) fv.textContent = "v" + _sysVer.version;
-  if (_sysVer.available && !_sysVer.managed_by_git) {
-    pill.textContent = `UPDATE → v${_sysVer.latest}`; pill.classList.add("update");
-    pill.title = "A new BUCS version is available: click to see what's new and update";
-  } else {
-    pill.textContent = "v" + (_sysVer.version || "—"); pill.classList.remove("update");
-    pill.title = "BUCS version: click to check for updates";
-  }
+  const k = $("#sys-ver-k"), vv = $("#sys-ver-v");
+  const set = (state, key, val, title) => {
+    pill.dataset.state = state; pill.classList.toggle("update", state === "update");
+    if (k) k.textContent = key; if (vv) vv.textContent = val; pill.title = title;
+    if (!k || !vv) pill.textContent = `${key} ${val}`;
+  };
+  if (_sysVer.available && !_sysVer.managed_by_git)
+    set("update", "UPDATE", "v" + _sysVer.latest, `Installed v${_sysVer.version || "—"} · v${_sysVer.latest} is available: click to see what's new and update`);
+  else if (_sysVer.version)
+    set("ok", _sysVer.managed_by_git ? "DEV BUILD" : "UP TO DATE", "v" + _sysVer.version, "BUCS version: click to check for updates");
+  else set("idle", "BUILD", "v—", "BUCS version: click to check for updates");
 }
 async function refreshVersion() {
   try { renderVersion(await (await fetch("/api/system/version")).json()); } catch (e) {}
@@ -5433,13 +5375,36 @@ async function waitForReturn(expect) {
 }
 makeInteractive($("#sys-version"), openUpdates, "BUCS version and updates");
 
-$("#sys-power")?.addEventListener("click", async () => {
-  if (!confirm("Shut down BUCS?\n\nAgents, voice and schedules stop and the BUCS window closes. Start it again any time from the BUCS desktop shortcut.")) return;
-  const r = await fetch("/api/system/shutdown", { method: "POST" }).then(x => x.json()).catch(() => ({ ok: true }));
-  if (r.ok === false) { logEvent(`<span class="tag">[sys]</span> ${escapeHTML(r.error || "shutdown refused")}`, "warn"); return; }
-  try { ws && ws.close(); } catch (e) {}
-  sysOverlay("⏻", "BUCS is shut down", "Everything stopped cleanly. You can close this tab.<br>To start again, double-click <b>BUCS</b> on your desktop.");
-});
+/* power core: in-theme confirm popover (no browser confirm box) */
+const PowerCtl = {
+  open() {
+    const pop = $("#power-pop"), b = $("#sys-power"); if (!pop || !b) return;
+    pop.hidden = false; b.setAttribute("aria-expanded", "true"); b.classList.add("armed");
+    setTimeout(() => $("#power-cancel")?.focus(), 0);
+  },
+  close(refocus) {
+    const pop = $("#power-pop"), b = $("#sys-power"); if (!pop || !b || pop.hidden) return;
+    pop.hidden = true; b.setAttribute("aria-expanded", "false"); b.classList.remove("armed");
+    if (refocus) b.focus();
+  },
+  async go() {
+    const go = $("#power-go"); if (go) { go.disabled = true; go.textContent = "STOPPING…"; }
+    const r = await fetch("/api/system/shutdown", { method: "POST" }).then(x => x.json()).catch(() => ({ ok: true }));
+    if (r.ok === false) {
+      if (go) { go.disabled = false; go.textContent = "⏻ SHUT DOWN"; }
+      this.close(true);
+      logEvent(`<span class="tag">[sys]</span> ${escapeHTML(r.error || "shutdown refused")}`, "warn"); return;
+    }
+    this.close();
+    try { ws && ws.close(); } catch (e) {}
+    sysOverlay("⏻", "BUCS is shut down", "Everything stopped cleanly. You can close this tab.<br>To start again, double-click <b>BUCS</b> on your desktop.");
+  },
+};
+$("#sys-power")?.addEventListener("click", (e) => { e.stopPropagation(); $("#power-pop")?.hidden ? PowerCtl.open() : PowerCtl.close(true); });
+$("#power-cancel")?.addEventListener("click", () => PowerCtl.close(true));
+$("#power-go")?.addEventListener("click", () => PowerCtl.go());
+document.addEventListener("click", (e) => { if (!e.target.closest || !e.target.closest(".power-wrap")) PowerCtl.close(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") PowerCtl.close(true); });
 
 /* mini system module: the two status tags reflect real state, not decoration */
 function refreshSysMod() {

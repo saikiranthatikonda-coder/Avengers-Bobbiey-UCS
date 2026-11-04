@@ -907,41 +907,6 @@ async def conversation_set(req: ConversationReq):
     return await conversation_get()
 
 
-class MicReq(BaseModel):
-    mode: str
-
-
-@app.get("/api/voice/mic")
-async def mic_get():
-    v = state.get("voice")
-    if v is None:
-        return {"enabled": False, "mode": "off", "hint": "set JARVIS_VOICE=1 in .env"}
-    return {"enabled": True, "mode": v.mic_mode, "status": getattr(v, "status", "?"),
-            "armed_s": max(0.0, round(v.armed_until - time.time(), 1))}
-
-
-@app.post("/api/voice/mic")
-async def mic_set(req: MicReq):
-    """Mic ON (normal) · SLEEP (only deliberate commands: "Jarvis …", clap, TALK) · OFF (mic released)."""
-    v = state.get("voice")
-    if v is None:
-        return {"ok": False, "error": "voice is disabled (JARVIS_VOICE=1 in .env)"}
-    try:
-        mode = await v.set_mic_mode(req.mode)
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
-    await _audit("voice.mic", mode)
-    return {"ok": True, "mode": mode, "status": getattr(v, "status", "?")}
-
-
-@app.post("/api/voice/talk")
-async def mic_talk():
-    """Push-to-talk: the next utterance (within 10 s) is a command, no wake word needed."""
-    v = state.get("voice")
-    if v is None or v.mic_mode == "off":
-        return {"ok": False, "error": "microphone is off" if v is not None else "voice is disabled"}
-    await v.arm()
-    return {"ok": True, "armed_s": 10}
 
 
 @app.get("/api/voice/diagnostics")

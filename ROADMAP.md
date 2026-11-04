@@ -132,7 +132,7 @@ tracks both.
 | Signed in-app updates: release tool, update prompt, verify → backup → apply → restart, auto-rollback | IMPLEMENTED (E2E-verified with the real launcher) |
 | Security hardening (origin guard, scoped vision, engineering lock, atomic writes) | IMPLEMENTED (v7.6.0, independent review) |
 | Self-healing autonomic core (checks, safe repairs, AI diagnosis, guarded self-restart) | IMPLEMENTED (v7.7.0) |
-| Mic modes ON / SLEEP / OFF + push-to-talk (Ctrl+Space) + spoken mode switches | IMPLEMENTED (v7.9.0) |
+| Mic modes ON / SLEEP / OFF + push-to-talk | REMOVED (v8.1.0, owner decision: the mic always listens for its wake words) |
 | Live-grounded real-time answers (clock, location, weather, live news/Wikipedia/prices) | IMPLEMENTED (v7.9.0) |
 | Disaster response: live physical + digital events | IMPLEMENTED (v7.9.0) |
 | Devices & connectivity hub (Home Assistant, MQTT, Hue, Shelly, Tasmota, ESPHome; LAN/Tailscale/WireGuard/Tunnel) | IMPLEMENTED (v7.9.0) |
