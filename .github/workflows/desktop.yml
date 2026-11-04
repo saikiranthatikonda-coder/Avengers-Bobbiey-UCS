@@ -34,8 +34,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.11" }
       - name: Stage bundled Python + dependencies + app files
         run: python tools/desktop/build.py --target windows-x64
@@ -72,7 +72,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           "signing=$signing" | Out-File dist\BUCS-Windows-x64-Setup.exe.signing.txt -Encoding ascii
           Get-ChildItem dist | Format-Table Name, Length
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: installer-windows
           path: dist/*
@@ -85,10 +85,10 @@ jobs:
     env:
       BUCS_NO_BROWSER: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.11" }
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with: { name: installer-windows, path: dist }
       - name: Install the previous published release first (upgrade test), if there is one
         shell: pwsh
@@ -153,7 +153,7 @@ jobs:
           New-Item -ItemType Directory -Force e2e-logs | Out-Null
           Copy-Item "$env:LOCALAPPDATA\Programs\BUCS\logs\*" e2e-logs -ErrorAction SilentlyContinue
           Copy-Item "$env:RUNNER_TEMP\install.log" e2e-logs -ErrorAction SilentlyContinue
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with: { name: e2e-logs-windows, path: e2e-logs, if-no-files-found: ignore }
 
@@ -168,8 +168,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.11" }
       - name: Stage bundled Python + dependencies + app files
         run: python tools/desktop/build.py --target ${{ matrix.target }}
@@ -181,7 +181,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: bash tools/desktop/macos/build_app.sh ${{ matrix.target }} dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: installer-${{ matrix.target }}
           path: dist/*
@@ -202,10 +202,10 @@ jobs:
       LAUNCH: '["open", "/Applications/BUCS.app"]'
       PYEXE: /Applications/BUCS.app/Contents/Resources/python/bin/python3
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.11" }
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with: { name: "installer-${{ matrix.target }}", path: dist }
       - name: Install from the DMG
         run: |
@@ -222,22 +222,27 @@ jobs:
           file /Applications/BUCS.app/Contents/MacOS/BUCS /Applications/BUCS.app/Contents/Resources/python/bin/python3.11
           echo "EXPECT=$(cat /Applications/BUCS.app/Contents/Resources/app/VERSION)" >> "$GITHUB_ENV"
       - name: Gatekeeper report for a downloaded (quarantined) copy
+        # informational: shows what a user who downloads the DMG will see (never blocks the release
+        # for ad-hoc builds; a notarized build that Gatekeeper rejects fails the job)
+        timeout-minutes: 8
         run: |
           set +e
+          t() { local s=$1; shift; echo "+ [$(date +%T)] $*"; perl -e 'alarm shift @ARGV; exec @ARGV' "$s" "$@"; echo "  -> exit $?"; }
           xattr -w com.apple.quarantine "0081;$(printf %x $(date +%s));Safari;$(uuidgen)" /Applications/BUCS.app
-          spctl -a -vv -t exec /Applications/BUCS.app; echo "spctl exit $?"
-          syspolicy_check distribution /Applications/BUCS.app 2>&1 | tail -5
-          open /Applications/BUCS.app
-          for i in $(seq 1 30); do [ -f "$HOMEDIR/.update/launcher.json" ] && break; sleep 2; done
+          t 60 spctl -a -vv -t exec /Applications/BUCS.app
+          t 60 spctl --status
+          t 20 open /Applications/BUCS.app
+          for i in $(seq 1 20); do [ -f "$HOMEDIR/.update/launcher.json" ] && break; sleep 2; done
           if [ -f "$HOMEDIR/.update/launcher.json" ]; then
-            echo "quarantined app launched (signed+notarized, or Gatekeeper allowed it)"
-            python tools/desktop/e2e_test.py shutdown --home "$HOMEDIR"
+            echo "::notice::${{ matrix.dmg }}: the quarantined app launched (notarized, or Gatekeeper assessments are disabled on this runner)"
+            t 120 python tools/desktop/e2e_test.py shutdown --home "$HOMEDIR"
           else
             echo "::notice::${{ matrix.dmg }}: Gatekeeper blocked the quarantined app (expected without notarization: users click Open Anyway once)"
             if grep -q "notarized=1" "dist/${{ matrix.dmg }}.signing.txt"; then echo "::error::notarized app was blocked"; exit 1; fi
           fi
           pkill -f CoreServicesUIAgent
-          pgrep -f "Contents/MacOS/BUCS" && osascript -e 'quit app "BUCS"'; sleep 3
+          pkill -f "Contents/MacOS/BUCS"
+          sleep 3
           xattr -dr com.apple.quarantine /Applications/BUCS.app   # = the user's one-time "Open Anyway"
           exit 0
       - name: Port 8765 busy -> BUCS picks another port
@@ -292,7 +297,7 @@ jobs:
         run: |
           mkdir -p e2e-logs; cp "$HOMEDIR"/logs/* e2e-logs/ 2>/dev/null || true
           log show --last 20m --predicate 'process == "BUCS" OR subsystem == "com.apple.syspolicy"' --style compact > e2e-logs/system.log 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with: { name: "e2e-logs-${{ matrix.target }}", path: e2e-logs, if-no-files-found: ignore }
 
@@ -302,14 +307,14 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.11" }
       - name: Stage bundled Python + dependencies + app files
         run: python tools/desktop/build.py --target linux-x64
       - name: Build AppImage
         run: bash tools/desktop/linux/build_appimage.sh dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: installer-linux-x64
           path: dist/*
@@ -325,10 +330,10 @@ jobs:
       APPIMG: /home/runner/Applications/BUCS-Linux-x64.AppImage
       LAUNCH: '["/home/runner/Applications/BUCS-Linux-x64.AppImage"]'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.11" }
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with: { name: installer-linux-x64, path: dist }
       - name: Install (download -> chmod +x, as a user would)
         run: |
@@ -391,7 +396,7 @@ jobs:
       - name: Collect logs
         if: always()
         run: mkdir -p e2e-logs; cp "$HOMEDIR"/logs/* e2e-logs/ 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with: { name: e2e-logs-linux-x64, path: e2e-logs, if-no-files-found: ignore }
 
@@ -406,8 +411,8 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v6
         with: { path: artifacts, pattern: installer-*, merge-multiple: true }
       - name: Assemble assets + checksums
         run: |
