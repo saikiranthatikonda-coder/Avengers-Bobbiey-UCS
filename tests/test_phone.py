@@ -555,5 +555,53 @@ class MiscTests(unittest.TestCase):
                 asyncio.run(p.place_call("+1", "+1", "u", "s", False, 60))
 
 
+# ═══ real server: phone settings, consent + DNC persist across a restart; keys never returned ═══
+
+class PersistHttpTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from harness import IsolatedServer
+        cls.srv = IsolatedServer().start(timeout=180)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def test_settings_contacts_dnc_survive_restart(self):
+        s = self.srv
+        token = "f" * 32
+        r = s.post("/api/phone/config", {"window_start": "09:30", "window_end": "18:15", "owner_tz": "Asia/Kolkata",
+                                         "outbound_per_hour": 3, "recording": True,
+                                         "account_sid": "AC" + "a" * 32, "auth_token": token})
+        self.assertTrue(r["ok"], r)
+        self.assertNotIn(token, json.dumps(r))
+        bad = s.post("/api/phone/config", {"window_start": "25:99", "outbound_per_hour": 9})
+        self.assertFalse(bad["ok"])                                    # all-or-nothing: nothing applied
+        c = s.post("/api/phone/contacts", {"name": "Test Person", "number": "+919800000001", "consent": True,
+                                           "consent_source": "verbal, test", "dnc": True})
+        self.assertTrue(c["ok"], c)
+        s.restart()
+        snap = s.get("/api/phone")
+        cfg = snap["config"]
+        self.assertEqual((cfg["window_start"], cfg["window_end"], cfg["outbound_per_hour"], cfg["recording"]),
+                         ("09:30", "18:15", 3, True))
+        self.assertTrue(cfg["auth_token_set"])
+        self.assertNotIn(token, json.dumps(snap))
+        ct = next(x for x in s.get("/api/phone/contacts")["contacts"] if x["number"] == "+919800000001")
+        self.assertTrue(ct["consent"])
+        self.assertTrue(ct["dnc"])
+        # DNC still blocks an outbound call after the restart
+        p = s.post("/api/phone/call/prepare", {"contact_id": ct["id"], "purpose": "confirm the meeting time"})
+        self.assertFalse(p["ok"])
+        self.assertTrue(any("do-not-call" in x for x in p["problems"]), p)
+        # observer can't change settings
+        s.post("/api/role", {"role": "observer"})
+        try:
+            self.assertIn("OBSERVER", s.post("/api/phone/config", {"window_start": "08:00"})["error"])
+            self.assertEqual(s.get("/api/phone")["config"]["window_start"], "09:30")
+        finally:
+            s.post("/api/role", {"role": "commander"})
+
+
 if __name__ == "__main__":
     unittest.main()

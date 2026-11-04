@@ -419,5 +419,29 @@ class RouterTests(unittest.TestCase):
             self.assertIn("sources", c.get("/api/globalmap/status").json())
 
 
+class DashboardContract(unittest.TestCase):
+    """static/globalmap.js view prefs + the SHOW ON MAP entry point used by other modules."""
+    JS = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "globalmap.js"),
+              encoding="utf-8").read()
+
+    def test_storage_is_guarded(self):
+        self.assertRegex(self.JS, r'function store\(k, v\) \{ try \{')
+
+    def test_layer_turned_on_by_focus_or_highlight_is_saved(self):
+        self.assertIn('S.on[it.layer] = true; store("layers", S.on)', self.JS)
+        self.assertIn('S.on[layer] = true; store("layers", S.on)', self.JS)
+
+    def test_map_mode_remembered(self):
+        self.assertIn('store("mode", m)', self.JS)
+        self.assertIn('const m = store("mode")', self.JS)
+
+    def test_foreign_layer_names_do_not_block_the_proximity_match(self):
+        # disaster.js passes layer "disaster", app.js threat cards pass "threats": neither is a map layer
+        self.assertIn("const known = !!o.layer && LAYERS.some(l => l[0] === o.layer);", self.JS)
+        self.assertIn("(!known || i.layer === o.layer)", self.JS)
+        self.assertNotIn("disaster", [k for k in gm.LAYERS])
+        self.assertNotIn("threats", [k for k in gm.LAYERS])
+
+
 if __name__ == "__main__":
     unittest.main()

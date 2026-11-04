@@ -99,6 +99,30 @@ class AICore:
         if hub:
             await hub.broadcast({"type": "log", "level": level, "msg": f"[ai core] {msg[:300]}"})
 
+    async def broadcast_change(self, brain: bool = False) -> None:
+        """Tell every open dashboard that AI CORE state changed. brain=True also sends the
+        core "models-updated" message (app.js refreshes the orb's LLM CORE badge, the
+        AI BRAIN ROUTER card and the model chip) — used for anything that can change which
+        model answers: routing policy/pins/disabled models, rediscovery, a pulled model."""
+        hub = self.state.get("hub")
+        if not hub:
+            return
+        try:
+            if brain:
+                await hub.broadcast({"type": "models-updated", "source": "agentos"})
+            await hub.broadcast({"type": "sync", "topic": "agentos"})
+        except Exception:
+            pass
+
+    async def refresh_if_registry_changed(self) -> bool:
+        """A provider added/edited/removed in the core LLM switch reaches AI CORE's model list
+        at once (instead of on the 10-minute rediscovery)."""
+        if self._fixed_adapters or self._registry_sig() == self._custom_sig:
+            return False
+        await self.refresh()
+        await self.broadcast_change(brain=False)
+        return True
+
     def _approval_needed(self, ap: dict) -> None:
         what = ap["tool"] if ap["kind"] == "tool" else f"workflow step — {ap['message'][:80]}"
         try:
@@ -188,10 +212,10 @@ class AICore:
             except Exception as e:
                 self.last_error = f"scheduler: {type(e).__name__}: {e}"
             try:
+                if not await self.refresh_if_registry_changed() and n % 20 == 0:
+                    await self.refresh()
                 if n % 4 == 0:
                     await self.hub.check_health()
-                if n % 20 == 0:
-                    await self.refresh()
                 await self.memory.embed_pending()
             except Exception:
                 pass
@@ -369,16 +393,24 @@ def build_router(ctx) -> APIRouter:
     commander, audit = ctx["commander"], ctx["audit"]
     core = lambda: get(state, ctx)  # noqa: E731
 
+    pending: dict = {"task": None}
+
     @r.get("/api/agentos")
     async def overview():
-        return core().snapshot()
+        c = core()
+        if (c.booted and not c._fixed_adapters and c._registry_sig() != c._custom_sig
+                and (pending["task"] is None or pending["task"].done())):
+            pending["task"] = asyncio.create_task(c.refresh_if_registry_changed())
+        return c.snapshot()
 
     # providers & routing
     @r.post("/api/agentos/providers/refresh")
     async def providers_refresh():
         if not commander():
             return _locked()
-        return {"ok": True, **(await core().refresh()), "providers": core().hub.public()}
+        out = {"ok": True, **(await core().refresh()), "providers": core().hub.public()}
+        await core().broadcast_change(brain=True)
+        return out
 
     @r.post("/api/agentos/providers/test")
     async def providers_test(request: Request):
@@ -401,6 +433,9 @@ def build_router(ctx) -> APIRouter:
         if res.get("ok"):
             await audit("agentos.routing", f"policy {res['config']['policy']}, pins {len(res['config']['pins'])}, "
                                            f"disabled {len(res['config']['disabled'])}")
+            # routing decides which model answers when the brain is on the smart router →
+            # the orb's LLM CORE badge, the brain card and other open tabs must re-read it
+            await core().broadcast_change(brain=True)
         return res
 
     @r.post("/api/agentos/route")
@@ -444,7 +479,9 @@ def build_router(ctx) -> APIRouter:
         if not commander():
             return _locked()
         b = await _body(request)
-        return await core().decide_approval(aid, bool(b.get("approve")), True)
+        res = await core().decide_approval(aid, bool(b.get("approve")), True)
+        await core().broadcast_change()
+        return res
 
     @r.post("/api/agentos/files")
     async def files_set(request: Request):
@@ -456,6 +493,7 @@ def build_router(ctx) -> APIRouter:
         res = core().set_folders([str(x) for x in (b.get("folders") or []) if str(x).strip()])
         if res.get("ok"):
             await audit("agentos.folders", f"{len(res['folders'])} approved folder(s)")
+            await core().broadcast_change()
         return res
 
     # memory
@@ -484,6 +522,7 @@ def build_router(ctx) -> APIRouter:
                                     pinned=bool(b.get("pinned")))
         if res.get("ok"):
             await audit("agentos.memory", f"added {kind}")
+            await core().broadcast_change()
         return res
 
     @r.post("/api/agentos/memory/import")
@@ -492,6 +531,7 @@ def build_router(ctx) -> APIRouter:
             return _locked()
         res = core().import_legacy()
         await audit("agentos.memory", f"import {res.get('imported')}")
+        await core().broadcast_change()
         return res
 
     @r.post("/api/agentos/memory/{iid}")
@@ -503,6 +543,7 @@ def build_router(ctx) -> APIRouter:
                                    pinned=b.get("pinned") if isinstance(b.get("pinned"), bool) else None)
         if res.get("ok"):
             await audit("agentos.memory", f"edited #{iid}")
+            await core().broadcast_change()
         return res
 
     @r.post("/api/agentos/memory/{iid}/forget")
@@ -512,6 +553,7 @@ def build_router(ctx) -> APIRouter:
         res = core().memory.forget(iid)
         if res.get("ok"):
             await audit("agentos.memory", f"forgot #{iid} ({res['removed']} item(s))")
+            await core().broadcast_change()
         return res
 
     # agents & workflows
@@ -522,6 +564,7 @@ def build_router(ctx) -> APIRouter:
         res = core().studio.upsert_agent(await _body(request))
         if res.get("ok"):
             await audit("agentos.agent", f"saved {res['agent']['id']} (tools: {', '.join(res['agent']['tools']) or 'none'})")
+            await core().broadcast_change()
         return res
 
     @r.post("/api/agentos/agents/{aid}/delete")
@@ -530,6 +573,7 @@ def build_router(ctx) -> APIRouter:
             return _locked()
         res = core().studio.delete_agent(aid)
         await audit("agentos.agent", f"deleted {aid}")
+        await core().broadcast_change()
         return res
 
     @r.post("/api/agentos/agents/{aid}/run")
@@ -549,14 +593,18 @@ def build_router(ctx) -> APIRouter:
         res = core().studio.upsert_workflow(await _body(request))
         if res.get("ok"):
             await audit("agentos.workflow", f"saved {res['workflow']['id']} ({len(res['workflow']['steps'])} steps)")
+            await core().broadcast_change()
         return res
 
     @r.post("/api/agentos/workflows/{wid}/delete")
     async def wf_delete(wid: str):
         if not commander():
             return _locked()
-        await audit("agentos.workflow", f"deleted {wid}")
-        return core().studio.delete_workflow(wid)
+        res = core().studio.delete_workflow(wid)
+        if res.get("ok"):
+            await audit("agentos.workflow", f"deleted {wid}")
+            await core().broadcast_change()
+        return res
 
     @r.post("/api/agentos/workflows/{wid}/run")
     async def wf_run(wid: str, request: Request):
@@ -592,6 +640,7 @@ def build_router(ctx) -> APIRouter:
         res = core().plugins.install(str(b.get("token", "")), b.get("confirm") is True)
         if res.get("ok"):
             await audit("agentos.plugin", f"installed {res['id']} (disabled until enabled)")
+            await core().broadcast_change()
         return res
 
     @r.post("/api/agentos/plugins/{pid}/enable")
@@ -601,6 +650,7 @@ def build_router(ctx) -> APIRouter:
         b = await _body(request)
         res = core().plugins.set_enabled(pid, bool(b.get("on")))
         await audit("agentos.plugin", f"{pid} {'enabled' if b.get('on') else 'disabled'} → {'ok' if res.get('ok') else res.get('error')}")
+        await core().broadcast_change()
         return res
 
     @r.post("/api/agentos/plugins/{pid}/uninstall")
@@ -609,6 +659,7 @@ def build_router(ctx) -> APIRouter:
             return _locked()
         res = core().plugins.uninstall(pid)
         await audit("agentos.plugin", f"uninstalled {pid}")
+        await core().broadcast_change()
         return res
 
     # integrations & local model pulls
@@ -636,6 +687,7 @@ def build_router(ctx) -> APIRouter:
         async def go():
             await oll.pull(model)
             await core().refresh()
+            await core().broadcast_change(brain=True)     # a new local model is routable now
         asyncio.create_task(go())
         return {"ok": True, "started": model}
 

@@ -642,6 +642,15 @@ async def connectivity_snapshot(state: dict | None = None, force: bool = False) 
         if _conn["data"] is None or age > 300 or (force and age > 15):
             _conn["data"] = await devices_link.gather((state or {}).get("fleet"))
             _conn["at"] = time.time()
+    # link probes are cached (slow), but the fleet counts are cheap and shown next to the
+    # core FLEET card, so they are re-read on every request instead of lagging up to 5 min
+    fleet = (state or {}).get("fleet")
+    if fleet is not None and isinstance(_conn["data"], dict):
+        try:
+            agg = fleet.snapshot().get("aggregate", {})
+            _conn["data"]["fleet"] = {"nodes": agg.get("nodes", 0), "online": agg.get("online", 0)}
+        except Exception:
+            pass
     return _conn["data"]
 
 
@@ -696,9 +705,14 @@ def build_router(ctx) -> APIRouter:
 
     @router.get("/api/devices")
     async def list_devices():
+        # "added" is recomputed per request so a discovery row flips to ADDED / back to ADD as
+        # soon as a device is added or removed (here or in another tab), not on the next scan
+        known = {(d["kind"], d.get("host")) for d in _devices.values()}
+        disc = {k: v for k, v in _discovery.items()}
+        disc["items"] = [{**it, "added": (it.get("kind"), it.get("host")) in known} for it in _discovery.get("items", [])]
         return {"devices": [public(d) for d in _devices.values()],
                 "adapters": {k: {kk: vv for kk, vv in v.items()} for k, v in ADAPTERS.items()},
-                "discovery": {k: v for k, v in _discovery.items()},
+                "discovery": disc,
                 "commander": bool(commander())}
 
     @router.post("/api/devices")

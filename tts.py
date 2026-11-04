@@ -72,9 +72,9 @@ class TTSPlayer:
     def _save_pref(self) -> None:
         import json
         try:
-            with open(self._PREF, "w", encoding="utf-8") as f:
-                json.dump({"muted": self.muted, "volume": self.volume,
-                           "conversation_mode": self.conversation_mode}, f)
+            from atomicio import atomic_write_text      # a crash mid-write must not lose the setting
+            atomic_write_text(self._PREF, json.dumps({"muted": self.muted, "volume": self.volume,
+                                                      "conversation_mode": self.conversation_mode}))
         except Exception:
             pass
 

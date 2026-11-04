@@ -608,5 +608,44 @@ class FileAccessTests(unittest.TestCase):
         self.assertEqual(len(errs), 3)
 
 
+# ═══ real server: settings (incl. the model choice) persist across a restart ════
+
+class SettingsPersistHttpTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from harness import IsolatedServer
+        cls.srv = IsolatedServer().start(timeout=180)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def test_model_choice_and_limits_survive_restart_and_observer_is_refused(self):
+        s = self.srv
+        r = s.post("/api/computeruse/settings", {"adapter": "ollama:llava:7b", "max_steps": 7,
+                                                 "approve_all": True, "allow_urls": False})
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["settings"]["adapter"], "ollama:llava:7b")
+        snap = s.get("/api/computeruse")
+        self.assertEqual(snap["settings"]["adapter"], "ollama:llava:7b")     # what every other tab polls
+        # partial update (the model picker posts only {adapter}) keeps the other settings
+        s.post("/api/computeruse/settings", {"adapter": "claude-cli"})
+        s.restart()
+        st = s.get("/api/computeruse")["settings"]
+        self.assertEqual((st["adapter"], st["max_steps"], st["approve_all"], st["allow_urls"]),
+                         ("claude-cli", 7, True, False))
+        # observer can't change it; the saved choice is untouched
+        s.post("/api/role", {"role": "observer"})
+        try:
+            r = s.post("/api/computeruse/settings", {"adapter": "auto"})
+            self.assertFalse(r["ok"])
+            self.assertIn("OBSERVER", r["error"])
+            self.assertEqual(s.get("/api/computeruse")["settings"]["adapter"], "claude-cli")
+            # STOP is never locked
+            self.assertEqual(s.post("/api/computeruse/control", {"action": "stop"})["error"], "no task is running")
+        finally:
+            s.post("/api/role", {"role": "commander"})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -363,6 +363,27 @@ class EvolutionEngine(unittest.TestCase):
             self.assertEqual(e2.signals.values("endpoint:/api/status"), [12.5])
         run(go())
 
+    def test_corrupt_settings_are_clamped_and_customer_autonomy_is_observe(self):
+        (self.root / "evolution.json").write_text(json.dumps({"v": 1, "settings": {
+            "autonomy": "deploy-everything", "heartbeat_min": 0, "eval_window_min": "x", "tests_every_h": 9999}}))
+        e = self.evo()
+        self.assertEqual(e.settings["autonomy"], "propose")            # unknown value → safe default
+        self.assertEqual(e.settings["heartbeat_min"], 2)               # 0 would spin the loop
+        self.assertEqual(e.settings["eval_window_min"], evolution.DEFAULT_SETTINGS["eval_window_min"])
+        self.assertEqual(e.settings["tests_every_h"], 168)
+        self.assertEqual(e.snapshot()["autonomy_effective"], "propose")
+        self.lic.owner = False
+        self.assertEqual(e.snapshot()["autonomy_effective"], "observe")  # UI never claims auto-propose on a customer install
+
+    def test_changed_interval_reschedules_now(self):
+        e = self.evo()
+        e.heartbeat["last"] = 1000.0
+        e.tests["last"] = {"ts": time.time()}
+        e.settings.update(heartbeat_min=5, tests_every_h=2)
+        e.reschedule()
+        self.assertEqual(e.heartbeat["next"], 1000.0 + 300)
+        self.assertAlmostEqual(e.tests["next"], e.tests["last"]["ts"] + 7200, delta=1)
+
     def test_feedback_validation_and_heartbeat_observes(self):
         async def go():
             e = self.evo()
@@ -559,6 +580,23 @@ class Endpoints(unittest.TestCase):
         self.assertFalse(self.srv.post("/api/evolution/items/nope/approve", {})["ok"])
         sig = self.srv.get("/api/evolution/signals?prefix=endpoint:")
         self.assertIn("endpoint:/api/status", sig["keys"])
+
+    def test_settings_save_broadcast_and_survive_restart(self):
+        body = {"autonomy": "observe", "heartbeat_min": 15, "eval_window_min": 45, "tests_every_h": 6}
+        got = self.srv.ws_during(lambda: self.srv.post("/api/evolution/settings", body), "evolution")
+        self.assertTrue(any(m.get("event") == "settings" and m["settings"]["heartbeat_min"] == 15 for m in got), got)
+        s = self.srv.get("/api/evolution")                                 # what other tabs' polling reads
+        self.assertEqual({k: s["settings"][k] for k in body}, body)
+        self.assertEqual(s["autonomy_effective"], "observe")
+        self.assertEqual(s["setting_bounds"]["heartbeat_min"], [2, 240])
+        r = self.srv.post("/api/evolution/settings", {"heartbeat_min": 1, "eval_window_min": 99999})
+        self.assertEqual((r["settings"]["heartbeat_min"], r["settings"]["eval_window_min"]), (2, 1440))
+        self.assertFalse(self.srv.post("/api/evolution/settings", {"autonomy": "deploy"})["ok"])
+        self.srv.post("/api/evolution/settings", {"heartbeat_min": 15, "eval_window_min": 45})
+        self.srv.restart(timeout=240)
+        s = self.srv.get("/api/evolution")
+        self.assertEqual({k: s["settings"][k] for k in body}, body)
+        self.srv.post("/api/evolution/settings", {"autonomy": "propose"})  # leave the shared server as it was
 
     def test_observer_is_locked_out_of_actions(self):
         self.srv.post("/api/role", {"role": "observer"})

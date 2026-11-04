@@ -16,6 +16,19 @@
     wildfire: "WF", volcano: "VO", drought: "DR", tsunami: "TSU", coastal: "CW", heat: "HT", landslide: "LS",
     ice: "ICE", dust: "DU", snow: "SN", vulnerability: "CVE", service: "SVC", outage: "NET", other: "··" };
   let data = null, filter = { k: "all" }, prepSel = null, tab = "services", landDrawn = false, busy = false;
+  // view prefs (filter, tab, preparedness pick) survive a reload; per-browser only, never server state
+  function pref(k, v) {
+    try {
+      if (v === undefined) return JSON.parse(localStorage.getItem("dis." + k));
+      localStorage.setItem("dis." + k, JSON.stringify(v));
+    } catch (e) { return null; }
+  }
+  {
+    const f = pref("filter");
+    if (f && typeof f.k === "string" && ["all", "cat", "near", "sev", "type"].includes(f.k)) filter = { k: f.k, v: f.v };
+    const t = pref("tab"); if (["services", "prep", "sources"].includes(t)) tab = t;
+    const p = pref("prep"); if (typeof p === "string") prepSel = p;
+  }
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
@@ -179,6 +192,8 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
   function setFilter(f) {
     const same = filter.k === f.k && filter.v === f.v;
     filter = same ? { k: "all" } : f;
+    pref("filter", filter);
+    if (!data) return;
     renderCounts(); renderList(); renderMap();
   }
 
@@ -348,6 +363,7 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
         setTimeout(() => { b.textContent = "↻ REFRESH"; }, 2500);
         return;
       } else if (r.ok) { data = j; renderAll(); }
+      else { try { logEvent(`<span class="tag">[disaster]</span> refresh failed: ${esc(j.error || "HTTP " + r.status)}`, "warn"); } catch (e2) {} }
     } catch (e) {
       try { logEvent(`<span class="tag">[disaster]</span> refresh failed`, "warn"); } catch (e2) {}
     } finally { busy = false; b.disabled = false; if (b.textContent === "FETCHING…") b.textContent = "↻ REFRESH"; }
@@ -367,13 +383,14 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
     const tb = e.target.closest("[data-tab]");
     if (tb) { showTab(tb.dataset.tab); return; }
     const pk = e.target.closest("#dis-prep-tabs button[data-k]");
-    if (pk) { prepSel = pk.dataset.k; renderPrep(); }
+    if (pk) { prepSel = pk.dataset.k; pref("prep", prepSel); renderPrep(); }
   });
   mount.addEventListener("keydown", (e) => {
     if ((e.key === "Enter" || e.key === " ") && e.target.matches(".dis-pt[data-id]")) { e.preventDefault(); openEvent(e.target.dataset.id); }
   });
   function showTab(t) {
     tab = t;
+    pref("tab", t);
     mount.querySelectorAll("#dis-tabs [data-tab]").forEach(b => { b.classList.toggle("on", b.dataset.tab === t); b.setAttribute("aria-selected", b.dataset.tab === t); });
     mount.querySelectorAll(".ft-pane").forEach(p => { p.hidden = p.dataset.pane !== t; });
   }
@@ -383,10 +400,11 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
     const t = e.target.closest("#tool-modal [data-dis-type]");
     if (!p && !t) return;
     try { closeToolModal(); } catch (e2) {}
-    if (p) { prepSel = p.dataset.disPrep; showTab("prep"); renderPrep(); document.getElementById("dis-tabs").scrollIntoView({ behavior: "smooth", block: "center" }); }
+    if (p) { prepSel = p.dataset.disPrep; pref("prep", prepSel); showTab("prep"); renderPrep(); document.getElementById("dis-tabs").scrollIntoView({ behavior: "smooth", block: "center" }); }
     if (t) { setFilter({ k: "type", v: t.dataset.disType }); document.getElementById("dis-list").scrollIntoView({ behavior: "smooth", block: "center" }); }
   });
 
+  showTab(tab);                                      // restore the remembered tab
   load();
   setInterval(load, 60000);                          // server caches; feeds refresh every ~5 min
   let tries = 0;

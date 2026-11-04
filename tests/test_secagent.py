@@ -370,6 +370,54 @@ class AgentFlow(unittest.TestCase):
         self.assertFalse(run(make_agent(self.dir).make_brief())["ok"], "no AI connected → honest error")
 
 
+class ThreatFeedBridge(unittest.TestCase):
+    """New critical/high findings show up in the core THREAT INTELLIGENCE cards too."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        PATCH_PKGS.start()
+        self.addCleanup(PATCH_PKGS.stop)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_new_hot_findings_become_threat_events_once(self):
+        import threats
+
+        class Hub:
+            def __init__(self):
+                self.msgs = []
+
+            async def broadcast(self, m):
+                self.msgs.append(m)
+        hub = Hub()
+        te = threats.ThreatEngine(hub)
+        a = make_agent(self.dir, state={"threats": te, "hub": hub})
+        run(a.scan(full=True))
+        evs = [e for e in te.events if e["category"] == "cyber"]
+        hot = [f for f in a.active() if f["severity"] in ("critical", "high")]
+        self.assertTrue(hot)
+        self.assertEqual(len(evs), min(3, len(hot)))
+        self.assertTrue(all(e["title"].startswith("Cyber analyst:") for e in evs))
+        self.assertTrue(any(m["type"] == "threat-event" and m["category"] == "cyber" for m in hub.msgs))
+        self.assertIn("cyber", te.snapshot()["by_category"])
+        run(a.scan(full=True))                                    # nothing new → no repeat incidents
+        self.assertEqual(len([e for e in te.events if e["category"] == "cyber"]), len(evs))
+
+    def test_accepted_findings_never_reach_the_feed(self):
+        import threats
+
+        class Hub:
+            async def broadcast(self, m):
+                pass
+        te = threats.ThreatEngine(Hub())
+        a = make_agent(self.dir, state={"threats": te})
+        a.is_accepted = lambda f: f["severity"] in ("critical", "high")
+        run(a.scan(full=True))
+        self.assertEqual([e for e in te.events if e["category"] == "cyber"], [])
+
+
 class Router(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

@@ -67,9 +67,23 @@ class IsolatedServer:
         })
         return env
 
-    def start(self, timeout: float = 90) -> "IsolatedServer":
-        copy_app(self.dir)
-        self._log = open(self.log_path, "wb")
+    def restart(self, timeout: float = 120) -> "IsolatedServer":
+        """Stop the process and boot it again on the SAME temp dir (state files kept) —
+        for persistence tests."""
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+        if getattr(self, "_log", None):
+            self._log.close()
+        return self.start(timeout=timeout, copy=False)
+
+    def start(self, timeout: float = 90, copy: bool = True) -> "IsolatedServer":
+        if copy:
+            copy_app(self.dir)
+        self._log = open(self.log_path, "ab")
         self.proc = subprocess.Popen(
             [PYTHON, "-m", "uvicorn", "main:app", "--host", "127.0.0.1",
              "--port", str(self.port)],
@@ -111,6 +125,39 @@ class IsolatedServer:
             raw = r.read()
             ctype = r.headers.get("Content-Type", "")
             return json.loads(raw) if "json" in ctype else raw.decode(errors="replace")
+
+    def ws_during(self, action, want: str, timeout: float = 15) -> list[dict]:
+        """Open /ws (what every other dashboard tab sees), run action() in a thread, and
+        return the broadcast messages of type `want` received after it (replayed history
+        from before the action is ignored)."""
+        import asyncio
+        import threading
+
+        import websockets
+
+        async def go():
+            got: list[dict] = []
+            async with websockets.connect(f"ws://127.0.0.1:{self.port}/ws") as ws:
+                # drain the on-connect replay of recent messages
+                while True:
+                    try:
+                        await asyncio.wait_for(ws.recv(), timeout=0.6)
+                    except asyncio.TimeoutError:
+                        break
+                t = threading.Thread(target=action, daemon=True)
+                t.start()
+                deadline = time.time() + timeout
+                while time.time() < deadline and not got:
+                    try:
+                        m = json.loads(await asyncio.wait_for(ws.recv(), timeout=max(0.1, deadline - time.time())))
+                    except asyncio.TimeoutError:
+                        break
+                    if m.get("type") == want:
+                        got.append(m)
+                t.join(timeout=timeout)
+            return got
+
+        return asyncio.run(go())
 
     def get(self, path: str, timeout: float = 30):
         return self._req("GET", path, timeout=timeout)

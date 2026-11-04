@@ -127,3 +127,9 @@ i.d.on, i.d.ok { background: var(--success); box-shadow: 0 0 5px var(--success);
 i.d.off { background: var(--error); box-shadow: 0 0 5px var(--error); }
 i.d.na { background: transparent; border: 1px solid var(--text-dim); }
 i.d.cf { background: var(--accent); } i.d.ts { background: var(--warn); }
+/* loop settings row (reuses the feedback input look) */
+#ev-set { justify-content: flex-start; flex-wrap: wrap; }
+#ev-set label { display: inline-flex; align-items: center; gap: 0.3rem; }
+#ev-set input { flex: none; width: 4.4rem; }
+#ev-set-msg { font-family: var(--font-mono); color: var(--text-dim); }
+.ev-card.is-error { border-color: var(--error); }

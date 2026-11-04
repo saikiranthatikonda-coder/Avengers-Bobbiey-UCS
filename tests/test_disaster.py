@@ -274,5 +274,34 @@ class Engine(unittest.TestCase):
         self.assertEqual(len(calls) - n, 1)
 
 
+class DashboardContract(unittest.TestCase):
+    """static/disaster.js: view prefs survive a reload (guarded localStorage), failures are surfaced."""
+    JS = (Path(__file__).resolve().parent.parent / "static" / "disaster.js").read_text(encoding="utf-8")
+
+    def test_view_prefs_persist_in_guarded_localstorage(self):
+        js = self.JS
+        self.assertRegex(js, r'function pref\(k, v\) \{\s*try \{')            # every access inside try/catch
+        for key in ('pref("filter", filter)', 'pref("tab", t)', 'pref("prep", prepSel)', 'pref("filter")'):
+            self.assertIn(key, js)
+        self.assertIn("showTab(tab);", js)                                    # remembered tab restored on load
+
+    def test_refresh_failure_is_reported(self):
+        self.assertIn("refresh failed: ${esc(j.error", self.JS)               # non-429 errors are not silent
+
+    def test_show_on_map_ids_match_global_map(self):
+        """SHOW ON MAP passes the Disaster item id; the global map must carry the same id."""
+        import globalmap_sources as gs
+        pairs = [(disaster.parse_gdacs(GDACS), gs.parse_gdacs(GDACS)),
+                 (disaster.parse_usgs(USGS), gs.parse_usgs(USGS)),
+                 (disaster.parse_eonet(EONET), gs.split_eonet(disaster.parse_eonet(EONET))),
+                 (disaster.parse_sachet(SACHET), gs.parse_sachet(SACHET))]
+        for dz_items, gm_items in pairs:
+            gm_ids = {i["id"] for i in gm_items}
+            located = [i for i in dz_items if i.get("lat") is not None]
+            self.assertTrue(located)
+            for it in located:
+                self.assertIn(it["id"], gm_ids, it["id"])
+
+
 if __name__ == "__main__":
     unittest.main()

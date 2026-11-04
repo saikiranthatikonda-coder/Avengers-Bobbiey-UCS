@@ -187,6 +187,14 @@
           <button type="button" class="cmd-btn" data-act-scan="1">⌕ SCAN THIS NETWORK</button></div></div>`;
       return;
     }
+    // keep what the operator typed (MQTT topic/payload, entity filter) across re-renders —
+    // every control click and the 30 s poll rebuild this list
+    const kept = {};
+    list.querySelectorAll("[data-id]").forEach((card) => {
+      card.querySelectorAll("input[data-mq], input[data-filter]").forEach((i) => {
+        if (i.value) kept[card.dataset.id + "|" + (i.dataset.mq || "filter")] = i.value;
+      });
+    });
     list.innerHTML = data.devices.map((d) => {
       const st = d.status || {};
       const cls = st.online === true ? (st.auth === false ? "warn" : "ok") : st.online === false ? "fail" : "off";
@@ -200,6 +208,14 @@
         <div class="dv-ctl">${controlsFor(d)}</div>
       </div>`;
     }).join("");
+    list.querySelectorAll("[data-id]").forEach((card) => {
+      card.querySelectorAll("input[data-mq], input[data-filter]").forEach((i) => {
+        const v = kept[card.dataset.id + "|" + (i.dataset.mq || "filter")];
+        if (v === undefined) return;
+        i.value = v;
+        if (i.dataset.filter) i.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    });
   }
 
   // ── add form ────────────────────────────────────────────

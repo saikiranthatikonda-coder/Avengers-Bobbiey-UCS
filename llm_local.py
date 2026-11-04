@@ -61,12 +61,30 @@ class LocalLLM:
         except Exception:
             pass
 
+    _LIST_TTL_OK = 8.0       # s — a fresh list is reused briefly (dashboard polls it from many cards)
+    _LIST_TTL_DOWN = 20.0    # s — an unreachable endpoint is not re-dialled on every request
+
     async def list_models(self) -> list[dict]:
-        """Installed local models. Prefers Ollama's native /api/tags (rich
-        metadata: size, params, quantization); falls back to /v1/models."""
+        """Installed local models (cached briefly so a stopped Ollama never makes
+        the dashboard wait ~18 s per call — that left the LLM CORE badge stale)."""
+        cache = getattr(self, "_list_cache", None)
+        if cache and cache[0] == self.base_url and \
+                time.monotonic() - cache[1] < (self._LIST_TTL_OK if cache[2] else self._LIST_TTL_DOWN):
+            return list(cache[2])
+        out = await self._list_models_uncached()
+        self._list_cache = (self.base_url, time.monotonic(), out)
+        return list(out)
+
+    def invalidate_models(self) -> None:
+        self._list_cache = None
+
+    async def _list_models_uncached(self) -> list[dict]:
+        """Prefers Ollama's native /api/tags (rich metadata: size, params,
+        quantization); falls back to /v1/models."""
         root = self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
+        tmo = httpx.Timeout(5.0, connect=1.5)
         try:
-            async with httpx.AsyncClient(timeout=5, trust_env=False) as c:
+            async with httpx.AsyncClient(timeout=tmo, trust_env=False) as c:
                 r = await c.get(f"{root}/api/tags")
                 r.raise_for_status()
                 data = r.json()
@@ -82,10 +100,12 @@ class LocalLLM:
                 })
             if out:
                 return out
+        except (httpx.ConnectError, httpx.ConnectTimeout):
+            return []                      # nothing listening — the /v1 fallback would just wait again
         except Exception:
             pass
         try:
-            async with httpx.AsyncClient(timeout=5, trust_env=False) as c:
+            async with httpx.AsyncClient(timeout=tmo, trust_env=False) as c:
                 r = await c.get(f"{self.base_url}/models", headers=self._headers())
                 r.raise_for_status()
                 return [{"name": m.get("id")} for m in (r.json().get("data") or [])

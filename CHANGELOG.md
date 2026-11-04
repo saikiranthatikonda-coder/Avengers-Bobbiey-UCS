@@ -5,6 +5,31 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-04 — v8.0.1 · Every click updates everywhere and is saved
+- **fix: LLM CORE badge under the orb now follows the active brain.**
+  - It used to show the insights engine's model, and `/api/models` took about 18 s whenever Ollama wasn't running. The model list is now cached briefly and fails fast.
+  - The orb tile, the insights MODEL chip, AI DIAGNOSTICS, Local AI, AI BRAIN ROUTER, the service grid and the LLM SWITCH all update within about 0.2 s of a switch made from any panel, tab, voice or typed command.
+- **fix: settings changed in one tab now update every open tab**, through one server sync message. This covers:
+  - the brain and its providers
+  - notes and productivity
+  - role and operators
+  - decisions and autonomy
+  - licence and commander profile
+  - fleet code
+  - self-heal
+  - AI Core routing, memory, agents, workflows and plugins
+  - evolution settings
+- **fix:** after a lost connection, the dashboard re-reads every shared setting so missed changes aren't lost.
+- **fix: forms keep what you are typing.** The phone settings, AI Core routing and folders, the devices MQTT box and the Computer Use model no longer lose unsaved edits on the periodic refresh, and save buttons show a saving state.
+- **feat: typed commands.** "Jarvis, switch the brain to ollama" and "mic off / sleep / wake up" now work from the command bar, not only by voice.
+- **fix: the mic pill** shows MIC OFF or SLEEP instead of READY.
+- **fix: the audio mute/volume and conversation toggles** show the server's real state, even when a request fails.
+- **feat: remembered view choices.** The clock popover (stopwatch, timer, last tab), camera choice, disaster filters, map mode and layers are remembered. Theme and clock settings follow across tabs.
+- **feat: Evolution LOOP SETTINGS** control (heartbeat, evaluation window, test interval) that takes effect immediately.
+- **fix:** critical and high cyber-analyst findings now reach the threat feed and count toward the threat matrix's security score.
+- **fix:** SHOW ON MAP from disaster and threat cards now finds the right point.
+- **Website:** removed the "Stark Industries × Bobbiey = Avengers: a collaboration…" line.
+
 ## 2026-11-04 — v8.0.0 · Desktop apps, Computer Use, Phone agent, Evolution loop, AI Core, Global Activity Map
 - **feat: DESKTOP APPS for Windows, macOS (Apple Silicon + Intel) and Linux:**
   - Each installer bundles its own Python 3.11, so customers don't need to install anything first.

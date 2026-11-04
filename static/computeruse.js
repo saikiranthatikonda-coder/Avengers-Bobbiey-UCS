@@ -13,7 +13,7 @@
     awaiting_input: "WAITING FOR YOUR ANSWER", paused: "PAUSED", taken_over: "YOU HAVE CONTROL", done: "DONE",
     failed: "FAILED", stopped: "STOPPED",
   };
-  let data = null, timer = null, frameKey = "", settingsDirty = false, lastPendingKey = "";
+  let data = null, timer = null, frameKey = "", settingsDirty = false, lastPendingKey = "", adapterSaving = false;
 
   mount.innerHTML = `
   <div class="bs-card cu-card" id="cu-card">
@@ -163,11 +163,16 @@
   }
 
   function renderSettings(d) {
-    const sel = $c("cu-adapter"), cur = sel.value || d.settings.adapter;
-    const opts = [`<option value="auto">AUTO · best available</option>`].concat((d.candidates || []).filter((c) => c.id !== "error").map((c) =>
-      `<option value="${esc(c.id)}" ${c.available ? "" : "disabled"}>${esc(c.name)}${c.available ? "" : " — " + esc(c.reason)}</option>`));
+    // the model picker mirrors the SAVED choice (server-side settings.json), so every open tab
+    // and a restart show the same model; a saved model that is unavailable right now stays
+    // visible and is labelled instead of silently turning into AUTO
+    const sel = $c("cu-adapter"), saved = d.settings.adapter || "auto", cands = (d.candidates || []).filter((c) => c.id !== "error");
+    const opts = [`<option value="auto">AUTO · best available</option>`].concat(cands.map((c) =>
+      `<option value="${esc(c.id)}" ${c.available || c.id === saved ? "" : "disabled"}>${esc(c.name)}${c.available ? "" : " — " + esc(c.reason)}</option>`));
+    if (saved !== "auto" && !cands.some((c) => c.id === saved)) opts.push(`<option value="${esc(saved)}">${esc(saved)} — not available now</option>`);
     const html = opts.join("");
-    if (sel.dataset.h !== html) { sel.innerHTML = html; sel.dataset.h = html; sel.value = [...sel.options].some((o) => o.value === cur && !o.disabled) ? cur : "auto"; }
+    if (sel.dataset.h !== html) { sel.innerHTML = html; sel.dataset.h = html; }
+    if (!adapterSaving && document.activeElement !== sel) sel.value = saved;
     if (settingsDirty) return;
     const s = d.settings;
     $c("cu-steps").value = s.max_steps; $c("cu-mins").value = s.max_minutes; $c("cu-gap").value = s.min_interval;
@@ -264,9 +269,27 @@
       allow_apps: $c("cu-apps").checked, allow_urls: $c("cu-urls").checked, adapter: $c("cu-adapter").value,
       allowed_dirs: $c("cu-dirs").value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
     };
+    const btn = $c("cu-save");
+    btn.disabled = true; $c("cu-set-msg").textContent = "saving…";
     const r = await post("/api/computeruse/settings", body);
-    $c("cu-set-msg").textContent = r.ok ? "saved" : (r.errors || [r.error]).filter(Boolean).join(" · ");
-    settingsDirty = false; refresh();
+    btn.disabled = false;
+    $c("cu-set-msg").textContent = r.ok ? "saved" : (r.errors || [r.error]).filter(Boolean).join(" · ") || "refused";
+    // refused outright (observer / not host / task running / network): keep the operator's edits;
+    // saved (even with per-field errors): show what the server actually stored
+    if (r.settings) settingsDirty = false;
+    refresh();
+  });
+
+  // choosing a model SAVES it (it is a real setting, restored after a restart and shown in every tab)
+  $c("cu-adapter").addEventListener("change", async (e) => {
+    const sel = e.currentTarget, want = sel.value;
+    adapterSaving = true; sel.disabled = true;
+    const r = await post("/api/computeruse/settings", { adapter: want });
+    sel.disabled = false; adapterSaving = false;
+    if (r.settings) log(`model set to ${esc(r.settings.adapter === "auto" ? "AUTO" : r.settings.adapter)}`);
+    else { log(`model not saved: ${esc(r.error || "refused")}`, "warn"); if (data) sel.value = data.settings.adapter || "auto"; }
+    if (data && r.settings) data.settings = r.settings;
+    refresh();
   });
 
   refresh();

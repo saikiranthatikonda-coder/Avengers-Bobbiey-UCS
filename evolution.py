@@ -54,6 +54,22 @@ SAMPLE_ENDPOINTS = ("/api/status", "/api/health", "/api/roadmap", "/api/agenda",
 DEFAULT_SETTINGS = {"autonomy": "propose",          # observe | propose  (deploy ALWAYS needs approval)
                     "heartbeat_min": 10, "eval_window_min": 30, "tests_every_h": 12, "research_every_h": 168,
                     "auto_propose_every_h": 6, "auto_propose_min_priority": 10.0, "analyst_every_min": 60}
+# operator-editable settings and their bounds (POST /api/evolution/settings; also re-applied on load)
+SETTING_BOUNDS = {"heartbeat_min": (2, 240), "eval_window_min": (5, 1440), "tests_every_h": (1, 168)}
+
+
+def clamp_settings(s: dict) -> dict:
+    """Keep persisted/posted settings sane (a hand-edited or corrupt file must not stall the loop)."""
+    if s.get("autonomy") not in ("observe", "propose"):
+        s["autonomy"] = DEFAULT_SETTINGS["autonomy"]
+    for k, (lo, hi) in SETTING_BOUNDS.items():
+        try:
+            s[k] = max(lo, min(hi, int(s[k])))
+        except (TypeError, ValueError, KeyError):
+            s[k] = DEFAULT_SETTINGS[k]
+    return s
+
+
 HEARTBEAT_COOLDOWN = 20
 ANALYST_COOLDOWN = 120
 RESEARCH_COOLDOWN = 600
@@ -129,6 +145,7 @@ class Evolution:
         if not d:
             return
         self.settings.update({k: v for k, v in (d.get("settings") or {}).items() if k in DEFAULT_SETTINGS})
+        clamp_settings(self.settings)
         self.signals.load(d.get("signals"))
         self.errors.load(d.get("errors"))
         self.backlog.items = {i["id"]: i for i in d.get("items") or [] if isinstance(i, dict) and i.get("id")}
@@ -448,9 +465,19 @@ class Evolution:
                 and now - PROCESS_START > 300 and not (self.research or {}).get("running"):
             self._spawn(self.run_research())
 
+    def reschedule(self) -> None:
+        """Re-derive the next heartbeat / scheduled test run from the CURRENT settings, so a changed
+        interval applies right away (not after the old sleep finishes)."""
+        if self.heartbeat.get("last"):
+            self.heartbeat["next"] = self.heartbeat["last"] + self.settings["heartbeat_min"] * 60
+        if self.owner:
+            last = (self.tests.get("last") or {}).get("ts", 0)
+            self.tests["next"] = max(last + self.settings["tests_every_h"] * 3600, PROCESS_START + 600)
+
     async def loop(self) -> None:
         await asyncio.sleep(45)
         while True:
+            started = time.time()
             if self.active_install:
                 try:
                     await self.beat()
@@ -458,7 +485,14 @@ class Evolution:
                     raise
                 except Exception:
                     pass
-            await asyncio.sleep(max(2, int(self.settings["heartbeat_min"])) * 60)
+            # wait in short steps, re-reading heartbeat_min each time: a settings change (or a
+            # manual heartbeat, which moves "last") takes effect within ~15 s
+            while True:
+                due = max(self.heartbeat.get("last") or 0, started) + max(2, int(self.settings["heartbeat_min"])) * 60
+                wait = due - time.time()
+                if wait <= 0:
+                    break
+                await asyncio.sleep(min(15.0, wait))
 
     # ═══ test suite (owner machine only) ═════════════════════════
     def test_status(self, modules: list[str]) -> str:
@@ -1002,7 +1036,10 @@ class Evolution:
         return {
             "owner": self.owner, "active": self.active_install,
             "mode": "full loop (approval-gated)" if self.owner else "observe + analyse only (customer install)",
-            "settings": self.settings, "loop": self.loop_counts(),
+            "settings": self.settings, "setting_bounds": SETTING_BOUNDS,
+            # what actually happens: customer installs never auto-propose, whatever the stored setting says
+            "autonomy_effective": self.settings["autonomy"] if self.owner else "observe",
+            "loop": self.loop_counts(),
             "current": self._item_view(current) if current else None,
             "heartbeat": {**self.heartbeat, "interval_min": self.settings["heartbeat_min"]},
             "observe": self.last_observe, "analysis": self.last_analysis,
@@ -1188,11 +1225,13 @@ def build_router(ctx) -> APIRouter:
             if req.autonomy == "propose" and not evo.owner:
                 return {"ok": False, "error": "customer install: observation and analysis only"}
             s["autonomy"] = req.autonomy
-        for k, lo, hi in (("heartbeat_min", 2, 240), ("eval_window_min", 5, 1440), ("tests_every_h", 1, 168)):
+        for k, (lo, hi) in SETTING_BOUNDS.items():
             v = getattr(req, k)
             if v is not None:
                 s[k] = max(lo, min(hi, int(v)))
+        evo.reschedule()
         evo.save()
+        await evo._broadcast("settings", settings=dict(s))
         await ctx["audit"]("evolution.settings", json.dumps({k: s[k] for k in ("autonomy", "heartbeat_min",
                                                                               "eval_window_min", "tests_every_h")}))
         return {"ok": True, "settings": s}

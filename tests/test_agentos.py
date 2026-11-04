@@ -725,5 +725,62 @@ class Core(unittest.TestCase):
         core.memory.close()
 
 
+class LiveSync(unittest.TestCase):
+    """Real isolated server: AI CORE changes reach the core brain badge (models-updated) and other
+    tabs (sync), core LLM-switch changes reach AI CORE, and every setting survives a restart."""
+
+    @classmethod
+    def setUpClass(cls):
+        from harness import IsolatedServer
+        cls.srv = IsolatedServer().start(timeout=180)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def test_changes_broadcast_sync_and_survive_restart(self):
+        srv = self.srv
+        # routing change → "models-updated" (the orb's LLM CORE badge re-reads the brain)
+        got = srv.ws_during(lambda: srv.post("/api/agentos/routing",
+                                             {"policy": "fastest", "pins": {"code": "ollama:qwen2.5-coder:7b"}}),
+                            "models-updated")
+        self.assertTrue(got, "routing change must broadcast models-updated")
+        self.assertEqual(srv.get("/api/agentos")["routing"]["policy"], "fastest")
+        # other AI CORE edits → a "sync" for other open tabs
+        got = srv.ws_during(lambda: srv.post("/api/agentos/memory", {"kind": "fact", "text": "LiveSync marker fact"}), "sync")
+        self.assertTrue(any(m.get("topic") == "agentos" for m in got))
+
+        # ROUTE ALL REPLIES HERE = the core switch → badge + AI CORE agree
+        got = srv.ws_during(lambda: srv.post("/api/llm/active", {"id": "smart"}), "models-updated")
+        self.assertTrue(got)
+        self.assertEqual(srv.get("/api/llm/providers")["active"], "smart")
+        self.assertTrue(srv.get("/api/agentos")["smart_active"])
+
+        # a provider added in the core LLM switch shows up in AI CORE without a manual rediscover
+        secret = "sk-livesync-secret-0123456789"
+        r = srv.post("/api/llm/providers", {"name": "LiveSync", "base_url": "http://127.0.0.1:9/v1",
+                                           "model": "ls-model", "api_key": secret})
+        self.assertTrue(r.get("ok"), r)
+        seen = False
+        for _ in range(40):
+            snap = srv.get("/api/agentos")
+            self.assertNotIn(secret, json.dumps(snap))
+            if any(p["id"].startswith("custom-") for p in snap["providers"]["providers"]):
+                seen = True
+                break
+            time.sleep(0.5)
+        self.assertTrue(seen, "custom provider never reached AI CORE")
+
+        srv.restart()
+        snap = srv.get("/api/agentos")
+        self.assertEqual(snap["routing"]["policy"], "fastest")
+        self.assertEqual(snap["routing"]["pins"].get("code"), "ollama:qwen2.5-coder:7b")
+        self.assertTrue(snap["smart_active"])
+        self.assertEqual(srv.get("/api/llm/providers")["active"], "smart")
+        mem = srv.get("/api/agentos/memory?q=LiveSync%20marker")
+        self.assertTrue(any("LiveSync marker" in i["text"] for i in mem["items"]))
+        self.assertNotIn(secret, json.dumps(srv.get("/api/llm/providers")))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,7 @@
   const t2 = (ts) => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
   const dt = (ts) => ts ? new Date(ts * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
   const dur = (s) => (s == null ? "—" : s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`);
-  let data = null, contacts = [], openCall = null, editing = null, timer = null, liveTimer = null, pending = null, pendTimer = null;
+  let data = null, contacts = [], openCall = null, editing = null, timer = null, liveTimer = null, pending = null, pendTimer = null, formDirty = false;
 
   mount.innerHTML = `
   <div class="bs-card ph-card" id="ph-card">
@@ -129,15 +129,19 @@
       <div><span>URL</span><b class="ph-url">${esc(d.config.public_base_url || "—")}</b></div>
       ${t.error ? `<div><span>NOTE</span><b>${esc(t.error)}</b></div>` : ""}
       <div><span>WEBHOOKS</span><b>${w.accepted || 0} verified · ${w.rejected || 0} rejected${w.last_rejected ? ` (last: ${esc(w.last_reason)})` : ""}</b></div>`;
-    const nums = d.config.numbers || [];
-    $p("ph-number").innerHTML = nums.length
+    const nums = d.config.numbers || [], numSel = $p("ph-number");
+    const numHtml = nums.length
       ? `<option value="">— select a number —</option>` + nums.map((n) => `<option value="${esc(n.id)}"${n.id === d.config.selected_number_id ? " selected" : ""}>${esc(n.number)}${n.name ? " · " + esc(n.name) : ""}${n.voice ? "" : " (no voice)"}</option>`).join("")
       : `<option value="">${d.config.account_sid_set ? "press VERIFY to list numbers" : "not configured"}</option>`;
+    // rebuild only when the list changed (a 15 s poll must not close an open dropdown); always
+    // mirror the SAVED selection so other tabs / a restart show the same number
+    if (numSel.dataset.h !== numHtml) { numSel.innerHTML = numHtml; numSel.dataset.h = numHtml; }
+    if (document.activeElement !== numSel) numSel.value = d.config.selected_number_id || "";
   }
 
   function fillForm(d) {
     const f = $p("ph-form");
-    if (f.contains(document.activeElement)) return;          // don't clobber typing
+    if (formDirty || f.contains(document.activeElement)) return;   // don't clobber typing / unsaved edits
     const c = d.config;
     $p("ph-provsel").innerHTML = (d.providers || []).map((p) => `<option value="${esc(p.name)}"${p.name === c.provider ? " selected" : ""}${p.implemented ? "" : " disabled"}>${esc(p.label)}</option>`).join("");
     for (const el of f.elements) {
@@ -298,8 +302,10 @@
   });
   $p("ph-point").addEventListener("click", async (e) => { await act(e.currentTarget, "/api/phone/numbers/point", {}, "number now points at this BUCS"); refresh(); });
   $p("ph-number").addEventListener("change", async (e) => {
-    const r = await post("/api/phone/config", { selected_number_id: e.target.value });
-    if (r.ok === false) log(esc(r.error), "warn");
+    const sel = e.target; sel.disabled = true;
+    const r = await post("/api/phone/config", { selected_number_id: sel.value });
+    sel.disabled = false; sel.blur();
+    if (r.ok === false) log(esc(r.error || "refused"), "warn"); else log("number selection saved");
     refresh();
   });
 
@@ -314,16 +320,24 @@
       else if (el.type === "number") { if (el.value !== "") body[el.name] = Number(el.value); }
       else body[el.name] = el.value;
     }
+    const sub = f.querySelector("[type=submit]");
+    sub.disabled = true; $p("ph-form-msg").textContent = "saving…";
     const r = await post("/api/phone/config", body);
+    sub.disabled = false;
     $p("ph-form-msg").textContent = r.ok ? (r.changed && r.changed.length ? "saved: " + r.changed.join(", ") : "no changes") : (r.error || "refused");
-    $p("ph-token").value = "";
-    document.activeElement && document.activeElement.blur && document.activeElement.blur();
+    if (r.ok) {                       // saved: show what the server stored. Refused: keep the edits on screen
+      formDirty = false;
+      $p("ph-token").value = "";
+      document.activeElement && document.activeElement.blur && document.activeElement.blur();
+    }
     refresh();
   });
+  $p("ph-form").addEventListener("input", () => { formDirty = true; });
   $p("ph-clear").addEventListener("click", async () => {
     if (!confirm("Forget the saved Twilio Account SID and Auth Token on this machine?")) return;
     const r = await post("/api/phone/credentials/clear", {});
     $p("ph-form-msg").textContent = r.ok ? "credentials removed" : (r.error || "refused");
+    if (r.ok) formDirty = false;
     refresh();
   });
 
@@ -341,7 +355,10 @@
     e.preventDefault();
     const f = e.currentTarget, body = { id: editing };
     for (const el of f.elements) { if (!el.name) continue; body[el.name] = el.type === "checkbox" ? el.checked : el.value; }
+    const sub = f.querySelector("[type=submit]");
+    sub.disabled = true; $p("ph-cmsg").textContent = "saving…";
     const r = await post("/api/phone/contacts", body);
+    sub.disabled = false;
     $p("ph-cmsg").textContent = r.ok ? "saved" : (r.error || "refused");
     if (r.ok) { editing = r.contact.id; refresh(); }
   });
@@ -402,7 +419,9 @@
     if (el.dataset.del) {
       const c = contacts.find((x) => x.id === Number(el.dataset.del));
       if (!c || !confirm(`Delete contact ${c.name}? Call history is kept.`)) return;
-      await act(el, "/api/phone/contacts/delete", { id: c.id }); refresh(); return;
+      const r = await act(el, "/api/phone/contacts/delete", { id: c.id });
+      if (r.ok && editing === c.id) { editing = null; $p("ph-cform").reset(); $p("ph-cform-title").textContent = "ADD CONTACT"; }  // never save over a deleted id
+      refresh(); return;
     }
     if (el.dataset.resum) { await act(el, `/api/phone/calls/${el.dataset.resum}/summarize`, {}); loadDrawer(Number(el.dataset.resum)); }
   });

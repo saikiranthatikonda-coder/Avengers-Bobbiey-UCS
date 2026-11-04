@@ -53,16 +53,18 @@ themeBtns.forEach(b => b.addEventListener("click", () => {
   themeBtns.forEach(x => x.classList.toggle("active", x === b));
   try { localStorage.setItem("avengers-theme", t); } catch (e) {}
 }));
-(() => {
+function applySavedTheme() {
   try {
     const saved = localStorage.getItem("avengers-theme");
-    if (saved) {
+    if (saved && /^(jarvis|stark|stealth)$/.test(saved)) {
       document.body.classList.remove("theme-jarvis","theme-stark","theme-stealth");
       document.body.classList.add("theme-" + saved);
       themeBtns.forEach(x => x.classList.toggle("active", x.dataset.theme === saved));
     }
   } catch (e) {}
-})();
+}
+applySavedTheme();
+window.addEventListener("storage", (e) => { if (e.key === "avengers-theme") applySavedTheme(); });   // other tabs
 
 // ── status pills ─────────────────────────────────────
 function setPill(id, label, level) {
@@ -465,7 +467,8 @@ var ConversationMode = {
   async toggle() {
     const b = document.getElementById("conv-toggle"); const on = b.getAttribute("aria-pressed") !== "true";
     this.set(on);
-    try { this.set((await (await fetch("/api/conversation", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on }) })).json()).on); } catch (e) {}
+    try { this.set((await (await fetch("/api/conversation", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on }) })).json()).on); }
+    catch (e) { logEvent(`<span class="tag">[voice]</span> conversation mode not changed: ${escapeHTML(e.message)}`, "warn"); return this.load(); }
     logEvent(`<span class="tag">[voice]</span> conversation mode ${on ? "ON — just talk to JARVIS; background voices muted (still shown here)" : "OFF — wake words + all agent voices"}`);
   },
 };
@@ -494,6 +497,11 @@ var MicMode = {
     if (talk) { talk.disabled = mode === "off"; talk.classList.toggle("armed", !!armed); if (armed) setTimeout(() => talk.classList.remove("armed"), armed * 1000); }
     const st = document.getElementById("mm-state");
     if (st && mode !== "on") { st.textContent = mode === "off" ? "MIC OFF" : "SLEEP · say “Jarvis…”"; st.className = "mm-state " + mode; }
+    // the header VOICE pill shows the same mode (it otherwise kept saying READY with the mic off)
+    const pill = mode === "off" ? (this.enabled === false ? "OFF" : "MIC OFF") : mode === "sleep" ? "SLEEP" : null;
+    if (pill) setPill("#sp-voice", pill, "warn");
+    else if (this._pill) setPill("#sp-voice", "READY", "ok");
+    this._pill = pill;
   },
   async load() {
     try {
@@ -503,12 +511,13 @@ var MicMode = {
     } catch (e) {}
   },
   async choose(mode) {
-    const r = await (await fetch("/api/voice/mic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode }) })).json().catch(() => ({}));
+    const r = await fetch("/api/voice/mic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode }) })
+      .then(x => x.json()).catch(err => ({ ok: false, error: "mic change failed: " + err.message }));
     if (r.ok) this.set(r.mode, 0, r.status); else logEvent(`<span class="tag">[voice]</span> ${escapeHTML(r.error || "mic change failed")}`, "warn");
     if (r.ok) logEvent(`<span class="tag">[voice]</span> microphone ${mode === "on" ? "ON: listening" : mode === "sleep" ? "SLEEP: only “Jarvis …”, double-clap or TALK" : "OFF: released"}`);
   },
   async talk() {
-    const r = await (await fetch("/api/voice/talk", { method: "POST" })).json().catch(() => ({}));
+    const r = await fetch("/api/voice/talk", { method: "POST" }).then(x => x.json()).catch(err => ({ ok: false, error: "talk failed: " + err.message }));
     if (r.ok) { this.set(this.mode, r.armed_s); logEvent(`<span class="tag">[voice]</span> TALK: speak your command now (${r.armed_s} s)`); }
     else logEvent(`<span class="tag">[voice]</span> ${escapeHTML(r.error || "talk unavailable")}`, "warn");
   },
@@ -1441,7 +1450,7 @@ async function refreshToolCardStats() {
   const s = await gatherToolSnapshot();
   const set = (id, txt) => { const el = $(id); if (el && txt) el.textContent = txt; };
   const agents = (s.status || {}).agents || [];
-  const brain = ((s.models || {}).active_brain || (s.status || {}).brain_mode || "—").toUpperCase();
+  const brain = (window._brainShort || (s.models || {}).active_brain || (s.status || {}).brain_mode || "—").toUpperCase();
   set("#tc-ai", `BRAIN · ${brain} · ${agents.filter(a => a.status !== "idle").length}/${agents.length} BUSY`);
   const agg = (s.fleet || {}).aggregate || {};
   set("#tc-fleet", `${agg.online ?? 0}/${agg.nodes ?? 0} NODES · ${agg.cpu_cores ?? "—"} CORES`);
@@ -1477,7 +1486,10 @@ const camResEl  = $("#cam-res");
 let camStream   = null;
 
 /* Phase 3 · multi-camera situational awareness */
-let camDeviceId = "";            // "" = default camera
+// "" = default camera. The chosen camera is remembered per browser; a remembered id is only
+// a preference ("ideal") so a camera that was unplugged never blocks the stream.
+let camDeviceId = (() => { try { return localStorage.getItem("bucs.camera") || ""; } catch (e) { return ""; } })();
+let camDeviceExact = false;      // true once the operator picks one in this session
 function camLabel() {
   const sel = $("#cam-select");
   const opt = sel && sel.selectedOptions[0];
@@ -1499,9 +1511,13 @@ async function enumerateCameras() {
 }
 $("#cam-select")?.addEventListener("change", async () => {
   camDeviceId = $("#cam-select").value || "";
+  camDeviceExact = true;
+  try { localStorage.setItem("bucs.camera", camDeviceId); } catch (e) {}
   if (camStream) {          // hot-switch: restart the stream on the new device
+    const aiWasOn = VisionAI.on;               // stopCamera() turns AI vision off; a switch shouldn't
     stopCamera();
     await startCamera();
+    if (aiWasOn && camStream && !VisionAI.on) VisionAI.toggle();
     logEvent(`<span class="tag">[cam]</span> switched to ${escapeHTML(camLabel())}`);
   }
 });
@@ -1524,7 +1540,7 @@ async function startCamera() {
       width:  { ideal: 480 },
       height: { ideal: 360 },
     };
-    if (camDeviceId) vidConstraints.deviceId = { exact: camDeviceId };
+    if (camDeviceId) vidConstraints.deviceId = camDeviceExact ? { exact: camDeviceId } : { ideal: camDeviceId };
     else vidConstraints.facingMode = "user";
     const stream = await navigator.mediaDevices.getUserMedia({
       video: vidConstraints,
@@ -1847,12 +1863,89 @@ function setReasonState(stateStr) {
   if (card) card.classList.toggle("analyzing", stateStr === "analyzing");
 }
 
+/* — ACTIVE BRAIN badges (orb LLM CORE tile + insights MODEL chip): one source of truth —
+   the provider registry (/api/llm/providers) + the selected local model (/api/models).
+   Refreshed at boot, on every "models-updated" broadcast and every 30 s. */
+function _brainLabel(reg, m) {
+  const act = (reg.providers || []).find(p => p.active) || {};
+  const id = reg.active || act.id || "auto";
+  if (id === "ollama") return { short: String(m.selected || "ollama").split(":")[0], full: "Ollama · " + (m.selected || "—") };
+  if (id === "smart") return { short: "SMART", full: "Smart router (per-task)" };
+  if (id === "claude") return { short: "CLAUDE", full: "Claude (CLI)" };
+  if (id === "auto") {
+    if (m.force_local) return { short: String(m.selected || "local").split(":")[0], full: "Local · " + (m.selected || "—") };
+    return m.cloud_claude ? { short: "CLAUDE", full: "Auto → Claude" }
+         : m.local_available ? { short: String(m.selected || "local").split(":")[0], full: "Auto → local · " + (m.selected || "—") }
+         : { short: "RULES", full: "Auto → rules (no model reachable)" };
+  }
+  return { short: String(act.model || act.name || id).split(/[:/]/).pop(), full: (act.name || id) + (act.model ? " · " + act.model : "") };
+}
+let _brainSeq = 0;
+async function refreshBrainBadges() {
+  const seq = ++_brainSeq;
+  try {
+    const mP = fetch("/api/models").then(r => r.json()).catch(() => null);
+    const reg = await fetch("/api/llm/providers").then(r => r.json());
+    if (seq !== _brainSeq) return;                 // a newer refresh already won
+    _paintBrain(_brainLabel(reg, window._lastModels || {}));   // instant: registry is fast
+    const m = await mP;
+    if (!m || seq !== _brainSeq) return;
+    window._lastModels = m;
+    _paintBrain(_brainLabel(reg, m));
+  } catch (e) {}
+}
+function _paintBrain(b) {
+  try {
+    const sl = $("#st-llm");
+    if (sl) { sl.textContent = b.short.toUpperCase().slice(0, 9); sl.parentElement.title = "Active brain: " + b.full + " — click to switch"; }
+    const rm = $("#reason-model");
+    if (rm) { rm.textContent = b.short.toUpperCase().slice(0, 20); rm.title = b.full; }
+    window._brainShort = b.short.toUpperCase().slice(0, 20);
+    const tc = $("#tc-ai");                         // AI DIAGNOSTICS tool card: same label
+    if (tc && /^BRAIN · .*? · /.test(tc.textContent)) tc.textContent = tc.textContent.replace(/^BRAIN · .*? · /, `BRAIN · ${window._brainShort} · `);
+  } catch (e) {}
+}
+refreshBrainBadges();
+setInterval(refreshBrainBadges, 30000);
+
+/* Every place that shows the active brain re-reads it from here: the orb LLM CORE tile,
+   the insights MODEL chip, LOCAL AI, the AI BRAIN ROUTER, the service grid, AI PERFORMANCE,
+   the cluster list and (when open and idle) the LLM SWITCH modal. Triggered by the server's
+   "models-updated" broadcast (any tab, typed/spoken switch) and right after a local switch. */
+let _llmBusy = 0;                    // LLM SWITCH modal mid-action: don't re-render under it
+function onBrainChanged(skipModal) {
+  const run = f => { try { f(); } catch (e) {} };
+  run(refreshBrainBadges); run(refreshLocalAI); run(refreshRouter); run(pollServiceGrid);
+  run(refreshAiPerf); run(refreshCluster);
+  try {
+    const modal = document.getElementById("tool-modal"), form = document.getElementById("llm-form");
+    if (!skipModal && modal && !modal.hidden && form && !_llmBusy && !form.contains(document.activeElement)) {
+      Promise.all([fetch("/api/models").then(r => r.json()), fetch("/api/llm/providers").then(r => r.json())])
+        .then(([m, p]) => { if (document.getElementById("llm-form") && !_llmBusy) renderModelManager(m, p); })
+        .catch(() => {});
+    }
+  } catch (e) {}
+}
+
+/* Shared settings changed on the server ({"type":"sync","topic":…} from main._sync):
+   every open dashboard re-reads that setting through the same refresh function. */
+function uiSyncRun(topic) {
+  const map = {
+    notes: () => refreshNotes(),
+    productivity: () => refreshProd(),
+    enterprise: () => refreshEnterprise(),
+    decisions: () => refreshDecisions(),
+    licence: () => refreshBilling(),
+    profile: () => CommanderProfile.refresh(),
+    fleet: () => renderFleetJoin(),
+  };
+  const f = map[topic];
+  if (f) { try { f(); } catch (e) {} }
+  else { try { window.dispatchEvent(new CustomEvent("bucs:sync", { detail: { topic } })); } catch (e) {} }
+}
+
 function setEngineInfo(engine) {
   if (!engine) return;
-  const model = $("#reason-model");
-  if (model && engine.model) model.textContent = String(engine.model).slice(0, 20);
-  const sl = $("#st-llm");
-  if (sl && engine.model) sl.textContent = String(engine.model).split(":")[0].slice(0, 9);
   const lat = $("#reason-latency");
   if (lat) lat.textContent = engine.latency_ms != null ? engine.latency_ms + " ms" : "—";
   const src = $("#insight-source");
@@ -2082,7 +2175,7 @@ function addThreatEvent(ev, prepend = true) {
   if (ev.id) { div.dataset.incident = ev.id; div.tabIndex = 0; div.setAttribute("role", "button"); div.title = "Open incident detail"; }
   const t = new Date((ev.ts || Date.now() / 1000) * 1000).toTimeString().slice(0, 5);
   div.innerHTML =
-    `<span class="tf-cat">${escapeHTML((ev.category || "sys").toUpperCase().slice(0, 4))}</span>` +
+    `<span class="tf-cat">${escapeHTML(({ cyber: "CYBR" })[ev.category] || (ev.category || "sys").toUpperCase().slice(0, 4))}</span>` +
     `<span class="tf-title">${escapeHTML(ev.title || "")}</span>` +
     `<span class="tf-time">${t}</span>`;
   if (prepend) feed.prepend(div); else feed.appendChild(div);
@@ -2878,11 +2971,13 @@ function renderModelManager(d, reg) {
   body.innerHTML = html;
 
   const reload = async () => {
-    const [m2, p2] = await Promise.all([fetch("/api/models").then(r => r.json()), fetch("/api/llm/providers").then(r => r.json())]);
-    renderModelManager(m2, p2);
-    const rm = $("#reason-model"); const act = (p2.providers || []).find(p => p.active);
-    if (rm && act) rm.textContent = act.name.toUpperCase().slice(0, 20);
+    try {
+      const [m2, p2] = await Promise.all([fetch("/api/models").then(r => r.json()), fetch("/api/llm/providers").then(r => r.json())]);
+      renderModelManager(m2, p2);
+    } catch (e) {}
+    onBrainChanged(true);                        // every other brain display (this modal is fresh)
   };
+  const busy = async (fn) => { _llmBusy++; try { return await fn(); } finally { _llmBusy = Math.max(0, _llmBusy - 1); } };
   const form = $("#llm-form"), msg = $("#llm-msg");
   const fill = (k) => {
     const v = presets[k] || {};
@@ -2892,15 +2987,19 @@ function renderModelManager(d, reg) {
   };
   $("#llm-preset").addEventListener("change", e => fill(e.target.value));
   fill($("#llm-preset").value);
-  form.addEventListener("submit", async (e) => {
+  form.addEventListener("submit", (e) => {
     e.preventDefault(); msg.textContent = "saving…";
-    const r = await _llmPost("/api/llm/providers", { name: $("#llm-name").value, base_url: $("#llm-url").value,
-      model: $("#llm-model").value, api_key: $("#llm-key").value || null, id: $("#llm-id").value || null });
-    if (!r.ok) { msg.textContent = r.error || "refused"; return; }
-    msg.textContent = "saved — testing…";
-    const t = await _llmPost(`/api/llm/providers/${encodeURIComponent(r.id)}/test`);
-    msg.textContent = t.ok ? `✓ reachable · ${t.latency_ms} ms` : `✕ ${t.reply || t.error || "no reply"}`;
-    setTimeout(reload, 1200);
+    busy(async () => {
+      const r = await _llmPost("/api/llm/providers", { name: $("#llm-name").value, base_url: $("#llm-url").value,
+        model: $("#llm-model").value, api_key: $("#llm-key").value || null, id: $("#llm-id").value || null })
+        .catch(err => ({ ok: false, error: err.message }));
+      if (!r.ok) { msg.textContent = r.error || "refused"; return; }
+      msg.textContent = "saved — testing…";
+      const t = await _llmPost(`/api/llm/providers/${encodeURIComponent(r.id)}/test`).catch(err => ({ ok: false, error: err.message }));
+      msg.textContent = t.ok ? `✓ reachable · ${t.latency_ms} ms` : `✕ ${t.reply || t.error || "no reply"}`;
+      await new Promise(res => setTimeout(res, 1200));          // let the operator read the result
+      reload();
+    });
   });
   body.querySelector('[data-act="licence"]')?.addEventListener("click", (e) => {
     e.preventDefault(); $("#tool-modal").hidden = true;
@@ -2910,9 +3009,10 @@ function renderModelManager(d, reg) {
   body.querySelectorAll(".llm-row").forEach(row => row.addEventListener("click", async (e) => {
     const b = e.target.closest("button[data-act]"); if (!b) return;
     const id = row.dataset.id, act = b.dataset.act;
+    const fail = err => ({ ok: false, error: err.message });
     if (act === "use") {
       b.textContent = "SWITCHING…";
-      const r = await _llmPost("/api/llm/active", { id });
+      const r = await busy(() => _llmPost("/api/llm/active", { id }).catch(fail));
       if (!r.ok) {
         b.textContent = "REFUSED"; b.title = r.error || "";
         logEvent(`<span class="tag">[llm]</span> ${escapeHTML(r.error || "switch refused")}`, "warn");
@@ -2921,11 +3021,12 @@ function renderModelManager(d, reg) {
       reload();
     } else if (act === "test") {
       b.textContent = "…";
-      await _llmPost(`/api/llm/providers/${encodeURIComponent(id)}/test`);
+      await busy(() => _llmPost(`/api/llm/providers/${encodeURIComponent(id)}/test`).catch(fail));
       reload();
     } else if (act === "del") {
       if (!confirm("Remove this provider? Its stored API key is deleted too.")) return;
-      await _llmPost(`/api/llm/providers/${encodeURIComponent(id)}/delete`);
+      const r = await busy(() => _llmPost(`/api/llm/providers/${encodeURIComponent(id)}/delete`).catch(fail));
+      if (r.ok === false && r.error) logEvent(`<span class="tag">[llm]</span> ${escapeHTML(r.error)}`, "warn");
       reload();
     } else if (act === "edit") {
       const p = provs.find(x => x.id === id) || {};
@@ -2938,7 +3039,9 @@ function renderModelManager(d, reg) {
   body.querySelectorAll(".model-row[data-model]").forEach(r => {
     const pick = async () => {
       r.querySelector(".mr-status").textContent = "SWITCHING…";
-      try { await _llmPost("/api/models/select", { model: r.dataset.model }); await reload(); } catch (e) {}
+      const res = await busy(() => _llmPost("/api/models/select", { model: r.dataset.model }).catch(err => ({ ok: false, error: err.message })));
+      if (!res.ok) logEvent(`<span class="tag">[llm]</span> ${escapeHTML(res.error || "switch refused")}`, "warn");
+      await reload();
     };
     r.addEventListener("click", pick);
     r.addEventListener("keydown", (e) => { if (e.key === "Enter") pick(); });
@@ -3227,16 +3330,21 @@ $("#note-add-form")?.addEventListener("submit", async (e) => {
   if (!text) return;
   inp.value = "";
   try {
-    await fetch("/api/notes", { method: "POST",
+    const r = await (await fetch("/api/notes", { method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text }) });
+      body: JSON.stringify({ text }) })).json();
+    if (!r.ok) { inp.value = text; logEvent(`<span class="tag">[notes]</span> note not saved`, "warn"); }
     refreshNotes();
-  } catch (e2) {}
+  } catch (e2) { inp.value = text; logEvent(`<span class="tag">[notes]</span> note not saved: ${escapeHTML(e2.message)}`, "warn"); }
 });
 $("#notes-list")?.addEventListener("click", async (e) => {
   const del = e.target.closest(".note-del"); if (!del) return;
   const id = del.closest(".note")?.dataset.id; if (!id) return;
-  try { await fetch(`/api/notes/${id}`, { method: "DELETE" }); refreshNotes(); } catch (e2) {}
+  try {
+    const r = await (await fetch(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" })).json();
+    if (!r.ok && r.error) logEvent(`<span class="tag">[notes]</span> ${escapeHTML(r.error)}`, "warn");
+    refreshNotes();
+  } catch (e2) {}
 });
 
 /* — service grid: real health of every integration — */
@@ -3371,6 +3479,12 @@ function connect() {
     logEvent('<span class="tag">[net]</span> uplink established');
     refreshPills();
     setPill("#sp-voice", "OFF", "warn");
+    // broadcasts sent while the link was down are lost: re-read the shared settings once
+    if (window._wsWasUp) {
+      try { ConversationMode.load(); MicMode.load(); AudioCtl.load(); onBrainChanged(true); } catch (e) {}
+      ["notes", "productivity", "enterprise", "decisions"].forEach(uiSyncRun);
+    }
+    window._wsWasUp = true;
   };
   ws.onclose = () => {
     logEvent('<span class="tag">[net]</span> uplink lost — reconnecting', "warn");
@@ -3405,7 +3519,8 @@ function handle(msg) {
       break;
     case "micmode":
       MicMode.set(msg.mode, msg.armed, msg.status);
-      if (msg.source === "voice") logEvent(`<span class="tag">[voice]</span> microphone mode → ${escapeHTML(msg.mode.toUpperCase())} (by voice)`);
+      if (msg.source === "voice" || msg.source === "command")
+        logEvent(`<span class="tag">[voice]</span> microphone mode → ${escapeHTML(msg.mode.toUpperCase())} (by ${msg.source})`);
       break;
     case "dev":
     case "dev-open":
@@ -3543,8 +3658,12 @@ function handle(msg) {
     case "memory-updated":                  // operator memory changed on disk
       try { refreshMemory(); } catch (e) {}
       break;
-    case "models-updated":                  // brain/model switched
-      try { pollServiceGrid(); refreshLocalAI(); } catch (e) {}
+    case "models-updated":                  // brain/model/provider switched (any tab, voice or command)
+      onBrainChanged();
+      try { window.dispatchEvent(new CustomEvent("bucs:sync", { detail: { topic: "models" } })); } catch (e) {}
+      break;
+    case "sync":                            // a shared setting changed (server-side, any tab)
+      uiSyncRun(msg.topic);
       break;
     case "web3":                            // web3 module toggled
       try { refreshWeb3(); } catch (e) {}
@@ -3722,9 +3841,9 @@ async function refreshRouter() {
 $("#rt-provs")?.addEventListener("click", async (e) => {
   const b = e.target.closest(".rt-prov"); if (!b || b.classList.contains("on")) return;
   b.textContent = "…";
-  const r = await _licPost("/api/llm/active", { id: b.dataset.id });
+  const r = await _licPost("/api/llm/active", { id: b.dataset.id }).catch(err => ({ ok: false, error: err.message }));
   if (!r.ok) logEvent(`<span class="tag">[llm]</span> ${escapeHTML(r.error || "switch refused")}`, "warn");
-  refreshRouter();
+  if (r.ok) onBrainChanged(); else refreshRouter();       // every brain display, not just this card
 });
 $("#rt-open")?.addEventListener("click", () => openModelManager());
 refreshRouter(); setInterval(refreshRouter, 15000);
@@ -4161,11 +4280,19 @@ const AudioCtl = {
     } catch (e) {}
     this.paint();
   },
+  _seq: 0,
   async push(body) {
+    const seq = ++this._seq;                     // slider drags send many; only the newest answer paints
     try {
-      await fetch("/api/audio", { method: "POST",
-        headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    } catch (e) {}
+      const d = await (await fetch("/api/audio", { method: "POST",
+        headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json();
+      if (seq !== this._seq) return;
+      if (d && d.ok) { this.muted = !!d.muted; this.volume = d.volume ?? this.volume; this.paint(); }
+      else this.load();
+    } catch (e) {
+      logEvent(`<span class="tag">[audio]</span> audio setting not saved: ${escapeHTML(e.message)}`, "warn");
+      this.load();
+    }
   },
   async toggleMute() {
     this.muted = !this.muted;
@@ -4293,12 +4420,15 @@ async function refreshRoadmap() {
 refreshRoadmap(); setInterval(refreshRoadmap, 120000);
 
 // ── local AI control center ──────────────────────────
+let _laiSeq = 0;
 async function refreshLocalAI() {
+  const seq = ++_laiSeq;
   try {
     const [models, stats] = await Promise.all([
-      (await fetch("/api/models")).json(),
-      (await fetch("/api/models/stats")).json(),
+      fetch("/api/models").then(r => r.json()),
+      fetch("/api/models/stats").then(r => r.json()),
     ]);
+    if (seq !== _laiSeq) return;                 // a newer refresh (e.g. after a switch) already won
     const act = $("#lai-active");
     if (act) act.textContent = (models.active_brain || "—").toUpperCase();
     const perf = stats.perf || {};
@@ -4323,7 +4453,9 @@ async function refreshLocalAI() {
                     ...(models.local || [])];
       host.innerHTML = rows.map(m => {
         const isClaude = m.name === "claude";
-        const activeNow = isClaude ? !models.force_local
+        // a custom / smart provider answers even with force_local off → then neither row is active
+        const viaProvider = /^(provider:|smart$)/.test(models.active_brain || "");
+        const activeNow = isClaude ? (!models.force_local && !viaProvider)
                                    : (models.force_local && m.name === models.selected);
         const spec = isClaude ? "ANTHROPIC · CLOUD"
           : [m.param_size, m.quant, m.size_gb ? m.size_gb + "GB" : null].filter(Boolean).join(" · ");
@@ -4337,11 +4469,13 @@ async function refreshLocalAI() {
         const pick = async () => {
           el.style.opacity = "0.5";
           try {
-            await fetch("/api/models/select", { method: "POST",
+            const r = await (await fetch("/api/models/select", { method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ model: el.dataset.model }) });
-          } catch (e) {}
-          refreshLocalAI();
+              body: JSON.stringify({ model: el.dataset.model }) })).json();
+            if (!r.ok) logEvent(`<span class="tag">[llm]</span> ${escapeHTML(r.error || "switch refused")}`, "warn");
+            else if (r.endpoint_ok === false) logEvent(`<span class="tag">[llm]</span> ${escapeHTML(el.dataset.model)} selected, but the Ollama endpoint did not answer`, "warn");
+          } catch (e) { logEvent(`<span class="tag">[llm]</span> switch failed: ${escapeHTML(e.message)}`, "warn"); }
+          onBrainChanged();
         };
         el.addEventListener("click", pick);
         el.addEventListener("keydown", (e) => { if (e.key === "Enter") pick(); });
@@ -4377,7 +4511,7 @@ async function refreshCluster() {
           if (r.ok) logEvent(`<span class="tag">[cluster]</span> inference routed ${r.remote ? "to " + escapeHTML(String(r.node)) : "back to local"}`);
           else if (r.error) logEvent(`<span class="tag">[cluster]</span> ${escapeHTML(r.error)}`, "warn");
         } catch (e) {}
-        refreshCluster(); refreshLocalAI();
+        onBrainChanged();
       });
     });
   } catch (e) {}
@@ -5655,10 +5789,14 @@ const TimeModule = (() => {
   const KEY = "bucs.timezones";
   const DEFAULT_ZONES = ["UTC", "Europe/London", "America/New_York", "Asia/Tokyo"];
   const localTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "local"; } catch (e) { return "local"; } })();
-  let zones = DEFAULT_ZONES.slice();
-  try { const z = JSON.parse(localStorage.getItem(KEY) || "null"); if (Array.isArray(z)) zones = z.filter(x => typeof x === "string").slice(0, 8); } catch (e) {}
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(zones)); } catch (e) {} };
+  const CLOCK_KEY = "bucs.clock";           // stopwatch + timer + last tab survive a reload
   const validTz = (tz) => { try { new Intl.DateTimeFormat("en-GB", { timeZone: tz }); return true; } catch (e) { return false; } };
+  let zones = DEFAULT_ZONES.slice();
+  const loadZones = () => {
+    try { const z = JSON.parse(localStorage.getItem(KEY) || "null"); if (Array.isArray(z)) zones = z.filter(x => typeof x === "string" && validTz(x)).slice(0, 8); } catch (e) {}
+  };
+  loadZones();
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(zones)); } catch (e) {} };
   const fmt = (d, tz, opt) => { try { return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz, ...(opt || {}) }); } catch (e) { return "--:--"; } };
   const tzShort = (tz) => { try { return new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" }).formatToParts(new Date()).find(p => p.type === "timeZoneName").value; } catch (e) { return tz; } };
   const label = (tz) => tz === "UTC" ? "UTC" : tz.split("/").pop().replace(/_/g, " ");
@@ -5693,6 +5831,19 @@ const TimeModule = (() => {
   // timer + stopwatch keep running while the popover is closed
   const sw = { start: 0, acc: 0, running: false };
   const tm = { end: 0, running: false, total: 0 };
+  let mode = "sw";
+  const num = v => (typeof v === "number" && isFinite(v) && v >= 0 ? v : 0);
+  const loadClock = () => {
+    try {
+      const c = JSON.parse(localStorage.getItem(CLOCK_KEY) || "null");
+      if (!c || typeof c !== "object") return;
+      if (c.sw) Object.assign(sw, { start: num(c.sw.start), acc: num(c.sw.acc), running: !!c.sw.running });
+      if (c.tm) Object.assign(tm, { end: num(c.tm.end), total: num(c.tm.total), running: !!c.tm.running });
+      if (c.mode === "sw" || c.mode === "tm") mode = c.mode;
+    } catch (e) {}
+  };
+  loadClock();
+  const saveClock = () => { try { localStorage.setItem(CLOCK_KEY, JSON.stringify({ sw, tm, mode })); } catch (e) {} };
   const two = n => String(n).padStart(2, "0");
   const dur = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${s >= 3600 ? Math.floor(s / 3600) + ":" : ""}${two(Math.floor(s / 60) % 60)}:${two(s % 60)}`; };
   const swMs = () => sw.acc + (sw.running ? Date.now() - sw.start : 0);
@@ -5707,7 +5858,7 @@ const TimeModule = (() => {
 
   const pop = () => document.getElementById("time-pop");
   const btn = () => document.getElementById("time-mod");
-  let open = false, mode = "sw";
+  let open = false;
 
   function tick() {
     const now = new Date();
@@ -5715,7 +5866,7 @@ const TimeModule = (() => {
     if (r) r.setAttribute("stroke-dasharray", `${now.getSeconds() + 1} 60`);
     const z = document.getElementById("tm-tz"); if (z && z.textContent === "—") z.textContent = tzShort(localTz);
     if (tm.running && Date.now() >= tm.end) {
-      tm.running = false; beep();
+      tm.running = false; saveClock(); beep();
       try { logEvent(`<span class="tag">[timer]</span> ${dur(tm.total)} timer finished`, "warn"); } catch (e) {}
       btn()?.classList.add("tm-done"); setTimeout(() => btn()?.classList.remove("tm-done"), 6000);
     }
@@ -5806,11 +5957,12 @@ const TimeModule = (() => {
       if (t.closest("[data-tp-close]")) return show(false);
       const rm = t.closest("[data-tp-rm]"); if (rm) { zones = zones.filter(z => z !== rm.dataset.tpRm); save(); return render(); }
       if (t.closest("[data-tp-reset]")) { zones = DEFAULT_ZONES.slice(); save(); return render(); }
-      const md = t.closest("[data-tp-mode]"); if (md) { mode = md.dataset.tpMode; return render(); }
+      const md = t.closest("[data-tp-mode]"); if (md) { mode = md.dataset.tpMode; saveClock(); return render(); }
       const s = t.closest("[data-tp-sw]");
       if (s) {
         if (s.dataset.tpSw === "toggle") { if (sw.running) { sw.acc += Date.now() - sw.start; sw.running = false; } else { sw.start = Date.now(); sw.running = true; } }
         else { sw.acc = 0; sw.running = false; }
+        saveClock();
         return render();
       }
       const tt = t.closest("[data-tp-tm]");
@@ -5819,6 +5971,7 @@ const TimeModule = (() => {
           const m = Math.max(1, Math.min(600, parseInt(document.getElementById("tp-tm-min")?.value, 10) || 0));
           tm.total = m * 6e4; tm.end = Date.now() + tm.total; tm.running = true;
         } else { tm.running = false; }
+        saveClock();
         return render();
       }
       const j = t.closest("[data-tp-jump]"); if (j) { show(false); try { bucsJump(j.dataset.tpJump); } catch (e2) {} }
@@ -5833,6 +5986,11 @@ const TimeModule = (() => {
       if (zones.includes(tz)) { if (err) err.textContent = "already in the list"; return; }
       if (zones.length >= 8) { if (err) err.textContent = "up to 8 zones"; return; }
       zones.push(tz); save(); render();
+    });
+    // another open tab changed the zones / stopwatch / timer: follow it
+    window.addEventListener("storage", (e) => {
+      if (e.key === KEY) { loadZones(); if (open) render(); }
+      else if (e.key === CLOCK_KEY) { loadClock(); if (open) render(); }
     });
     setInterval(tick, 1000); tick();
   }

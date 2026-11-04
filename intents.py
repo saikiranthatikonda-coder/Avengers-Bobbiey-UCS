@@ -59,7 +59,89 @@ async def i_conversation(ctx, text, low):
               action={"name": "voice.conversation_mode", "target": "on" if on else "off"})
 
 
-_DEV_VERB = r"\b(fix|debug|troubleshoot|diagnose|repair|investigate|not (working|showing|loading|updating|responding)|isn't (working|showing|loading)|doesn't (work|show|load)|won't (work|show|load|open)|broken|error|bug|crash(es|ing)?|implement|add (a |an )?(new )?(feature|panel|section|button|widget)|remove (the )?.{0,30}(section|panel|button|widget))\b"
+async def i_micmode(ctx, text, low):
+    """Typed (command bar) or engine-routed "Jarvis, mic off" / "go to sleep" / "wake up".
+    Spoken ones are already switched inside voice.py before they reach the engine; both
+    paths end in VoiceLoop.set_mic_mode, which persists the mode and broadcasts "micmode"."""
+    from voice import mic_command
+    want = mic_command(text)
+    if not want:
+        return None
+    rest = re.sub(r"\b(hey |ok |okay )?jarvis\b[,.!]*", " ", low).strip(" .!,?")
+    if len(rest.split()) > 5:                      # a sentence that merely contains "wake up"
+        return None
+    v = ctx.get("voice")
+    if v is None or not hasattr(v, "set_mic_mode"):
+        return _r("Voice input is disabled on this install, sir. Set JARVIS_VOICE=1 to use the microphone.",
+                  action={"name": "voice.mic", "target": want, "ok": False})
+    await v.set_mic_mode(want, source="command")
+    return _r({"on": "Microphone on. I'm listening, sir.",
+               "sleep": "Going to sleep. Say \"Jarvis\" when you need me.",
+               "off": "Microphone off. It's released."}[want],
+              action={"name": "voice.mic", "target": want})
+
+
+_BRAIN_ALIASES = {"claude": "claude", "claude cli": "claude", "claude code": "claude", "cloud": "claude",
+                  "ollama": "ollama", "local": "ollama", "local model": "ollama", "local ai": "ollama",
+                  "llama": "ollama", "auto": "auto", "automatic": "auto", "default": "auto",
+                  "smart": "smart", "smart router": "smart", "router": "smart"}
+_BRAIN_NOUN = r"(?:brain|model|llm|ai|a\.i\.?)"
+_BRAIN_RES = (
+    re.compile(rf"\b(?:switch|change|set)\s+(?:the\s+|your\s+)?{_BRAIN_NOUN}\s+(?:over\s+)?to\s+(.+)$"),
+    re.compile(rf"\b(?:use|switch to)\s+(.+?)\s+(?:as|for)\s+(?:the\s+|your\s+)?{_BRAIN_NOUN}$"),
+    re.compile(r"^(?:(?:hey |ok )?jarvis[, ]+)?switch (?:over )?to (claude|ollama|local|auto|smart)"
+               r"(?: (?:mode|brain|model|router))?$"),
+)
+
+
+async def i_brain(ctx, text, low):
+    """"Jarvis, switch the brain to Ollama" / "use claude as the model": the same switch as the
+    LLM SWITCH modal (/api/llm/active), so it persists in providers.json and every dashboard
+    updates through the "models-updated" broadcast."""
+    reg = ctx.get("providers")
+    if reg is None:
+        return None
+    clean = low.strip(" .!?")
+    want = None
+    for rx in _BRAIN_RES:
+        m = rx.search(clean)
+        if m:
+            want = re.sub(r"\b(please|now|instead|the|model|brain|provider)\b", " ", m.group(1))
+            want = re.sub(r"\s+", " ", want).strip(" ,.")
+            break
+    if want is None:
+        return None
+    provs = reg.list()
+    pid = _BRAIN_ALIASES.get(want)
+    if pid is None:
+        hit = next((p for p in provs if want in (p["id"].lower(), p["name"].lower())), None) or \
+              next((p for p in provs if p["name"].lower().startswith(want) or p["id"].lower().startswith(want)), None)
+        pid = hit["id"] if hit else None
+    if pid is None or not any(p["id"] == pid for p in provs):
+        names = ", ".join(p["name"].split(" (")[0] for p in provs)
+        return _r(f"I don't have a brain called {want}, sir. Available: {names}.",
+                  action={"name": "brain.switch", "target": want, "ok": False})
+    if (ctx.get("rbac") or {}).get("role", "commander") != "commander":
+        return _r("Switching the brain needs the commander role, sir.",
+                  action={"name": "brain.switch", "target": pid, "ok": False})
+    p = next(p for p in provs if p["id"] == pid)
+    if p.get("locked"):
+        return _r("Cloud brains need a Pro licence on this install, sir. Local models stay free.",
+                  action={"name": "brain.switch", "target": pid, "ok": False})
+    if p.get("active"):
+        return _r(f"{p['name'].split(' (')[0]} is already the active brain, sir.",
+                  action={"name": "brain.switch", "target": pid})
+    res = reg.set_active(pid)
+    if not res.get("ok"):
+        return _r(f"I couldn't switch the brain: {res.get('error', 'refused')}.",
+                  action={"name": "brain.switch", "target": pid, "ok": False})
+    return _r(f"Switched the brain to {p['name'].split(' (')[0]}, sir.",
+              ui=[{"type": "models-updated"},
+                  {"type": "log", "level": "info", "msg": f"brain switched → {pid} (by command)"}],
+              action={"name": "brain.switch", "target": pid})
+
+
+_DEV_VERB =r"\b(fix|debug|troubleshoot|diagnose|repair|investigate|not (working|showing|loading|updating|responding)|isn't (working|showing|loading)|doesn't (work|show|load)|won't (work|show|load|open)|broken|error|bug|crash(es|ing)?|implement|add (a |an )?(new )?(feature|panel|section|button|widget)|remove (the )?.{0,30}(section|panel|button|widget))\b"
 _DEV_SUBJECT = r"\b(bucs|ucs|dashboard|panel|section|button|tile|widget|orb|agenda|inbox|calendar|news|feed|digest|vision|voice|mic|jarvis|agent|map|globe|ui|page|screen|icon|code|feature|server|engine|console|weather|network|fleet)\b"
 
 
@@ -343,7 +425,7 @@ async def i_dashboard(ctx, text, low):
 
 # order matters: actions that start with "open" (apps, sites) before dashboard
 # sections, specific questions before broad ones
-HANDLERS = [i_conversation, i_dev, i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
+HANDLERS = [i_conversation, i_micmode, i_brain, i_dev, i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
             i_inbox, i_threats, i_news, i_memory, i_vision, i_missions, i_dashboard]
 
 

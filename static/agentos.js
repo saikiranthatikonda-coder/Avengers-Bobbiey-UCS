@@ -22,6 +22,8 @@
   const TABS = [["models", "MODELS & ROUTING"], ["tools", "TOOLS"], ["memory", "MEMORY"], ["studio", "AGENTS & WORKFLOWS"],
     ["market", "MARKETPLACE"], ["integrations", "INTEGRATIONS"]];
   let data = null, tab = "models", timer = null, editingAgent = null, editingWf = null, staged = null;
+  // unsaved operator edits: polling (and other tabs' changes) must not overwrite them
+  let routingDirty = false, foldersDirty = false;
   try { tab = localStorage.getItem("ao-tab") || "models"; } catch (e) {}
 
   mount.innerHTML = `
@@ -44,7 +46,7 @@
         <div>
           <div class="intel-divider">ROUTING POLICY</div>
           <div class="ao-row"><select id="ao-policy" class="ao-in"></select>
-            <button class="cmd-btn" type="button" data-act="save-routing">SAVE</button></div>
+            <button class="cmd-btn" type="button" data-act="save-routing">SAVE</button><span class="ao-dim" id="ao-routing-state"></span></div>
           <div class="ao-note" id="ao-smart"></div>
           <details class="ao-det"><summary>PER-TASK PINS (operator override)</summary><div id="ao-pins" class="ao-pins"></div></details>
           <div class="intel-divider">TEST CONSOLE · ROUTED, REAL CALL</div>
@@ -187,15 +189,31 @@
       pol.innerHTML = Object.entries(d.policies).map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join("");
       $a("ao-tpolicy").innerHTML += Object.entries(d.policies).map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join("");
       $a("ao-task").innerHTML += Object.entries(d.tasks).map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join("");
-      pol.value = d.routing.policy;
     }
     const models = ((d.providers && d.providers.providers) || []).flatMap((p) => p.models.filter((m) => m.caps.includes("chat")));
     const pinsEl = $a("ao-pins");
-    if (!pinsEl.dataset.built || pinsEl.dataset.n !== String(models.length)) {
+    const sig = models.map((m) => m.id).join("|");
+    if (!pinsEl.dataset.built || pinsEl.dataset.sig !== sig) {
+      const keep = {};                                   // unsaved pin choices survive a rebuild
+      if (routingDirty) pinsEl.querySelectorAll("[data-pin]").forEach((s) => { keep[s.dataset.pin] = s.value; });
+      const cur = routingDirty ? keep : (d.routing.pins || {});
       pinsEl.innerHTML = Object.entries(d.tasks).map(([k, l]) => `<label>${esc(l)}<select class="ao-in" data-pin="${esc(k)}"><option value="">auto</option>
-        ${models.map((m) => `<option value="${esc(m.id)}" ${d.routing.pins[k] === m.id ? "selected" : ""}>${esc(m.id)}</option>`).join("")}</select></label>`).join("");
-      pinsEl.dataset.built = "1"; pinsEl.dataset.n = String(models.length);
+        ${models.map((m) => `<option value="${esc(m.id)}" ${cur[k] === m.id ? "selected" : ""}>${esc(m.id)}</option>`).join("")}
+        ${cur[k] && !models.some((m) => m.id === cur[k]) ? `<option value="${esc(cur[k])}" selected>${esc(cur[k])} (not available now)</option>` : ""}</select></label>`).join("");
+      pinsEl.dataset.built = "1"; pinsEl.dataset.sig = sig;
     }
+    // mirror the SAVED routing (changed here, in another tab or by voice) unless mid-edit
+    if (!routingDirty) {
+      if (document.activeElement !== pol) pol.value = d.routing.policy;
+      pinsEl.querySelectorAll("[data-pin]").forEach((s) => {
+        if (document.activeElement === s) return;
+        const want = (d.routing.pins || {})[s.dataset.pin] || "";
+        if (want && ![...s.options].some((o) => o.value === want))
+          s.insertAdjacentHTML("beforeend", `<option value="${esc(want)}">${esc(want)} (not available now)</option>`);
+        s.value = want;
+      });
+    }
+    $a("ao-routing-state").textContent = routingDirty ? "unsaved — press SAVE" : "";
     $a("ao-smart").innerHTML = d.smart_active
       ? `<span class="ao-good">●</span> All BUCS agent replies route through this router (AI BRAIN ROUTER → Smart router).`
       : `Agent replies use the AI BRAIN ROUTER card's choice. <button class="ao-mini" type="button" data-act="smart-on">ROUTE ALL REPLIES HERE</button>`
@@ -225,7 +243,7 @@
       <div class="ao-dim">${esc(t.description)}</div>
       <div class="ao-toolrun" data-tool-run="${esc(t.name)}" hidden></div></div>`).join("") || `<div class="tf-empty">no tools</div>`;
     const fEl = $a("ao-folders");
-    if (document.activeElement !== fEl) fEl.value = (d.folders || []).slice(1).join("\n");
+    if (document.activeElement !== fEl && !foldersDirty) fEl.value = (d.folders || []).slice(1).join("\n");
     fEl.placeholder = `always: ${(d.folders || [""])[0]}\n+ one folder per line (host machine only)`;
     $a("ao-toollog").innerHTML = (d.tool_log || []).length ? d.tool_log.map((l) => `<div class="ao-hrow"><span class="ao-dim">${ago(l.ts)}</span>
       <b>${esc(l.tool)}</b><span class="ao-tier ${esc(l.tier)}">${esc(l.tier)}</span><span class="${l.ok ? "ao-good" : "ao-bad"}">${l.ok ? "ok" : "failed"}</span><span class="ao-dim">${esc(l.by)} · ${ms(l.ms)}</span></div>`).join("")
@@ -435,9 +453,13 @@
       case "save-routing": {
         const pins = {};
         mount.querySelectorAll("[data-pin]").forEach((s) => { if (s.value) pins[s.dataset.pin] = s.value; });
-        done(await post("/api/agentos/routing", { policy: $a("ao-policy").value, pins }), "routing saved"); break;
+        el.disabled = true; el.textContent = "SAVING…";
+        const r = await post("/api/agentos/routing", { policy: $a("ao-policy").value, pins });
+        el.disabled = false; el.textContent = "SAVE";
+        if (r && r.ok) routingDirty = false;              // a refused save keeps the edits on screen
+        done(r, "routing saved — the smart router uses it from the next reply"); break;
       }
-      case "smart-on": done(await post("/api/llm/active", { id: "smart" }), "all agent replies now use the smart router"); break;
+      case "smart-on": el.disabled = true; done(await post("/api/llm/active", { id: "smart" }), "all agent replies now use the smart router"); break;
       case "pull": if (confirm(`Download ${el.dataset.model} from the Ollama registry? This can be several GB.`)) done(await post("/api/agentos/ollama/pull", { model: el.dataset.model }), `pulling ${esc(el.dataset.model)}…`); break;
       case "preview": case "run": {
         const prompt = $a("ao-prompt").value.trim();
@@ -477,7 +499,13 @@
         box.querySelector("pre").textContent = JSON.stringify(r.ok ? r.result : r, null, 2).slice(0, 6000);
         refresh(); break;
       }
-      case "save-folders": done(await post("/api/agentos/files", { folders: $a("ao-folders").value.split(/\n/).map((s) => s.trim()).filter(Boolean) }), "approved folders saved"); break;
+      case "save-folders": {
+        el.disabled = true;
+        const r = await post("/api/agentos/files", { folders: $a("ao-folders").value.split(/\n/).map((s) => s.trim()).filter(Boolean) });
+        el.disabled = false;
+        if (r && r.ok) foldersDirty = false;
+        done(r, "approved folders saved"); break;
+      }
       case "msearch": loadMemory(); break;
       case "mimport": { const r = await post("/api/agentos/memory/import"); done(r, r.ok ? "imported " + esc(JSON.stringify(r.imported)) : null); loadMemory(); break; }
       case "madd": {
@@ -552,7 +580,21 @@
     const el = e.target.closest("[data-act]");
     if (el && el.dataset.act !== "toggle-model") act(el);
   });
-  mount.addEventListener("change", (e) => { const el = e.target.closest("[data-act='toggle-model']"); if (el) act(el); });
+  mount.addEventListener("change", (e) => {
+    const el = e.target.closest("[data-act='toggle-model']");
+    if (el) { act(el); return; }
+    if (e.target.id === "ao-policy" || e.target.matches("[data-pin]")) {
+      routingDirty = true; $a("ao-routing-state").textContent = "unsaved — press SAVE";
+    }
+  });
+  mount.addEventListener("input", (e) => { if (e.target.id === "ao-folders") foldersDirty = true; });
+  // the server announces changes from other tabs, voice or the AI BRAIN ROUTER card
+  // ({"type":"sync","topic":"agentos"} / "models-updated"); app.js forwards them as a
+  // "bucs:sync" window event. Until then the 15 s poll below catches them.
+  window.addEventListener("bucs:sync", (e) => {
+    const t = e && e.detail && e.detail.topic;
+    if (t === "agentos" || t === "models") refresh();
+  });
   mount.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.id === "ao-mq") loadMemory();
     if (e.key === "Enter" && e.target.classList.contains("ao-run")) act(e.target);

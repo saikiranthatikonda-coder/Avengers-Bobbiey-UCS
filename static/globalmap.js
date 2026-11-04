@@ -984,6 +984,7 @@
   async function setMode(m) {
     if (m === S.mode) return;
     S.mode = m;
+    if (["2d", "3d", "orbit"].includes(m)) store("mode", m);   // view pref: restored on reload
     mount.querySelectorAll(".gm-modes button").forEach(b => { const on = b.dataset.mode === m; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
     root.dataset.mode = m;
     hideTip();
@@ -1042,23 +1043,26 @@
       o = o || {};
       let it = null;
       if (o.id && S.data) it = S.data.items.find(i => i.id === o.id || i.id === "usgs:" + o.id || String(i.id).endsWith(":" + o.id));
+      // callers outside the map (disaster "SHOW ON MAP", threat cards) pass their own layer names
+      // ("disaster", "threats"): only a real map layer may narrow the proximity match
+      const known = !!o.layer && LAYERS.some(l => l[0] === o.layer);
       if (!it && o.lat != null && o.lon != null && S.data) {
-        it = S.data.items.filter(i => (!o.layer || i.layer === o.layer) && km(i.lat, i.lon, o.lat, o.lon) < 30)
+        it = S.data.items.filter(i => (!known || i.layer === o.layer) && km(i.lat, i.lon, o.lat, o.lon) < 30)
           .sort((a, b) => km(a.lat, a.lon, o.lat, o.lon) - km(b.lat, b.lon, o.lat, o.lon))[0] || null;
       }
       const lat = it ? it.lat : +o.lat, lon = it ? it.lon : +o.lon;
-      if (it && !S.on[it.layer]) { S.on[it.layer] = true; renderLayers(); invalidate(true); }
+      if (it && !S.on[it.layer]) { S.on[it.layer] = true; store("layers", S.on); renderLayers(); invalidate(true); }
       const r = mount.getBoundingClientRect();
       if (r.bottom < 0 || r.top > innerHeight) mount.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
       if (S.replay != null) setReplay(0);
       if (isFinite(lat) && isFinite(lon)) zoomTo(lat, lon, 4.5);
-      if (it) select({ kind: "item", it }); else if (o.layer) api.highlight(o.layer);
+      if (it) select({ kind: "item", it }); else if (known) api.highlight(o.layer);
       if (G) syncGlobe();
       return !!it || (isFinite(lat) && isFinite(lon));
     },
     highlight(layer) {
       if (!LAYERS.some(l => l[0] === layer)) return false;
-      if (!S.on[layer]) { S.on[layer] = true; if (layer === "flights") pollFlights(); if (layer === "satellites") pollSats(); }
+      if (!S.on[layer]) { S.on[layer] = true; store("layers", S.on); if (layer === "flights") pollFlights(); if (layer === "satellites") pollSats(); }
       S.hl = layer; S.hlUntil = nowS() + 6;
       renderLayers(); invalidate(true);
       setTimeout(() => { if (S.hlUntil <= nowS() + 0.1) { S.hl = null; renderLayers(); invalidate(true); } }, 6100);
@@ -1086,6 +1090,8 @@
     await Promise.all([pollSummary(), locate(), pollFleet()]);
     pollFlights(); pollSats();
     renderHist(); invalidate(true);
+    const m = store("mode");                       // remembered 2D / 3D / ORBITAL view
+    if (m === "3d" || m === "orbit") setMode(m);
   })();
   setInterval(pollSummary, 60000);
   setInterval(pollFlights, 60000);

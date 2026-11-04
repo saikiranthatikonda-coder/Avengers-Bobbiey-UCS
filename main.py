@@ -741,6 +741,7 @@ async def profile_save(req: ProfileReq):
     res = state["commander"].save(req.content, mode="append" if req.mode == "append" else "replace")
     if res.get("ok"):
         await _audit("memory.profile", f"{req.mode}: {res['chars']:,} chars, {res['sections']} sections")
+        await _sync("profile")
     return res
 
 
@@ -750,6 +751,7 @@ async def profile_clear():
         return _locked()
     state["commander"].clear()
     await _audit("memory.profile", "cleared")
+    await _sync("profile")
     return {"ok": True}
 
 
@@ -787,6 +789,7 @@ async def llm_provider_save(req: ProviderReq):
     res = state["providers"].upsert(req.name, req.base_url, req.model, req.api_key, req.id)
     if res.get("ok"):
         await _audit("llm.provider", f"saved {res['id']} ({req.base_url})")       # never the key
+        await state["hub"].broadcast({"type": "models-updated"})
     return res
 
 
@@ -795,12 +798,16 @@ async def llm_provider_delete(pid: str):
     if not _commander():
         return _locked()
     await _audit("llm.provider", f"removed {pid}")
-    return state["providers"].remove(pid)
+    res = state["providers"].remove(pid)
+    await state["hub"].broadcast({"type": "models-updated"})   # removing the active one falls back to auto
+    return res
 
 
 @app.post("/api/llm/providers/{pid}/test")
 async def llm_provider_test(pid: str):
-    return await state["providers"].test(pid)
+    res = await state["providers"].test(pid)
+    await state["hub"].broadcast({"type": "models-updated"})   # its health dot changed
+    return res
 
 
 class ActiveReq(BaseModel):
@@ -1357,6 +1364,7 @@ async def notes_add(req: NoteReq):
     notes = _load_notes()
     notes.insert(0, {"id": _uuid.uuid4().hex[:8], "text": text, "ts": _t.time()})
     _save_notes(notes[:30])
+    await _sync("notes")
     return {"ok": True}
 
 
@@ -1366,6 +1374,7 @@ async def notes_delete(note_id: str):
         return _locked()
     notes = [n for n in _load_notes() if n.get("id") != note_id]
     _save_notes(notes)
+    await _sync("notes")
     return {"ok": True}
 
 
@@ -1600,9 +1609,16 @@ async def memory_speak():
 async def models_endpoint():
     llm = state["local_llm"]
     brain = state["brain"]
-    # which brain is actually answering right now
-    active = "local:" + str(llm.model) if getattr(brain, "force_local", False) else \
-             ("claude" if brain.mode == "llm" else brain.mode)
+    # which brain is actually answering right now (provider registry first: a
+    # custom / smart provider answers even though force_local is off)
+    reg = state.get("providers")
+    pname = getattr(brain, "provider_name", None)
+    if pname and reg is not None and reg.active == pname:
+        active = "smart" if pname == "smart" else "provider:" + str(pname)
+    elif getattr(brain, "force_local", False):
+        active = "local:" + str(llm.model)
+    else:
+        active = "claude" if brain.mode == "llm" else brain.mode
     return {
         "local": await llm.list_models(),
         "selected": llm.model,
@@ -1801,6 +1817,14 @@ def _locked() -> dict:
                                   "Switch to COMMANDER to proceed."}
 
 
+async def _sync(topic: str) -> None:
+    """Tell every open dashboard that a shared setting changed, so each one
+    re-reads it through the same refresh function (app.js uiSyncRun)."""
+    hub = state.get("hub")
+    if hub is not None:
+        await hub.broadcast({"type": "sync", "topic": topic})
+
+
 async def _audit(action: str, detail: str = "") -> None:
     a = state.get("audit")
     if a is not None:
@@ -1837,6 +1861,7 @@ async def role_endpoint(req: RoleReq):
     await _audit("role.switch", f"session role → {role}")
     await state["hub"].broadcast({"type": "log", "level": "warn" if role == "observer" else "info",
                                   "msg": f"command session role → {role.upper()}"})
+    await _sync("enterprise")
     return {"ok": True, "role": role}
 
 
@@ -1861,6 +1886,7 @@ async def operators_add(req: OperatorReq):
                 "created": _t.time()})
     _save_operators(ops)
     await _audit("operator.add", f"registered {name} ({req.role})")
+    await _sync("enterprise")
     return {"ok": True, "operators": ops}
 
 
@@ -1904,6 +1930,7 @@ async def operator_switch(req: ActiveOpReq):
     state["rbac"]["operator"] = match["name"]
     state["rbac"]["role"] = match["role"]
     await _audit("operator.switch", f"active operator → {match['name']} ({match['role']})")
+    await _sync("enterprise")
     return {"ok": True, "operator": match["name"], "role": match["role"]}
 
 
@@ -2016,7 +2043,9 @@ async def health_auto(req: AutoReq):
     sh.auto = bool(req.on)
     sh._save()
     await _audit("selfheal.auto", "auto-repair " + ("on" if sh.auto else "off"))
-    return sh.snapshot()
+    snap = sh.snapshot()
+    await state["hub"].broadcast({"type": "selfheal", "overall": snap.get("overall")})
+    return snap
 
 
 @app.post("/api/health/diagnose")
@@ -2101,6 +2130,9 @@ async def license_activate(req: LicenseReq):
         await state["start_runtime"]()            # bring every system online now
     if "audit" in state:
         await _audit("license.activate", "ok" if res.get("ok") else f"refused: {res.get('error', '')[:80]}")
+    if res.get("ok") and "hub" in state:
+        await _sync("licence")
+        await state["hub"].broadcast({"type": "models-updated"})   # cloud brains unlock
     return res
 
 
@@ -2111,6 +2143,8 @@ async def license_deactivate():
     await _audit("license.deactivate", "licence removed from this install")
     res = state["licensing"].deactivate()
     state["providers"]._apply()
+    await _sync("licence")
+    await state["hub"].broadcast({"type": "models-updated"})
     return res
 
 
@@ -2441,6 +2475,7 @@ async def cluster_route(req: ClusterRouteReq):
         llm.remote_node = None
         await llm.probe()
         await _audit("cluster.route", "inference routed back to local endpoint")
+        await state["hub"].broadcast({"type": "models-updated"})
         return {"ok": True, "endpoint": llm.base_url, "remote": False}
     node = next((n for n in state["fleet"].snapshot()["nodes"]
                  if n.get("node_id") == req.node_id), None)
@@ -2457,6 +2492,7 @@ async def cluster_route(req: ClusterRouteReq):
     await _audit("cluster.route", f"inference routed to {node.get('name')} ({llm.base_url})")
     await state["hub"].broadcast({"type": "log", "level": "info",
                                   "msg": f"cluster: brain inference routed to node {node.get('name')}"})
+    await state["hub"].broadcast({"type": "models-updated"})
     return {"ok": True, "endpoint": llm.base_url, "remote": True,
             "node": node.get("name"), "reachable": ok}
 
@@ -2490,6 +2526,7 @@ async def fleet_paircode_rotate():
     except Exception:
         pass
     await _audit("fleet.paircode_rotate", "pairing access code rotated")
+    await _sync("fleet")                        # topic only: each viewer re-reads the code itself
     return {"ok": True, "code": code}
 
 
@@ -2532,14 +2569,18 @@ class DecisionReq(BaseModel):
 async def decisions_execute(req: DecisionReq):
     if not _commander():
         return _locked()
-    return await state["decisions"].execute(req.id, approved_by=state["rbac"]["operator"])
+    res = await state["decisions"].execute(req.id, approved_by=state["rbac"]["operator"])
+    await _sync("decisions")
+    return res
 
 
 @app.post("/api/decisions/dismiss")
 async def decisions_dismiss(req: DecisionReq):
     if not _commander():
         return _locked()
-    return await state["decisions"].dismiss(req.id)
+    res = await state["decisions"].dismiss(req.id)
+    await _sync("decisions")
+    return res
 
 
 class AutonomyReq(BaseModel):
@@ -2550,7 +2591,9 @@ class AutonomyReq(BaseModel):
 async def decisions_autonomy(req: AutonomyReq):
     if not _commander():
         return _locked()
-    return await state["decisions"].set_autonomy(req.on)
+    res = await state["decisions"].set_autonomy(req.on)
+    await _sync("decisions")
+    return res
 
 
 @app.get("/api/roadmap")
@@ -2580,16 +2623,14 @@ async def productivity_post(req: ProdReq):
     if not _commander():
         return _locked()
     p = state["productivity"]
+    acts = {"task": lambda: p.set_task(req.text or ""), "task_done": p.complete_task,
+            "focus_start": p.focus_start, "focus_stop": p.focus_stop}
+    if req.action not in acts:
+        return {"error": f"unknown action: {req.action}"}
     await _audit("productivity." + req.action, (req.text or "")[:60])
-    if req.action == "task":
-        return await p.set_task(req.text or "")
-    if req.action == "task_done":
-        return await p.complete_task()
-    if req.action == "focus_start":
-        return await p.focus_start()
-    if req.action == "focus_stop":
-        return await p.focus_stop()
-    return {"error": f"unknown action: {req.action}"}
+    res = await acts[req.action]()
+    await _sync("productivity")
+    return res
 
 
 @app.get("/api/knowledge/stats")

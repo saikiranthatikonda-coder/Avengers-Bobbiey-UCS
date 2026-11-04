@@ -24,7 +24,8 @@
   const STAGE_TONE = { awaiting_approval: "warn", regressed: "bad", sandbox_failed: "bad", failed: "bad", kept: "good",
     resolved: "good", reverted: "dim", rejected: "dim", dismissed: "dim", evaluating: "live", sandboxing: "live",
     proposing: "live", deploying: "live", reverting: "live" };
-  let data = null, caps = null, timer = null, capsTimer = null, capsIssuesOnly = true;
+  let data = null, caps = null, timer = null, capsTimer = null, capsIssuesOnly = true, setDirty = false;
+  try { capsIssuesOnly = localStorage.getItem("ev-caps-issues") !== "0"; } catch (e) {}   // UI-only view pref
   const open = new Set();
 
   mount.innerHTML = `
@@ -82,10 +83,25 @@
         <span class="ev-legend"><i class="d ok"></i>LOADED <i class="d cf"></i>CONFIGURED <i class="d ts"></i>TESTS</span></div>
       <div class="ev-caps-grid" id="ev-caps"></div>
     </details>
+    <details class="ev-caps" id="ev-set-wrap">
+      <summary>LOOP SETTINGS · <span id="ev-set-sum">—</span></summary>
+      <div class="ev-caps-bar ev-fb" id="ev-set">
+        <label title="Minutes between observe + analyze passes">HEARTBEAT (MIN) <input type="number" id="ev-set-hb" data-k="heartbeat_min" step="1" /></label>
+        <label title="How long a deployed change is measured before KEEP">EVAL WINDOW (MIN) <input type="number" id="ev-set-ev" data-k="eval_window_min" step="1" /></label>
+        <label title="Scheduled unit-test runs (owner machine)" id="ev-set-ts-l">TESTS EVERY (H) <input type="number" id="ev-set-ts" data-k="tests_every_h" step="1" /></label>
+        <button class="cmd-btn" id="ev-set-save" type="button">SAVE</button>
+        <span id="ev-set-msg"></span>
+      </div>
+    </details>
   </div>`;
 
   const post = (u, b) => fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b || {}) })
-    .then((r) => r.json()).catch((e) => ({ ok: false, error: e.message }));
+    .then(async (r) => {
+      let j = {};
+      try { j = await r.json(); } catch (e) {}
+      if (r.ok) return j;
+      return { ...j, ok: false, error: j.error || (typeof j.detail === "string" ? j.detail : "HTTP " + r.status) };
+    }).catch((e) => ({ ok: false, error: e.message }));
 
   // ── loop ring ────────────────────────────────────────────────
   function renderRing(d) {
@@ -224,6 +240,19 @@
       : `<div class="tf-empty">no issues — every capability is loaded and its tests pass</div>`;
   }
 
+  function renderSettings(d) {
+    const s = d.settings || {}, b = d.setting_bounds || {};
+    $e("ev-set-sum").textContent = `HEARTBEAT ${s.heartbeat_min ?? "—"} MIN · EVAL ${s.eval_window_min ?? "—"} MIN` + (d.owner ? ` · TESTS ${s.tests_every_h ?? "—"} H` : "");
+    $e("ev-set-ts-l").hidden = !d.owner;
+    // never clobber what the operator is typing; otherwise show the server's (possibly other-tab) values
+    if (setDirty || $e("ev-set").contains(document.activeElement)) return;
+    $e("ev-set").querySelectorAll("input[data-k]").forEach((inp) => {
+      const k = inp.dataset.k;
+      if (b[k]) { inp.min = b[k][0]; inp.max = b[k][1]; }
+      inp.value = s[k] ?? "";
+    });
+  }
+
   function render(d) {
     if (!d) return;
     data = d;
@@ -231,11 +260,13 @@
     $e("ev-mode").textContent = (d.mode || "").toUpperCase();
     $e("ev-hb").textContent = hb.running ? "RUNNING…" : `#${hb.beats || 0} · ${ago(hb.last)} · NEXT ${hb.next ? ago(hb.next) : "—"}${hb.last_ms != null ? " · " + hb.last_ms + " ms" : ""}${hb.last_error ? " · ERROR" : ""}`;
     const auto = (d.settings || {}).autonomy;
-    $e("ev-auto").textContent = auto === "propose" ? "PROPOSE (APPROVAL-GATED)" : "OBSERVE ONLY";
+    const eff = d.autonomy_effective || (owner ? auto : "observe");      // customer installs never auto-propose
+    $e("ev-auto").textContent = eff === "propose" ? "PROPOSE (APPROVAL-GATED)" : "OBSERVE ONLY";
     const ab = $e("ev-autonomy");
     ab.textContent = auto === "propose" ? "SET: OBSERVE ONLY" : "SET: AUTO-PROPOSE";
     ab.title = auto === "propose" ? "Stop auto-proposing; keep observing + analysing" : "Let the loop hand its top item to engineering (max 1 per 6 h). Deploy still needs your approval.";
     ab.hidden = !owner; $e("ev-tests").hidden = !owner;
+    renderSettings(d);
     renderRing(d);
     // sources
     const src = (d.observe && d.observe.sources) || {};
@@ -285,8 +316,16 @@
   }
 
   async function refresh() {
-    try { render(await (await fetch("/api/evolution", { cache: "no-store" })).json()); }
-    catch (e) { clearTimeout(timer); timer = setTimeout(refresh, 60000); }
+    try {
+      const r = await fetch("/api/evolution", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      render(await r.json());
+      $e("ev-card").classList.remove("is-error");
+    } catch (e) {
+      $e("ev-card").classList.add("is-error");
+      $e("ev-hb").textContent = "UNAVAILABLE (" + (e.message || "error") + ") · RETRYING";
+      clearTimeout(timer); timer = setTimeout(refresh, 60000);
+    }
   }
   async function refreshCaps() {
     try { caps = await (await fetch("/api/evolution/capabilities", { cache: "no-store" })).json(); renderCaps(); } catch (e) {}
@@ -301,12 +340,42 @@
     return r;
   }
   $e("ev-beat").addEventListener("click", (e) => simple(e.currentTarget, "/api/evolution/heartbeat", {}, "heartbeat: observe + analyze pass complete").then(refreshCaps));
-  $e("ev-analyst").addEventListener("click", (e) => { $e("ev-analyst-text").textContent = "Asking the connected AI — it sees only the measured evidence…"; simple(e.currentTarget, "/api/evolution/analyst", {}); });
+  $e("ev-analyst").addEventListener("click", (e) => {
+    const box = $e("ev-analyst-text"), before = box.textContent;
+    box.textContent = "Asking the connected AI — it sees only the measured evidence…";
+    simple(e.currentTarget, "/api/evolution/analyst", {}).then((r) => {
+      // a failed call must not leave "Asking…" on screen; refresh() redraws a previous analysis if one exists
+      if (r.ok === false && box.textContent.startsWith("Asking")) box.textContent = (data && data.analyst && data.analyst.text) ? before : "Analyst unavailable: " + (r.error || "refused");
+    });
+  });
   $e("ev-tests").addEventListener("click", (e) => simple(e.currentTarget, "/api/evolution/tests", {}, "unit-test run started (owner machine)"));
   $e("ev-research").addEventListener("click", (e) => simple(e.currentTarget, "/api/evolution/research", {}, "research mission started"));
   $e("ev-autonomy").addEventListener("click", (e) => simple(e.currentTarget, "/api/evolution/settings",
     { autonomy: (data && data.settings && data.settings.autonomy) === "propose" ? "observe" : "propose" }));
-  $e("ev-caps-issues").addEventListener("change", (e) => { capsIssuesOnly = e.currentTarget.checked; renderCaps(); });
+  $e("ev-caps-issues").checked = capsIssuesOnly;
+  $e("ev-caps-issues").addEventListener("change", (e) => {
+    capsIssuesOnly = e.currentTarget.checked;
+    try { localStorage.setItem("ev-caps-issues", capsIssuesOnly ? "1" : "0"); } catch (err) {}
+    renderCaps();
+  });
+  $e("ev-set").addEventListener("input", () => { setDirty = true; $e("ev-set-msg").textContent = "unsaved"; });
+  $e("ev-set-save").addEventListener("click", async (e) => {
+    const body = {};
+    $e("ev-set").querySelectorAll("input[data-k]").forEach((inp) => {
+      if (inp.closest("[hidden]")) return;
+      const v = parseInt(inp.value, 10);
+      if (Number.isFinite(v)) body[inp.dataset.k] = v;
+    });
+    const btn = e.currentTarget; btn.disabled = true;
+    const r = await post("/api/evolution/settings", body);
+    btn.disabled = false;
+    if (r.ok === false) { $e("ev-set-msg").textContent = r.error || "refused"; log(esc(r.error || "refused"), "warn"); return; }
+    setDirty = false;
+    $e("ev-set-msg").textContent = "saved";
+    log("loop settings saved");
+    refresh();
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
   $e("ev-caps-wrap").addEventListener("toggle", (e) => { if (e.currentTarget.open) refreshCaps(); });
 
   mount.addEventListener("click", async (e) => {

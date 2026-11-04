@@ -231,11 +231,11 @@ class ThreatEngine:
             "ai": min(100, round(max(0, 100 - avg_conf) * 2)),
             "resource": min(100, round(max(0, cpu - 60) * 0.9
                                        + max(0, mem - 70) * 1.1)),
-            "security": min(100, round(6 + recent("external") * 2.5)),
+            "security": min(100, round(6 + recent("external") * 2.5 + recent("cyber") * 8)),
         }
         # what each domain score is made of (shown in the dashboard detail view)
-        cat_for = {"operational": "operations", "infrastructure": "system", "network": "network",
-                   "ai": "ai", "resource": "system", "security": "external"}
+        cat_for = {"operational": ("operations",), "infrastructure": ("system",), "network": ("network",),
+                   "ai": ("ai",), "resource": ("system",), "security": ("external", "cyber")}
         basis = {
             "operational": f"calendar conflicts {intel.get('conflicts', 0)}, day density "
                            f"{intel.get('density') or 'n/a'}, operations incidents (30 min)",
@@ -243,13 +243,13 @@ class ThreatEngine:
             "network": "network incidents in the last 30 min",
             "ai": f"average agent confidence {avg_conf:.0f}%",
             "resource": f"CPU {cpu:.0f}% (counts above 60%), memory {mem:.0f}% (counts above 70%)",
-            "security": "security headlines from the news feed (30 min)",
+            "security": "cyber-analyst findings (critical/high) + security headlines from the news feed (30 min)",
         }
         out = {}
         for k, v in domains.items():
             prev = self._prev_matrix.get(k, v)
             signals = sum(1 for ev in self.events
-                          if ev["category"] == cat_for[k] and now - ev["ts"] <= 1800)
+                          if ev["category"] in cat_for[k] and now - ev["ts"] <= 1800)
             out[k] = {"score": v,
                       "trend": "up" if v > prev + 2 else "down" if v < prev - 2 else "flat",
                       "signals": signals, "basis": basis[k]}

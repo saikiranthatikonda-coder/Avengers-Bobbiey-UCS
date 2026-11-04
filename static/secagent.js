@@ -247,7 +247,7 @@
     if (el.dataset.toggle) { const id = el.dataset.toggle; open.has(id) ? open.delete(id) : open.add(id); renderList(); return; }
     if (el.dataset.filter) { filter = filter === el.dataset.filter ? null : el.dataset.filter; render(data); return; }
     if (el.dataset.propose) {
-      el.disabled = true; el.textContent = "SENDING…";
+      const lab = el.textContent; el.disabled = true; el.textContent = "SENDING…";
       const r = await post("/api/secagent/propose", { id: el.dataset.propose });
       if (r.ok === false) {
         log(esc(r.error || "proposal refused"), "warn");
@@ -260,7 +260,7 @@
         if (panel) panel.hidden = false;
         log("engineering agent offline: fix task pre-filled in the ENGINEERING panel. Press send to request a proposal", "warn");
       }
-      el.textContent = "PROPOSE FIX"; el.disabled = false; refresh(); return;
+      el.textContent = lab; el.disabled = false; refresh(); return;
     }
     if (el.dataset.accept || el.dataset.acceptRule) {
       const id = el.dataset.accept || el.dataset.acceptRule, rule = !!el.dataset.acceptRule;

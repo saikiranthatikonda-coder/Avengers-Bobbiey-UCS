@@ -1086,8 +1086,27 @@ class SecAgent:
                     await hub.broadcast({"type": "secagent", "score": sc, "counts": c})
                 except Exception:
                     pass
+            await self._to_threat_feed(act)
             return {"ok": True, "kind": kind, "score": sc, "counts": c, "new": self.last_new,
                     "resolved": self.last_resolved, "errors": errors, "duration": round(_now() - t0, 1)}
+
+    async def _to_threat_feed(self, act: list[dict]) -> None:
+        """NEW critical/high findings also become incidents in the core THREAT INTELLIGENCE feed
+        (threat-event broadcast + /api/threats + risk score), so the threat cards agree with the
+        analyst. Accepted risks never do; each finding fires at most once a day; max 3 per scan."""
+        te = self.state.get("threats")
+        add = getattr(te, "_add", None)
+        if add is None:
+            return
+        new = set(self.last_new)
+        hot = [f for f in act if f["id"] in new and f["severity"] in ("critical", "high")][:3]
+        for f in hot:
+            try:
+                await add("cyber", f["severity"], f"Cyber analyst: {f['title']}"[:120],
+                          detail=f"{f.get('evidence', '')} · fix: {f.get('fix', '')}"[:240],
+                          dedupe_key=f"secagent:{f['id']}", cooldown=24 * 3600)
+            except Exception:
+                pass
 
     def find(self, fid: str) -> dict | None:
         return next((f for f in self.all_findings() if f["id"] == fid), None)

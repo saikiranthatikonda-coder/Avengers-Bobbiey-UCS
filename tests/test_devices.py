@@ -228,6 +228,57 @@ class Api(unittest.TestCase):
         self.assertIn("offline", st["detail"])
 
 
+    def test_discovery_added_flag_follows_add_and_remove(self):
+        devices._discovery["items"] = [{"kind": "wled", "host": "192.168.1.40", "name": "strip", "via": "mDNS",
+                                        "label": "WLED", "added": False, "addable": True}]
+        try:
+            self.assertFalse(self.c.get("/api/devices").json()["discovery"]["items"][0]["added"])
+            did = self.c.post("/api/devices", json={"kind": "wled", "host": "192.168.1.40"}).json()["device"]["id"]
+            self.assertTrue(self.c.get("/api/devices").json()["discovery"]["items"][0]["added"])
+            self.assertTrue(self.c.post(f"/api/devices/{did}/remove").json()["ok"])
+            self.assertFalse(self.c.get("/api/devices").json()["discovery"]["items"][0]["added"])
+        finally:
+            devices._discovery["items"] = []
+
+
+class FleetCounts(unittest.TestCase):
+    def test_connectivity_fleet_counts_are_live_not_cached(self):
+        class Fleet:
+            online = 1
+
+            def snapshot(self):
+                return {"aggregate": {"nodes": 3, "online": self.online}}
+        fleet = Fleet()
+
+        async def gather(f=None):
+            return {"methods": [], "at": 0, "fleet": {"nodes": 3, "online": f.online}}
+        with mock.patch.object(devices_link, "gather", gather),                 mock.patch.dict(devices._conn, {"data": None, "at": 0.0}):
+            self.assertEqual(run(devices.connectivity_snapshot({"fleet": fleet}))["fleet"]["online"], 1)
+            fleet.online = 3                                       # a node came online; probes still cached
+            self.assertEqual(run(devices.connectivity_snapshot({"fleet": fleet}))["fleet"]["online"], 3)
+
+
+class RealServerPersistence(unittest.TestCase):
+    """Real app (IsolatedServer, temp data dir): an added device and a secagent accepted-risk rule
+    survive a restart, and the token never comes back unmasked."""
+
+    def test_device_and_accepted_rule_survive_restart(self):
+        from harness import IsolatedServer
+        srv = IsolatedServer().start(timeout=180)
+        try:
+            r = srv.post("/api/devices", {"kind": "wled", "host": "192.168.250.250", "name": "Desk strip"})
+            self.assertTrue(r["ok"], r)
+            did = r["device"]["id"]
+            r = srv.post("/api/secagent/accept", {"id": "lan_listeners", "scope": "rule", "note": "lab"})
+            self.assertTrue(r["ok"], r)
+            srv.restart(timeout=180)
+            devs = srv.get("/api/devices")["devices"]
+            self.assertEqual([(d["id"], d["name"]) for d in devs], [(did, "Desk strip")])
+            self.assertIn("lan_listeners", srv.get("/api/secagent")["accepted_rules"])
+        finally:
+            srv.stop()
+
+
 class Discovery(unittest.TestCase):
     @staticmethod
     def _rr(name, rtype, rdata):
