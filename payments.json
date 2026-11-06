@@ -1,0 +1,14 @@
+{
+  "_readme": "UPI payments for BUCS Pro. The website shows one pre-generated QR per plan (docs/pay/, made with tools/make_upi_qr.py, which takes the UPI ID on the command line so it is never stored as text). Buyers send their UTR + install ID to contact_email; you issue the key in LICENSE -> ISSUE KEY.",
+  "method": "upi",
+  "qr": {
+    "12": "pay/bucs-12m.png",
+    "1": "pay/bucs-1m.png"
+  },
+  "contact_email": "srisaikiranthatikonda@gmail.com",
+  "currency": "INR",
+  "prices": {
+    "1": 149,
+    "12": 1499
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "bucs-release",
+  "version": "8.2.1",
+  "date": "2026-11-06",
+  "commit": "ed14388",
+  "notes": [
+    "v8.2.1: desktop installer build fix (macOS build image updated). Same features as v8.2.0."
+  ],
+  "url": "releases/bucs-8.2.1.zip",
+  "sha256": "da184eed549da685c3741b5339806ddd9fced213cf9f98f5b18e7c475256dc2f",
+  "size": 825105,
+  "sig": "PQGATZDD22Im7JXR1sSbBSS2MCQuEP5Z9k2zVFJGE7jv-Iwj3zmuKe75PoN6KnOOD5nEHvo8OyzH8opnSey3AA"
+}
