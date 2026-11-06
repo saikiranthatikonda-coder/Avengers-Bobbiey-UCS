@@ -5,6 +5,9 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-06 — v8.2.1 · Desktop build fix
+- **ci:** the Apple Silicon installer now builds on GitHub's `macos-15` image (the `macos-14` image was retired, so v8.2.0's installers could not be built). The app still targets macOS 11+. No app changes beyond v8.2.0.
+
 ## 2026-11-06 — v8.2.0 · Agents see the whole dashboard, every item links to its source
 - **feat: JARVIS and every agent can read every dashboard section.**
   - Ask about anything on screen and the answer comes from that section's live data, naming the section. For example: "what did the cyber analyst find?", "any quakes near me?", "what's on the global map near India?", "last phone call summary", "which model are you using?", "dashboard overview" / "sitrep".
