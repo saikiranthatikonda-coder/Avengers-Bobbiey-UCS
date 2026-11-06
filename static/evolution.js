@@ -306,7 +306,7 @@
     const rs = d.research || {};
     $e("ev-rs-when").textContent = rs.running ? "RUNNING…" : rs.ts ? ago(rs.ts).toUpperCase() : "NOT RUN YET";
     const sg = rs.suggestions || [];
-    $e("ev-research-list").innerHTML = sg.length ? sg.slice(0, 10).map((s) => `<div class="ev-rs"><span class="ev-kind">${esc(s.kind === "dependency" ? "DEP" : "WATCH")}</span><span class="ev-rs-t">${esc(s.title)}</span>${s.url && /^https:\/\//.test(s.url) ? `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">notes ↗</a>` : ""}</div>`).join("")
+    $e("ev-research-list").innerHTML = sg.length ? sg.slice(0, 10).map((s) => `<div class="ev-rs"><span class="ev-kind">${esc(s.kind === "dependency" ? "DEP" : "WATCH")}</span><span class="ev-rs-t">${esc(s.title)}</span>${s.url && /^https:\/\/[^\s"'<>]+$/.test(s.url) ? `<a class="src-link" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.source || "source")} ↗</a>` : `<span class="src-none">${esc(s.source || "")}</span>`}</div>`).join("")
       + ((rs.errors || []).length ? `<div class="ev-src-f">${esc(rs.errors.length)} source error(s): ${esc(rs.errors.slice(0, 2).join("; "))}</div>` : "")
       : `<div class="tf-empty">${rs.ts ? "everything up to date" : "weekly mission: PyPI releases + AI model news"}</div>`;
     const busy = (d.loop || []).some((s) => s.busy) || hb.running || (d.tests || {}).running || rs.running;

@@ -75,7 +75,8 @@
 
   function renderFinding(f, compact) {
     const isOpen = open.has(f.id);
-    const url = typeof f.url === "string" && f.url.startsWith("https://osv.dev/") ? f.url : null;
+    // advisory pages only on their known hosts (OSV.dev, NVD, CISA); local checks have no web source
+    const url = typeof f.url === "string" && /^https:\/\/(osv\.dev|nvd\.nist\.gov|www\.cisa\.gov)\/[^\s"'<>]*$/.test(f.url) ? f.url : null;
     return `<div class="sa-f ${esc(f.severity)}${f.stale ? " stale" : ""}" data-id="${esc(f.id)}">
       <button class="sa-f-head" type="button" data-toggle="${esc(f.id)}" aria-expanded="${isOpen}">
         <span class="sa-badge ${esc(f.severity)}">${esc(f.severity.toUpperCase())}</span>
@@ -85,7 +86,8 @@
       ${isOpen ? `<div class="sa-f-body">
         <div><b>EVIDENCE</b> ${esc(f.evidence)}</div>
         <div><b>FIX</b> ${esc(f.fix)}</div>
-        ${url ? `<div><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(f.ref || "advisory")} ↗</a></div>` : ""}
+        <div><b>SOURCE</b> ${url ? `<a class="src-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(f.source || "advisory")} · ${esc(f.ref || "advisory")} ↗</a>`
+          : `<span class="src-local">${esc(f.source || "this install (local check)")} · rule ${esc(f.rule || "—")}</span>`}</div>
         <div class="sa-f-acts">
           ${f.fixable ? `<button class="cmd-btn" type="button" data-propose="${esc(f.id)}" title="Hand this fix to engineering mode. Nothing is applied until you approve it there.">PROPOSE FIX</button>` : ""}
           <button class="cmd-btn" type="button" data-accept="${esc(f.id)}">ACCEPT RISK</button>
@@ -159,8 +161,8 @@
       `last scan: ${(d.new || []).length} new · ${(d.resolved || []).length} resolved`;
     const i = d.intel || {};
     $s("sa-intel").innerHTML = `
-      <div><span>OSV.dev</span><b>${esc(ago(i.osv_updated))}</b><em>${esc(i.osv_cached || 0)} advisories cached</em></div>
-      <div><span>CISA KEV</span><b>${esc(ago(i.kev_updated))}</b><em>${i.kev_version ? "catalog " + esc(i.kev_version) + " · " + esc(i.kev_count) + " entries" : "not loaded"}</em></div>
+      <div><span><a class="src-link" href="https://osv.dev/" target="_blank" rel="noopener noreferrer">OSV.dev ↗</a></span><b>${esc(ago(i.osv_updated))}</b><em>${esc(i.osv_cached || 0)} advisories cached</em></div>
+      <div><span><a class="src-link" href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener noreferrer">CISA KEV ↗</a></span><b>${esc(ago(i.kev_updated))}</b><em>${i.kev_version ? "catalog " + esc(i.kev_version) + " · " + esc(i.kev_count) + " entries" : "not loaded"}</em></div>
       <div><span>NEXT FULL</span><b>${d.next_full ? esc(new Date(d.next_full * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })) : "—"}</b><em>light checks every 30 min</em></div>`;
     const ch = Object.entries(d.checks || {});
     if (ch.length) $s("sa-checks").innerHTML = ch.map(([k, v]) => `

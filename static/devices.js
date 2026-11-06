@@ -25,6 +25,7 @@
         <div class="ft-kicker">LOCAL PROTOCOLS ONLY · LAN-RESTRICTED · EVERY ACTION AUDITED</div>
         <div class="bs-title">DEVICES &amp; CONNECTIVITY</div>
         <div class="bs-sub" id="dv-stat">loading…</div>
+        <div class="bs-sub"><span class="src-local">SOURCE · this LAN (local device protocols, devices.py; no web page)</span></div>
       </div>
       <div class="ft-actions">
         <button class="cmd-btn" id="dv-scan" type="button" title="Find devices advertising on this network (mDNS + SSDP, ~6 s)">⌕ SCAN LAN</button>

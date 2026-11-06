@@ -25,6 +25,7 @@ Design rules (see CLAUDE.md §6b):
 """
 
 import asyncio
+import contextvars
 import re
 import time
 import uuid
@@ -48,6 +49,11 @@ def speakable(text: str) -> str:
         text = pat.sub(rep, text)
     return text.strip(" ,")
 SPOKEN_SOURCES = {"voice", "clap", "text", "ui"}
+# sources whose operator is physically at the host (the microphone / clap detector is on this PC)
+HOST_SOURCES = {"voice", "clap"}
+# the command being processed in the current task (each command runs in its own task), so
+# intents/agents can see who asked and from where without changing their signatures
+CURRENT_CMD: contextvars.ContextVar = contextvars.ContextVar("bucs_current_cmd", default=None)
 
 
 @dataclass
@@ -55,6 +61,7 @@ class Command:
     text: str
     source: str = "text"                 # voice | text | ui | clap | api | agent
     agent: str | None = None             # explicit target (wake word / @mention)
+    host: bool = False                   # asked from the host machine (loopback / local mic)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:10])
     created: float = field(default_factory=time.perf_counter)
     wall: float = field(default_factory=time.time)
@@ -129,6 +136,11 @@ class Engine:
         self.first_speech: deque = deque(maxlen=50)
         self.totals = {"commands": 0, "fast": 0, "llm": 0, "cancelled": 0, "failed": 0}
         self.listeners: list = []                              # callables(cmd) on finish
+        try:                                                   # agents can read every dashboard section
+            import dashboard_context
+            dashboard_context.bind(state)
+        except Exception:
+            pass
 
     # ── public API ────────────────────────────────────────────────
     @property
@@ -136,9 +148,13 @@ class Engine:
         return self.state.get("hub")
 
     async def submit(self, text: str, source: str = "text", agent: str | None = None,
-                     wait: bool = False, speak: bool | None = None, on_done=None) -> Command:
+                     wait: bool = False, speak: bool | None = None, on_done=None,
+                     host: bool | None = None) -> Command:
+        # host: the HTTP layer says whether the request came from the host itself; voice/clap
+        # come from this PC's microphone. Anything else (agents, unknown callers) is not host.
         cmd = Command(text=(text or "").strip(), source=source,
-                      agent=(agent or None) and agent.lower())
+                      agent=(agent or None) and agent.lower(),
+                      host=bool(host) if host is not None else source in HOST_SOURCES)
         self.totals["commands"] += 1
         speak = (source in SPOKEN_SOURCES) if speak is None else speak
         # a new request from the operator supersedes speech still playing for an
@@ -202,6 +218,7 @@ class Engine:
 
     # ── pipeline ──────────────────────────────────────────────────
     async def _run(self, cmd: Command, speak: bool, on_done) -> None:
+        CURRENT_CMD.set(cmd)                                   # task-local: this command only
         try:
             await self._emit(cmd, "received")
             await self._emit(cmd, "ack")                       # instant visual acknowledgement
@@ -302,6 +319,18 @@ class Engine:
                 await self._emit(cmd, "grounding", sources="live")
             prompt = await livefacts.ground(self.state, cmd.text) + prompt
             cmd.mark("grounded_ms")
+        except Exception:
+            pass
+        # live dashboard sections the question is about (threats, map, cyber analyst, computer use…)
+        try:
+            import dashboard_context
+            facts = await dashboard_context.context_for(
+                self.state, cmd.text, meta={"cmd_id": cmd.id, "agent": target, "source": cmd.source})
+            if facts:
+                await self._emit(cmd, "grounding", sources="dashboard",
+                                 sections=dashboard_context.LAST.get("sections", []))
+                prompt = facts + prompt
+                cmd.mark("dashboard_ms")
         except Exception:
             pass
 

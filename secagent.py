@@ -42,6 +42,8 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+import source_links as sl
+
 HERE = Path(__file__).resolve().parent
 STATE_FILE = HERE / ".update" / "secagent.json"
 RULESET_VERSION = "2026.11.1"
@@ -130,9 +132,19 @@ def _now() -> float:
     return time.time()
 
 
+# where each category's evidence comes from (shown with every finding; local checks have no web page)
+FINDING_SOURCE = {"deps": "OSV.dev advisory", "secrets": "this install (local file scan)",
+                  "exposure": "this machine (local network/listener check)", "config": "this install (app config check)",
+                  "intel": "CISA KEV catalog"}
+
+
 def _finding(fid, category, rule, severity, title, evidence, fix, task=None, **extra) -> dict:
-    return {"id": fid, "category": category, "rule": rule, "severity": severity, "title": title,
-            "evidence": evidence, "fix": fix, "fixable": bool(task), "task": task, **extra}
+    f = {"id": fid, "category": category, "rule": rule, "severity": severity, "title": title,
+         "evidence": evidence, "fix": fix, "fixable": bool(task), "task": task, **extra}
+    f["url"] = sl.safe_url(f.get("url"))
+    f.setdefault("source", FINDING_SOURCE.get(category, "this install (local check)"))
+    f["source_url"] = f["url"]
+    return f
 
 
 async def _run(*args, timeout: float = 10) -> str:
@@ -323,7 +335,7 @@ def dep_findings(hits: dict, details: dict, direct: set, kev_cves: set) -> list[
                                 f"{pkg} {ver}: {summary}",
                                 f"{pkg}=={ver} installed ({where}); OSV {ref}; severity: {how}",
                                 fix, task, ref=vid, package=pkg, kev=exploited or None,
-                                url=f"https://osv.dev/vulnerability/{vid}"))
+                                url=sl.osv_vuln(vid)))
     return out
 
 
@@ -680,7 +692,8 @@ def kev_findings(kev: dict | None, packages: list[tuple[str, str]], last_hotfix:
                                 f"KEV {e.get('cveID')} names \"{e.get('product')}\" — same name as an installed package",
                                 f"CISA KEV added {e.get('dateAdded')}: {e.get('vendorProject')} {e.get('product')} — "
                                 f"{e.get('vulnerabilityName')}. BEST-EFFORT name match, not a version check.",
-                                "Check whether the KEV entry applies to the installed package; upgrade if it does"))
+                                "Check whether the KEV entry applies to the installed package; upgrade if it does",
+                                ref=e.get("cveID"), url=sl.nvd_cve(e.get("cveID")) or sl.KEV_CATALOG))
     win = [e for e in kev.get("recent") or [] if "windows" in (e.get("product") or "").lower()
            and (e.get("vendorProject") or "").lower() == "microsoft" and (e.get("dateAdded") or "") >= cut30]
     if OS == "Windows" and win and last_hotfix:
@@ -693,7 +706,7 @@ def kev_findings(kev: dict | None, packages: list[tuple[str, str]], last_hotfix:
                                     f"Windows last updated {age} days ago; {len(win)} actively-exploited Windows CVEs added to KEV in 30 days",
                                     f"Get-HotFix newest install {hf.isoformat()}; CISA KEV Microsoft Windows entries "
                                     f"added since {cut30}: {', '.join(sorted(e['cveID'] for e in win)[:6])}",
-                                    "Run Windows Update now"))
+                                    "Run Windows Update now", url=sl.KEV_CATALOG, ref="CISA KEV catalog"))
         except Exception:
             pass
     return out

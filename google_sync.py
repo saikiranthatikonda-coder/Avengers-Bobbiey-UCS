@@ -19,6 +19,8 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from source_links import gmail_message, google_link
+
 SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -96,6 +98,7 @@ def parse_event(it: dict, calendar: str = "") -> dict | None:
         "response": (me or {}).get("responseStatus", ""),  # accepted|declined|tentative|needsAction
         "all_day": "date" in (it.get("start") or {}),
         "uid": it.get("iCalUID") or it.get("id") or "",
+        "url": google_link(it.get("htmlLink")) or "",       # the event in Google Calendar (as Google returns it)
     }
 
 
@@ -382,6 +385,7 @@ class GoogleCalendar:
                     "priority": "priority" if ("IMPORTANT" in labels
                                                or "STARRED" in labels) else "normal",
                     "unread": "UNREAD" in labels,
+                    "url": gmail_message(m.get("id"), self.account) or "",
                 })
             return out
 
@@ -476,7 +480,8 @@ def fetch_open_tasks(svc, max_results: int = 20) -> list[dict]:
                 except Exception:
                     due = None
             out.append({"title": t["title"][:140], "list": tl.get("title", ""),
-                        "due": due, "notes": (t.get("notes") or "")[:160]})
+                        "due": due, "notes": (t.get("notes") or "")[:160],
+                        "url": google_link(t.get("webViewLink")) or ""})
     out.sort(key=lambda t: (t["due"] is None, t["due"] or ""))
     return out[:max_results]
 

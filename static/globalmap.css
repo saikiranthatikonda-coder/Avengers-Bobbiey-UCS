@@ -149,3 +149,8 @@
   .gm-card { animation: none; }
   .st-pending .gm-st { animation: none; }
 }
+
+/* source links in the map detail card */
+.gm-card .gm-nosrc { color: var(--text-dim); font-size: 0.6rem; letter-spacing: 0.06em; margin: 0.35rem 0 0; }
+.gm-card .gm-srcs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem; }
+.gm-card .gm-al a { display: inline; padding: 0; border: 0; font: inherit; letter-spacing: normal; }

@@ -80,6 +80,15 @@ class Avenger:
                 f"net ↑{m.get('net_up', 0)} ↓{m.get('net_down', 0)} KB/s. "
                 "Use only these figures; say so if asked for data not listed.]\n")
 
+    async def _dashboard_facts(self, prompt: str) -> str:
+        """Live dashboard sections the question is about (dashboard_context.py). The real-time
+        engine injects these itself before handle_stream(); this covers the legacy handle() path."""
+        try:
+            import dashboard_context
+            return await dashboard_context.context_for(None, prompt, meta={"agent": self.name, "source": "legacy"})
+        except Exception:
+            return ""
+
     async def handle(self, prompt: str) -> str:
         await self.set_status("thinking", note=prompt[:80])
         # cross-agent shared memory: prefix what OTHER agents recently learned
@@ -91,6 +100,7 @@ class Avenger:
             except Exception:
                 ctx = ""
         ctx = self._live_telemetry() + self._commander_context(prompt) + ctx
+        ctx = await self._dashboard_facts(prompt) + ctx
         reply = await self.brain.think(ctx + prompt, system=self.system_prompt,
                                        agent=self.name, fast=True)
         self.history.append({"q": prompt, "a": reply, "ts": time.time()})

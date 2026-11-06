@@ -5,6 +5,30 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-06 — v8.2.0 · Agents see the whole dashboard, every item links to its source
+- **feat: JARVIS and every agent can read every dashboard section.**
+  - Ask about anything on screen and the answer comes from that section's live data, naming the section. For example: "what did the cyber analyst find?", "any quakes near me?", "what's on the global map near India?", "last phone call summary", "which model are you using?", "dashboard overview" / "sitrep".
+  - Coverage: 25 sections, each read server-side with a time budget. A failing section never breaks the others.
+  - Agents also get a read-only `dashboard_read` tool.
+  - Secrets, keys, IDs and full phone numbers are never included.
+  - Observers see only what the dashboard already shows them.
+- **feat: Computer Use from chat or voice.** "Jarvis, use the computer to …" asks you to confirm.
+  - It runs only for the commander on the host machine, and every Computer Use safety gate still applies: approval before sensitive actions, pause/stop/take-over, privacy guard.
+  - "Computer use status" and "stop computer use" work by voice or chat.
+  - The dashboard scrolls to the panel when a task starts.
+- **feat: every data item links to its original source,** opening in a new tab:
+  - News and intel: the articles.
+  - Disasters: USGS, GDACS, NASA EONET, NDMA SACHET, CVE/KEV pages on NVD, IODA, and the service status pages.
+  - Global map: flights on ADS-B Exchange, satellites on N2YO/CelesTrak, space weather on NOAA SWPC.
+  - Weather: Open-Meteo.
+  - Your accounts: calendar, tasks and mail open in Google.
+  - Cyber findings: OSV and NVD.
+  - Evolution research: PyPI.
+  - Chat answers: live-fact citations.
+
+  Data from this machine has no web page, so it is labelled with its real source instead of a made-up link. Only http(s) links are allowed, all opened with `noopener noreferrer`.
+- **fix: text buttons no longer spin on hover.** RECONNECT NOW, TEST and the edit buttons were rotating 120°; only the ↻ refresh icons rotate now.
+
 ## 2026-11-04 — v8.1.0 · Cleaner header: centred UCS title, new system controls, mic modes removed
 - **Removed: the mic ON / SLEEP / OFF / TALK section (owner decision).**
   - The microphone always listens for its wake words, as before v7.9.

@@ -22,6 +22,7 @@
     <div class="bs-head">
       <div class="bs-title">PHONE AGENT · AI VOICE CALLS</div>
       <div class="bs-sub">STATUS: <span id="ph-state">—</span> · PROVIDER <span id="ph-prov">—</span> · AI <span id="ph-brain">—</span></div>
+      <div class="bs-sub"><span class="src-local">SOURCE · calls as reported by your phone provider to this install (phone.py; no public page)</span></div>
     </div>
     <div class="ph-grid">
       <div class="ph-left">

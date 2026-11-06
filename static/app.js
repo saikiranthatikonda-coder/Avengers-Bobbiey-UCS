@@ -6,6 +6,36 @@ const $ = (s) => document.querySelector(s);
 const escapeHTML = (s) =>
   (s || "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 
+// ── source links: external data opens its original source (http(s) only, new tab, no opener/referrer).
+// Data without a web source gets a plain "SOURCE · …" label instead — never a guessed URL.
+const safeHttpUrl = (u) => {
+  if (typeof u !== "string") return null;
+  const s = u.trim();
+  if (!s || s.length > 2000 || !/^https?:\/\/[^\s"'<>\\\x60]+$/i.test(s)) return null;   // \x60 = backtick
+  try { const p = new URL(s); return (p.protocol === "http:" || p.protocol === "https:") && p.hostname ? s : null; }
+  catch (e) { return null; }
+};
+function srcLink(url, label, cls = "src-link") {
+  const u = safeHttpUrl(url), l = escapeHTML(String(label || "source"));
+  return u ? `<a class="${cls}" href="${escapeHTML(u)}" target="_blank" rel="noopener noreferrer" title="Open the original source (new tab)">${l} ↗</a>`
+           : `<span class="src-none" title="no public source page">${l}</span>`;
+}
+function srcLocal(text) { return `<span class="src-local">SOURCE · ${escapeHTML(String(text || ""))}</span>`; }
+// documented public page patterns, built only from ids of the documented shape (mirrors source_links.py)
+const SRC_URL = {
+  adsbx: (icao) => /^[0-9a-f]{6}$/i.test(String(icao || "")) ? `https://globe.adsbexchange.com/?icao=${String(icao).toLowerCase()}` : null,
+  n2yo: (id) => /^\d{1,6}$/.test(String(id || "")) && +id > 0 ? `https://www.n2yo.com/satellite/?s=${+id}` : null,
+  celestrak: (id) => /^\d{1,6}$/.test(String(id || "")) && +id > 0 ? `https://celestrak.org/NORAD/elements/gp.php?CATNR=${+id}&FORMAT=tle` : null,
+};
+// turn http(s) URLs inside ALREADY-ESCAPED text into links
+function linkifyEscaped(esc) {
+  return String(esc || "").replace(/https?:\/\/(?:(?!&quot;|&lt;|&gt;)[^\s<>"'])+/g, (m) => {
+    const t = m.match(/[.,;:!?)\]]+$/); const tail = t ? t[0] : ""; if (tail) m = m.slice(0, -tail.length);
+    return safeHttpUrl(m.replace(/&amp;/g, "&")) ? `<a class="src-link" href="${m}" target="_blank" rel="noopener noreferrer">${m}</a>${tail}` : m + tail;
+  });
+}
+window.BUCS_SRC = { safeUrl: safeHttpUrl, link: srcLink, local: srcLocal, url: SRC_URL, linkify: linkifyEscaped };
+
 // ── clock ────────────────────────────────────────────
 function tickClock() {
   const d = new Date();
@@ -167,8 +197,10 @@ function renderNews(items) {
     div.className = "news-item";
     const age = it.ts ? Math.max(0, Math.round((Date.now() - Date.parse(it.ts)) / 60000)) : null;
     const when = age == null || isNaN(age) ? "" : age < 60 ? ` · ${age}m ago` : ` · ${Math.round(age / 60)}h ago`;
-    div.innerHTML = `<div>${escapeHTML(it.title)}</div><div class="src">▸ ${escapeHTML(it.source || "unknown")}${when}</div>`;
-    if (/^https?:\/\//.test(it.url || "")) { div.onclick = () => window.open(it.url, "_blank", "noopener"); div.title = "open article"; }
+    const u = safeHttpUrl(it.url);
+    div.innerHTML = `<div>${u ? `<a class="news-title-link" href="${escapeHTML(u)}" target="_blank" rel="noopener noreferrer">${escapeHTML(it.title)}</a>` : escapeHTML(it.title)}</div>`
+      + `<div class="src">▸ ${srcLink(u, it.source || "unknown")}${when}</div>`;
+    if (u) { div.onclick = (e) => { if (!e.target.closest("a")) window.open(u, "_blank", "noopener,noreferrer"); }; div.title = "open article at the source"; }
     list.appendChild(div);
   }
 }
@@ -392,6 +424,15 @@ var CommandConsole = {
       r.final = m.stage; r.marks = m.marks || {}; r.path = m.path;
       if (m.reply) r.reply = m.reply;
       if (m.error && m.stage !== "cancelled") r.reply = (r.reply ? r.reply + "\n" : "") + "⚠ " + m.error;
+      // live-facts citations: the sources fetched to ground this answer (only exists for time-sensitive questions)
+      if (m.stage === "done" && r.text && r.text !== "(summoned)" && !r.sources) {
+        r.sources = [];
+        fetch("/api/livefacts/sources", { method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ query: r.text }) })
+          .then(x => x.ok ? x.json() : null)
+          .then(d => { if (d && Array.isArray(d.sources) && d.sources.length) { r.sources = d.sources; this.render(); } })
+          .catch(() => {});
+      }
     }
     if (typeof JarvisSummon !== "undefined") JarvisSummon.fromCmd(m, r);
     this.render();
@@ -422,7 +463,8 @@ var CommandConsole = {
           ${r.agent ? `<span class="cmd-src">${escapeHTML(String(r.agent).toUpperCase())}</span>` : ""}
           ${live ? `<button class="cmd-x" data-cancel="${r.id}" aria-label="cancel command">×</button>` : ""}</div>
         <div class="cmd-stages">${this.chips(r)}</div>
-        ${r.reply || r.detail ? `<div class="cmd-a">${escapeHTML(r.reply || r.detail || "")}</div>` : ""}
+        ${r.reply || r.detail ? `<div class="cmd-a">${linkifyEscaped(escapeHTML(r.reply || r.detail || ""))}</div>` : ""}
+        ${r.sources && r.sources.length ? `<div class="cmd-cites"><span class="lbl">LIVE SOURCES</span> ${r.sources.slice(0, 6).map(c => srcLink(c.url, c.kind === "Google News" ? c.source : (c.kind || c.source))).join(" · ")}</div>` : ""}
         ${r.final ? `<div class="cmd-t">${this.timing(r)}</div>` : ""}
       </div>`;
     }).join("");
@@ -895,6 +937,12 @@ async function _refreshWeather(force = false) {
     $("#weather-wind").textContent  = d.wind_kmh != null ? Math.round(d.wind_kmh) : "--";
     $("#weather-feels").textContent = d.feels_c != null ? Math.round(d.feels_c) : "--";
     $("#weather-update").textContent = (d.stale ? "CACHED · " : "OK · ") + new Date((d.fetched_at || Date.now() / 1000) * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+    try {   // source chip: the provider's public page for these coordinates
+      let ws = $("#weather-src");
+      const upd = $("#weather-update");
+      if (!ws && upd) { ws = document.createElement("span"); ws.id = "weather-src"; ws.className = "src-chip"; upd.after(ws); }
+      if (ws) ws.innerHTML = srcLink(d.source_url, d.source || "Open-Meteo");
+    } catch (e) {}
     const hg = $("#hw-glyph"); if (hg) hg.textContent = d.glyph || "◐";        // header readout removed (v8); guarded
     const ht = $("#hw-temp"); if (ht) ht.textContent = d.temp_c != null ? `${Math.round(d.temp_c)}°` : "--°";
     if (d.city) {
@@ -1079,7 +1127,7 @@ function renderAgenda(events, source) {
         <span class="agenda-countdown">${fmtCountdown(e.minutes_until)}</span>
       </div>
       <div class="agenda-body">
-        <div class="agenda-title">${escapeHTML(e.title)}</div>
+        <div class="agenda-title">${safeHttpUrl(e.url) ? `<a class="src-link agenda-src" href="${escapeHTML(e.url)}" target="_blank" rel="noopener noreferrer" title="open in Google Calendar">${escapeHTML(e.title)} ↗</a>` : escapeHTML(e.title)}</div>
         <div class="agenda-meta">${e.calendar && e.calendar !== "Primary" ? `<span class="agenda-cal">${escapeHTML(e.calendar)}</span>` : ""}${rsvp ? `<span class="agenda-rsvp">${rsvp}</span>` : ""}${escapeHTML(who)}</div>
       </div>${join}`;
     div.querySelector(".agenda-join")?.addEventListener("click", ev => ev.stopPropagation());
@@ -1098,7 +1146,7 @@ function renderTasks(tasks) {
     const overdue = t.due && t.due < today;
     div.className = "agenda-task" + (overdue ? " overdue" : "");
     div.innerHTML = `<span class="agenda-task-box" aria-hidden="true"></span>
-      <span class="agenda-task-title">${escapeHTML(t.title)}</span>
+      <span class="agenda-task-title">${safeHttpUrl(t.url) ? `<a class="src-link" href="${escapeHTML(t.url)}" target="_blank" rel="noopener noreferrer" title="open in Google Tasks">${escapeHTML(t.title)} ↗</a>` : escapeHTML(t.title)}</span>
       <span class="agenda-task-due">${t.due ? (overdue ? "OVERDUE " : "DUE ") + escapeHTML(t.due.slice(5)) : escapeHTML(t.list || "")}</span>`;
     host.appendChild(div);
   }
@@ -1117,7 +1165,7 @@ function renderInbox(emails, priorityCount, source) {
     div.className = "inbox-item" + (m.priority === "priority" ? " priority" : "");
     div.innerHTML = `
       <div class="inbox-sender">${escapeHTML(m.sender)}</div>
-      <div class="inbox-subject">${escapeHTML(m.subject)}</div>
+      <div class="inbox-subject">${safeHttpUrl(m.url) ? `<a class="src-link" href="${escapeHTML(m.url)}" target="_blank" rel="noopener noreferrer" title="open in Gmail">${escapeHTML(m.subject)} ↗</a>` : escapeHTML(m.subject)}</div>
       <div class="inbox-snippet">${escapeHTML(m.snippet || "")}</div>`;
     host.appendChild(div);
   }
@@ -1341,7 +1389,7 @@ const TOOL_DATA = {
         ${_stat("SIGNAL", w.signal || "—")}
       </div><div class="mb-list">
         ${_row(`SSID ${escapeHTML(w.ssid || "—")} · channel ${escapeHTML(w.channel || "—")} · security <b style="color:var(${secure ? "--success" : "--warn"})">${escapeHTML(w.auth || "unknown")}</b>`, secure ? "ENCRYPTED LINK" : "UNENCRYPTED WI-FI · USE A VPN ON THIS NETWORK")}
-        ${sp && sp.ok ? _row(`Speed test · ${escapeHTML(sp.server)} · ${Math.round(sp.bytes_used / 1e6)} MB used`, `MEASURED ${_ago(sp.ts)}`) : ""}
+        ${sp && sp.ok ? _row(`Speed test · ${/cloudflare/i.test(sp.server || "") ? srcLink("https://speed.cloudflare.com/", sp.server) : escapeHTML(sp.server)} · ${Math.round(sp.bytes_used / 1e6)} MB used`, `MEASURED ${_ago(sp.ts)}`) : ""}
         ${top ? _row(`Busiest process: ${escapeHTML(top.name)} · CPU ${top.cpu}% · ${Math.round(top.mem_mb)} MB`, "LIVE PROCESS SWEEP") : ""}
         ${_row(`Bluetooth: ${((c.bluetooth || {}).count ?? "unknown")} paired device(s)`, "ADAPTER")}
       </div>
@@ -1350,6 +1398,15 @@ const TOOL_DATA = {
   },
 };
 
+// these tool views show local data only (no web source); the footer says where it is measured
+const TOOL_SOURCE = {
+  "ai-diagnostics": "this machine (brain probe, /api/models, /api/aiops)",
+  "satellite-feed": "BUCS fleet registry (/api/fleet: node reports)",
+  "threat-scanner": "this machine (threats.py engine, /api/threats)",
+  "mission-files": "this install (orchestrator directives, /api/orchestrator)",
+  "security-logs": "this install (append-only audit.log, /api/enterprise)",
+  "network-activity": "this machine (connectivity.py, psutil, netspeed.py)",
+};
 async function openToolModal(toolKey) {
   const def = TOOL_DATA[toolKey]; if (!def) return;
   const modal = $("#tool-modal"); if (!modal) return;
@@ -1363,7 +1420,7 @@ async function openToolModal(toolKey) {
   const state = await gatherToolSnapshot();
   if (seq !== window._mSeq) return;           // the operator opened something else meanwhile
   try {
-    $("#modal-body").innerHTML = def.render(state);
+    $("#modal-body").innerHTML = def.render(state) + `<div class="si-src">${srcLocal(TOOL_SOURCE[toolKey] || "this machine (live local telemetry)")}</div>`;
     $("#speedtest-btn")?.addEventListener("click", async (ev) => {
       ev.target.disabled = true; ev.target.textContent = "SPEED TEST RUNNING…";
       try { await fetch("/api/network/speedtest", { method: "POST" }); } catch (e) {}
@@ -2313,8 +2370,10 @@ function renderThreatAnalytics(d) {
 /* ═══ INTELLIGENCE TICKER ════════════════════════════ */
 
 const tickerItems = [];
-function pushTicker(text, cls = "") {
-  tickerItems.unshift(cls ? `<span class="${cls}">${escapeHTML(text)}</span>` : escapeHTML(text));
+function pushTicker(text, cls = "", url = null) {
+  const u = safeHttpUrl(url);
+  const body = u ? `<a class="tk-src" href="${escapeHTML(u)}" target="_blank" rel="noopener noreferrer" title="open source ↗">${escapeHTML(text)} ↗</a>` : escapeHTML(text);
+  tickerItems.unshift(cls ? `<span class="${cls}">${body}</span>` : body);
   if (tickerItems.length > 8) tickerItems.pop();
   const el = $("#ticker-content");
   if (el) el.innerHTML = tickerItems.join("&nbsp;&nbsp;<b>···</b>&nbsp;&nbsp;");
@@ -2464,6 +2523,9 @@ const DASH_TARGETS = {
   threats: ".bs-threat", map: ".map-panel", agenda: "#agenda-list",
   insights: "#aiops-insights", news: "#news-list", camera: "#operator-cam",
   roster: "#avengers-panel", readiness: "#intel-readiness",
+  computeruse: "#computeruse-mount", phone: "#phone-mount", disaster: "#disaster-mount",
+  devices: "#devices-mount", secagent: "#secagent-mount", evolution: "#evolution-mount",
+  agentos: "#agentos-mount", globalmap: "#globalmap-mount",
 };
 function execDashCmd(target) {
   const sel = DASH_TARGETS[target]; if (!sel) return;
@@ -3520,7 +3582,7 @@ function handle(msg) {
         if (msg.status === "thinking" || msg.status === "working") animateAiGauge(true);
         else animateAiGauge(false);
       }
-      if (msg.event === "reply") logEvent(`<span class="tag">[${msg.agent}]</span> ${escapeHTML(msg.a || msg.q)}`);
+      if (msg.event === "reply") logEvent(`<span class="tag">[${msg.agent}]</span> ${linkifyEscaped(escapeHTML(msg.a || msg.q))}`);
       if (msg.event === "reply" && msg.agent === "jarvis") JarvisSummon.reply(msg.a || "");
       if (msg.event === "tick")  logEvent(`<span class="tag">[${msg.agent}]</span> ${escapeHTML(msg.msg)}`);
       if (msg.event === "alert") logEvent(`<span class="tag">[${msg.agent}]</span> ${escapeHTML(msg.msg)}`, "warn");
@@ -3569,7 +3631,7 @@ function handle(msg) {
       addThreatEvent(msg);
       pushTicker(`[${(msg.category || "sys").toUpperCase()}] ${msg.title}`,
                  msg.severity === "high" || msg.severity === "critical" ? "tk-crit"
-                 : msg.severity === "medium" ? "tk-warn" : "");
+                 : msg.severity === "medium" ? "tk-warn" : "", msg.url);
       if (msg.severity === "high" || msg.severity === "critical")
         logEvent(`<span class="tag">[threat]</span> ${escapeHTML(msg.title)}`, "warn");
       break;
@@ -3696,7 +3758,7 @@ function renderLicence(lic, plan) {
   } else if (lic.licensed) {
     host.innerHTML = `<div class="lic-state ok">● BUCS PRO · ${escapeHTML(lic.key || "")}</div>
       <div class="lic-meta">${escapeHTML([lic.customer, `valid until ${_fmtDate(lic.expires_at)}`, `${lic.days_left} days left`].filter(Boolean).join(" · "))}</div>
-      <div class="lic-acts"><a class="cmd-btn" href="${PRICING_URL}" target="_blank" rel="noopener">RENEW ↗</a>
+      <div class="lic-acts"><a class="cmd-btn" href="${PRICING_URL}" target="_blank" rel="noopener noreferrer">RENEW ↗</a>
         <button class="ghost-btn" data-lic="deactivate" title="remove the key from this install">REMOVE KEY</button></div>`;
   } else {
     host.innerHTML = `<div class="lic-state">○ NOT LICENSED</div>`;
@@ -3944,7 +4006,7 @@ async function refreshWeb3() {
       if (w) {
         const ex = w.explorer ? `${w.explorer}/address/${w.address}` : null;
         wb.innerHTML = `
-          <div class="w3-kv"><span class="k">ADDRESS</span><span class="v" title="${escapeHTML(w.address)}">${escapeHTML(shortAddr(w.address))}${ex ? ` <a href="${escapeHTML(ex)}" target="_blank" rel="noopener" style="color:#c084fc">↗</a>` : ""}</span></div>
+          <div class="w3-kv"><span class="k">ADDRESS</span><span class="v" title="${escapeHTML(w.address)}">${escapeHTML(shortAddr(w.address))}${ex ? ` <a href="${escapeHTML(ex)}" target="_blank" rel="noopener noreferrer" style="color:#c084fc">↗</a>` : ""}</span></div>
           <div class="w3-kv"><span class="k">NETWORK</span><span class="v">${escapeHTML(w.network || "—")}</span></div>
           <div class="w3-kv"><span class="k">${escapeHTML(w.native_symbol || "NATIVE")}</span><span class="v">${w.native_balance != null ? w.native_balance.toFixed(5) : "—"}</span></div>
           <div class="w3-kv"><span class="k">${escapeHTML(w.token_symbol || "TOKEN")}</span><span class="v">${w.token_balance != null ? w.token_balance.toFixed(3) : (d.config.has_contract ? "0" : "pre-launch")}</span></div>
@@ -4527,7 +4589,7 @@ function renderKbResults(items, answer) {
     <div class="kb-text">${escapeHTML(answer)}</div></div>`;
   html += (items || []).map(r => `
     <div class="kb-item">
-      <div class="kb-src">${escapeHTML((r.source || "").toUpperCase())} · ${escapeHTML(r.ref || "")}</div>
+      <div class="kb-src">${escapeHTML((r.source || "").toUpperCase())} · ${safeHttpUrl(r.url) ? srcLink(r.url, r.ref || "source") : escapeHTML(r.ref || "")}</div>
       <div class="kb-text">${escapeHTML(r.text)}</div>
     </div>`).join("");
   host.innerHTML = html || '<div class="tf-empty">no matches — try different words</div>';
@@ -5630,8 +5692,10 @@ async function openIncident(id) {
       ${ev.detail ? _row(escapeHTML(ev.detail), "DETAIL") : ""}
       ${_row(escapeHTML(stageNote), "LIFECYCLE")}
       ${ON_HOST.has(ev.category) ? _row("Measured on this machine" + (g && g.city ? ` (${escapeHTML(g.city)}, IP-geolocated)` : ""), "WHERE") : ""}
+      ${_row(safeHttpUrl(ev.url) ? srcLink(ev.url, ev.source || "original article") : srcLocal(ev.source || "this machine (threats.py, live telemetry)"), "SOURCE")}
     </div>
     <div class="mb-actions">
+      ${safeHttpUrl(ev.url) ? `<a class="cmd-btn" href="${escapeHTML(safeHttpUrl(ev.url))}" target="_blank" rel="noopener noreferrer">OPEN SOURCE ↗</a>` : ""}
       ${["active", "resolved"].includes(ev.stage) ? `<button class="cmd-btn" type="button" data-ack="${escapeHTML(ev.id)}">ACKNOWLEDGE</button>` : ""}
       ${mappable ? `<button class="cmd-btn" type="button" data-map-lat="${g.lat}" data-map-lon="${g.lon}" data-map-id="${escapeHTML(ev.id)}" data-map-layer="threats" data-map-label="${escapeHTML(ev.title)}">SHOW ON MAP</button>` : ""}
       <button class="cmd-btn" type="button" data-jump="#tic-analytics">RESPONSE QUEUE</button>
@@ -5712,6 +5776,11 @@ function _detailFrom(el) {
   if (ask) { closeToolModal(); const i = $("#ask-input"); if (i) { i.value = "@jarvis explain and advise: " + ask.dataset.ask; i.focus(); bucsJump("#ask-form"); } return true; }
   return false;
 }
+// a source link opens its page and nothing else: the row/card click handlers underneath stay quiet
+document.addEventListener("click", (e) => {
+  const a = e.target.closest && e.target.closest("a.src-link, a.tk-src, a.news-title-link");
+  if (a) e.stopPropagation();          // default action (open in new tab) still happens
+}, true);
 document.addEventListener("click", (e) => {
   if (e.target.closest("a, input, select, textarea")) return;
   if (_detailFrom(e.target)) e.stopPropagation();      // capture phase: the card-level jump handlers stay quiet

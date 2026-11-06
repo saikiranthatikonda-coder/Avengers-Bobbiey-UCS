@@ -20,6 +20,7 @@
     <div class="bs-head">
       <div class="bs-title">COMPUTER USE · SUPERVISED DESKTOP AGENT</div>
       <div class="bs-sub"><span class="cu-dot" id="cu-dot"></span><span id="cu-state">IDLE</span> · MODEL <span id="cu-model">—</span> · <span id="cu-safe">FAIL-SAFE: MOUSE TO ANY CORNER</span></div>
+      <div class="bs-sub"><span class="src-local">SOURCE · this machine's screen (local capture, frames auto-delete; no web page)</span></div>
     </div>
     <div class="cu-grid">
       <div class="cu-left">

@@ -12,6 +12,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
+from source_links import safe_url
+
 
 @dataclass
 class CalendarEvent:
@@ -27,6 +29,7 @@ class CalendarEvent:
     organizer: str = ""
     response: str = ""                  # accepted | declined | tentative | needsAction
     attendee_count: int = 0
+    url: str = ""                       # Google Calendar htmlLink (the event's source page)
     notified_10: bool = False
     notified_1: bool = False
 
@@ -41,6 +44,7 @@ class Email:
     received: datetime
     priority: str = "normal"  # "priority" | "normal"
     snippet: str = ""
+    url: str = ""                       # Gmail web link for this message
     notified: bool = False
 
 
@@ -74,6 +78,7 @@ class Agenda:
                 organizer=r.get("organizer") or "",
                 response=r.get("response") or "",
                 attendee_count=r.get("attendee_count") or len(r.get("attendees") or []),
+                url=safe_url(r.get("url")) or "",
             )
             flags = old_flags.get((ev.title, ev.start.isoformat()))
             if flags:
@@ -178,6 +183,7 @@ class Agenda:
                          if r.get("received_ms") else datetime.now(),
                 priority=r.get("priority", "normal"),
                 snippet=r.get("snippet") or "",
+                url=safe_url(r.get("url")) or "",
             )
             if (em.sender, em.subject) in old_notified:
                 em.notified = True
@@ -206,6 +212,8 @@ class Agenda:
                 "organizer": e.organizer,
                 "response": e.response,
                 "attendee_count": e.attendee_count,
+                "url": e.url,
+                "source": "Google Calendar",
             })
         events.sort(key=lambda x: x["start_ts"])
         emails = sorted(self.emails, key=lambda m: m.received, reverse=True)
@@ -217,6 +225,8 @@ class Agenda:
                 "snippet": m.snippet,
                 "ts": m.received.timestamp(),
                 "priority": m.priority,
+                "url": m.url,
+                "source": "Gmail",
             } for m in emails][:6],
             "priority_unread": sum(1 for m in self.emails if m.priority == "priority"),
             "events_today": sum(

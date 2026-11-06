@@ -61,6 +61,105 @@ async def i_conversation(ctx, text, low):
 
 
 
+# ── Computer Use from chat / voice ────────────────────────────────
+# "Jarvis, use the computer to …" → a two-step confirm, then the SAME entry the dashboard and
+# AI Core use (state["computeruse"].submit_task): commander role + host machine only, and every
+# Computer Use safety gate (sensitive-action approvals, pause/stop/takeover, privacy guard,
+# step/time limits, audit) still applies inside the Computer Use engine. Nothing is bypassed.
+_CU_START = (
+    re.compile(r"\b(?:use|take (?:over|control of)|control|operate|drive)\s+(?:the|my|this)\s+"
+               r"(?:computer|pc|laptop|desktop|screen|mouse(?: and keyboard)?)\s+(?:to|and)\s+(.{3,600}?)[.!]?$", re.I),
+    re.compile(r"^(?:(?:hey |ok )?jarvis[, ]+)?(?:start (?:a )?)?computer[- ]use(?: task)?[:,]?\s+(?:to\s+)?(.{3,600}?)[.!]?$",
+               re.I),
+)
+_CU_STATUS = re.compile(r"\b(status of (?:the |my )?computer[- ]use|computer[- ]use (?:task )?(?:status|progress)|"
+                        r"what(?:'s| is) (?:the )?computer[- ]use (?:task )?doing|how(?:'s| is) (?:the )?computer[- ]use"
+                        r"(?: task)? going|is computer[- ]use (?:still )?running|what is the computer doing)\b")
+_CU_STOP = re.compile(r"\b(?:stop|cancel|abort|halt|kill)\s+(?:the\s+)?computer[- ]use(?: task)?\b")
+_CU_CONFIRM = re.compile(r"^\W*(?:(?:hey |ok )?jarvis[, ]+)?(?:confirm(?:ed)?|yes(?:,? (?:go ahead|do it|start(?: it)?|confirm))?|"
+                         r"go ahead|start it|do it)\W*$")
+_CU_DECLINE = re.compile(r"^\W*(?:(?:hey |ok )?jarvis[, ]+)?(?:no|nope|don't|do not|cancel that|never ?mind|abort that)\b")
+CU_CONFIRM_S = 60
+
+
+def _current_cmd():
+    try:
+        import realtime
+        return realtime.CURRENT_CMD.get()
+    except Exception:
+        return None
+
+
+def _cu_gate(ctx) -> str | None:
+    """Why this caller may NOT start Computer Use (None = allowed). Commander + host only."""
+    if (ctx.get("rbac") or {}).get("role", "commander") != "commander":
+        return "Computer Use needs the commander role, sir."
+    cmd = _current_cmd()
+    if cmd is None or not getattr(cmd, "host", False):
+        return "Computer Use can only be started from the host machine itself, sir."
+    return None
+
+
+async def i_computeruse(ctx, text, low):
+    eng = ctx.get("computeruse")
+    pending = ctx.get("computeruse_chat_pending")
+    if pending and time.time() - pending["ts"] > CU_CONFIRM_S:
+        ctx.pop("computeruse_chat_pending", None)
+        pending = None
+    if pending and _CU_DECLINE.match(low):
+        ctx.pop("computeruse_chat_pending", None)
+        return _r("Understood, I won't touch the computer.", action={"name": "computeruse.request.declined"})
+    if pending and _CU_CONFIRM.match(low):
+        ctx.pop("computeruse_chat_pending", None)
+        why = _cu_gate(ctx)
+        if why or eng is None:
+            return _r(why or "Computer Use isn't loaded on this install, sir.",
+                      action={"name": "computeruse.submit", "ok": False})
+        cmd = _current_cmd()
+        src = "voice" if getattr(cmd, "source", "") in ("voice", "clap") else "chat"
+        goal = pending["text"]
+
+        async def run(progress):
+            await progress("starting Computer Use…")
+            r = await eng.submit_task(goal, source=src)
+            if not r.get("ok"):
+                return f"Computer Use didn't start: {r.get('error', 'refused')}."
+            return (f"Computer Use is running with {r.get('adapter', 'the vision model')}. Sensitive steps will pause "
+                    "for your approval on the Computer Use panel, and STOP always works.")
+        return _r("Starting it now, sir.", slow=True, run=run,
+                  action={"name": "computeruse.submit", "target": goal[:80]},
+                  ui=[{"type": "dash-cmd", "target": "computeruse"}])
+    if _CU_STOP.search(low):
+        if eng is None:
+            return _r("Computer Use isn't loaded on this install, sir.")
+        res = eng.control("stop", "operator said stop (chat/voice)")          # stopping is always allowed
+        return _r("Computer Use stopped." if res.get("ok") else "Computer Use has nothing running, sir.",
+                  action={"name": "computeruse.stop", "ok": bool(res.get("ok"))})
+    if _CU_STATUS.search(low):
+        try:
+            import dashboard_context
+            return _r(dashboard_context.computeruse_status_line(ctx))
+        except Exception:
+            return None
+    goal = None
+    for rx in _CU_START:
+        m = rx.search(re.sub(r"\s+", " ", text).strip())          # keep the operator's casing
+        if m:
+            goal = m.group(1).strip()
+            break
+    if not goal:
+        return None
+    if eng is None:
+        return _r("Computer Use isn't loaded on this install, sir.")
+    why = _cu_gate(ctx)
+    if why:
+        return _r(why, action={"name": "computeruse.request", "ok": False})
+    ctx["computeruse_chat_pending"] = {"text": goal[:600], "ts": time.time()}
+    return _r(f"I'll use the computer to {goal[:200].rstrip('.')}. Sensitive steps will still pause for your "
+              "approval and STOP always works. Say confirm to start, or no to cancel.",
+              action={"name": "computeruse.request", "target": goal[:80]})
+
+
 _BRAIN_ALIASES = {"claude": "claude", "claude cli": "claude", "claude code": "claude", "cloud": "claude",
                   "ollama": "ollama", "local": "ollama", "local model": "ollama", "local ai": "ollama",
                   "llama": "ollama", "auto": "auto", "automatic": "auto", "default": "auto",
@@ -405,7 +504,7 @@ async def i_dashboard(ctx, text, low):
 
 # order matters: actions that start with "open" (apps, sites) before dashboard
 # sections, specific questions before broad ones
-HANDLERS = [i_conversation, i_brain, i_dev, i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
+HANDLERS = [i_conversation, i_computeruse, i_brain, i_dev, i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
             i_inbox, i_threats, i_news, i_memory, i_vision, i_missions, i_dashboard]
 
 

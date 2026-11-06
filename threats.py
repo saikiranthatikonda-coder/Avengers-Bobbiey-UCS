@@ -27,6 +27,8 @@ import uuid
 from collections import deque
 from datetime import datetime
 
+from source_links import safe_url
+
 SEVERITY_WEIGHT = {"low": 3, "medium": 8, "high": 18, "critical": 30}
 SECURITY_WORDS = ("breach", "hack", "cyber", "malware", "ransomware",
                   "attack", "vulnerability", "exploit", "phishing",
@@ -64,7 +66,8 @@ class ThreatEngine:
     # ── event plumbing ────────────────────────────────────────────
     async def _add(self, category: str, severity: str, title: str,
                    detail: str = "", dedupe_key: str | None = None,
-                   cooldown: float = 600.0, cond: dict | None = None) -> None:
+                   cooldown: float = 600.0, cond: dict | None = None,
+                   url: str | None = None, source: str | None = None) -> None:
         key = dedupe_key or f"{category}:{title}"
         now = time.time()
         if now - self._fired.get(key, 0) < cooldown:
@@ -75,6 +78,9 @@ class ThreatEngine:
             "category": category, "severity": severity,
             "title": title[:120], "detail": detail[:240],
             "agent": AGENT_FOR_CATEGORY.get(category, "jarvis"),
+            # where the signal came from: an external article (linked) or this machine's own telemetry
+            "source": source or ("news feed" if category == "external" else "this machine (live telemetry/agenda)"),
+            "url": safe_url(url),
         }
         if cond:
             # {"metric": "mem", "above": 93}: re-checked against live telemetry
@@ -164,7 +170,7 @@ class ThreatEngine:
                     await self._add("external", "low",
                                     f"Security headline: {title}",
                                     f"via {art.get('source', 'feed')}",
-                                    cooldown=0)
+                                    cooldown=0, url=art.get("url"), source=art.get("source") or "news feed")
 
         # PRODUCTIVITY — long operator absence during work hours
         if self.insights:

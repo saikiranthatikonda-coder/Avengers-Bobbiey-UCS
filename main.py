@@ -597,7 +597,7 @@ class Ask(BaseModel):
 
 
 @app.post("/api/ask")
-async def ask(req: Ask):
+async def ask(req: Ask, request: Request):
     team = state["team"]
     hub: Hub = state["hub"]
     tts: TTSPlayer = state["tts"]
@@ -642,7 +642,7 @@ async def ask(req: Ask):
         reply = await target.handle(req.prompt)
         return {"reply": reply, "agent": target.name, "codename": target.codename}
     cmd = await engine.submit(req.prompt, source="api", agent=target.name if req.agent else None,
-                              wait=True, speak=bool(state["tts"].enabled))
+                              wait=True, speak=bool(state["tts"].enabled), host=_host_only(request))
     who = team.get(cmd.handled_by) or target
     return {"reply": cmd.reply, "agent": who.name, "codename": who.codename,
             "id": cmd.id, "path": cmd.path, "intent": cmd.intent, "marks": cmd.marks,
@@ -659,13 +659,14 @@ class CommandReq(BaseModel):
 
 
 @app.post("/api/command")
-async def command(req: CommandReq):
+async def command(req: CommandReq, request: Request):
     """Non-blocking: returns the command id at once; progress, streamed reply
     and timings arrive over /ws as {"type": "cmd", ...}."""
     if req.agent and req.agent.lower() not in state["team"]:
         return {"ok": False, "error": f"Unknown agent: {req.agent}", "available": list(state["team"].keys())}
     src = req.source if req.source in ("text", "ui", "api") else "text"
-    cmd = await state["engine"].submit(req.text, source=src, agent=req.agent, speak=req.speak)
+    cmd = await state["engine"].submit(req.text, source=src, agent=req.agent, speak=req.speak,
+                                       host=_host_only(request))
     return {"ok": True, "id": cmd.id}
 
 
@@ -1968,7 +1969,8 @@ def _exit_soon(reason: str) -> None:
 # module never imports main.py.
 import importlib  # noqa: E402
 
-FEATURE_MODULES = ("disaster", "devices", "secagent", "computeruse", "phone", "evolution", "agentos", "globalmap")
+FEATURE_MODULES = ("disaster", "devices", "secagent", "computeruse", "phone", "evolution", "agentos", "globalmap",
+                   "dashboard_context")
 _feature_ctx = {"state": state, "audit": lambda action, detail="": _audit(action, detail),
                 "commander": lambda: _commander(), "host_only": lambda request: _host_only(request)}
 for _name in FEATURE_MODULES:
@@ -2615,6 +2617,14 @@ class AskKB(BaseModel):
 @app.post("/api/knowledge/ask")
 async def knowledge_ask(req: AskKB):
     return await state["knowledge"].ask(req.query.strip()[:200])
+
+
+@app.post("/api/livefacts/sources")
+async def livefacts_sources(req: AskKB):
+    """Citations (title/source/url) of the live sources fetched for this question in the last
+    2 min, so the dashboard can link an answer back to them. Read-only, nothing is fetched here."""
+    import livefacts
+    return {"sources": livefacts.sources_for(req.query.strip()[:500])}
 
 
 @app.post("/api/threats/ack/{event_id}")

@@ -261,6 +261,7 @@ class GlobalMap:
                     "columns": ["icao24", "callsign", "country", "lon", "lat", "alt_m", "vel_ms",
                                 "track_deg", "vrate_ms", "t_pos", "squawk"],
                     "gate": self.opensky.snapshot(self.now()),
+                    "link_template": gs.ADSBX_TEMPLATE, "link_source": "ADS-B Exchange",
                     "source": self.source_info("opensky") if "opensky" in self.cache else None}
         if layer == "satellites":
             c = self.cache.get("celestrak", empty)

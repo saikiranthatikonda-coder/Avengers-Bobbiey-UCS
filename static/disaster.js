@@ -232,7 +232,7 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
         <span class="dis-ab" title="${esc(i.type)}">${esc(ABBR[i.type] || "··")}</span>
         <span class="dis-ev-body">
           <span class="dis-ev-t"><span class="dis-sev">${esc(i.sev_label)}</span>${esc(fix(i.title))}</span>
-          <span class="dis-ev-m">${esc(i.source)} · ${esc(ago(i.time))}${i.stale ? " · STALE" : ""} ${dist}</span>
+          <span class="dis-ev-m">${esc(i.source)}${safeUrl(i.link) ? " ↗" : ""} · ${esc(ago(i.time))}${i.stale ? " · STALE" : ""} ${dist}</span>
         </span>
         <span class="dis-go" aria-hidden="true">›</span></button>`;
     }).join("") + (items.length > 80 ? `<div class="tf-empty">+${items.length - 80} more (lower severity) · narrow with a filter</div>` : "");
@@ -317,11 +317,11 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
       </div>
       <div class="mb-actions">
         ${i.lat != null ? `<button class="cmd-btn" type="button" data-map-lat="${+i.lat}" data-map-lon="${+i.lon}" data-map-id="${esc(i.id)}" data-map-layer="disaster" data-map-label="${esc(fix(i.title))}">SHOW ON MAP</button>` : ""}
-        ${u ? `<a class="cmd-btn" href="${esc(u)}" target="_blank" rel="noopener noreferrer">OPEN ${esc(i.source)} ↗</a>` : ""}
+        ${u ? `<a class="cmd-btn" href="${esc(u)}" target="_blank" rel="noopener noreferrer">OPEN SOURCE · ${esc(i.source)} ↗</a>` : ""}
         ${all[i.type] ? `<button class="cmd-btn" type="button" data-dis-prep="${esc(i.type)}">WHAT TO DO</button>` : ""}
         <button class="cmd-btn" type="button" data-dis-type="${esc(i.type)}">SIMILAR EVENTS</button>
       </div>
-      <div class="si-src"><span class="lbl">DATA SOURCE</span> ${esc(i.source)} · fetched ${esc(clock(i.fetched_at))} (${esc(ago(i.fetched_at))}) <code>/api/disaster</code></div>`;
+      <div class="si-src"><span class="lbl">DATA SOURCE</span> ${u ? `<a class="src-link" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(i.source)} ↗</a>` : `${esc(i.source)} (no public page for this item)`} · fetched ${esc(clock(i.fetched_at))} (${esc(ago(i.fetched_at))}) <code>/api/disaster</code></div>`;
     if (typeof openCustomModal === "function") openCustomModal(fix(i.title), `DISASTER RESPONSE · ${String(i.category).toUpperCase()}`, null, html);
   }
 

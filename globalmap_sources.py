@@ -30,6 +30,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 import disaster as dz          # read-only reuse of the Disaster Response parsers
+import source_links as sl
 from globalmap_geo import COUNTRY, US_STATE
 
 SEV_LABEL = dz.SEV_LABEL
@@ -67,6 +68,7 @@ def map_item(it: dict, layer: str, **extra) -> dict | None:
         return None
     out = {k: it.get(k) for k in ("id", "type", "title", "detail", "severity", "sev_label",
                                   "lat", "lon", "time", "source", "link")}
+    out["source_url"] = out.get("link")
     out["layer"] = layer
     if it.get("mag") is not None:
         out["mag"] = it["mag"]
@@ -82,6 +84,7 @@ def _mk(**kw) -> dict:
     kw["title"] = _txt(kw.get("title"), 160)
     kw["detail"] = _txt(kw.get("detail"), 280)
     kw["link"] = _url(kw.get("link"))
+    kw["source_url"] = kw["link"]
     return kw
 
 
@@ -253,6 +256,9 @@ def parse_nws(payload: dict) -> list[dict]:
 # ───────────────────────── OpenSky (aircraft) ─────────────────────────
 
 EMERGENCY_SQUAWK = {"7500": "unlawful interference", "7600": "radio failure", "7700": "general emergency"}
+# rows are compact (up to 6000): the dashboard builds each aircraft's public page from this
+# documented pattern with the row's real icao24 (validated as 6 hex digits on both sides)
+ADSBX_TEMPLATE = "https://globe.adsbexchange.com/?icao={icao24}"
 
 
 def parse_opensky(payload: dict, max_rows: int = 6000) -> tuple[list[list], dict]:
@@ -287,7 +293,9 @@ def parse_opensky(payload: dict, max_rows: int = 6000) -> tuple[list[list], dict
     meta = {"time": _num((payload or {}).get("time")), "states": total, "airborne": airborne,
             "shown": len(rows), "sampled": len(rows) < airborne,
             "emergencies": [{"icao24": r[0], "callsign": r[1], "squawk": r[10],
-                             "meaning": EMERGENCY_SQUAWK[r[10]], "lat": r[4], "lon": r[3]} for r in emerg]}
+                             "meaning": EMERGENCY_SQUAWK[r[10]], "lat": r[4], "lon": r[3],
+                             "url": sl.adsbx_aircraft(r[0])} for r in emerg],
+            "link_template": ADSBX_TEMPLATE, "link_source": "ADS-B Exchange"}
     return rows, meta
 
 
@@ -374,7 +382,8 @@ def parse_tle(text: str, group: str) -> list[dict]:
     while i + 2 < len(lines):
         name, l1, l2 = lines[i].strip(), lines[i + 1].strip(), lines[i + 2].strip()
         if _tle_ok(l1, l2):
-            out.append({"id": int(l1[2:7]), "name": _txt(name, 40), "group": group, "l1": l1[:69], "l2": l2[:69]})
+            out.append({"id": int(l1[2:7]), "name": _txt(name, 40), "group": group, "l1": l1[:69], "l2": l2[:69],
+                        "url": sl.n2yo_satellite(int(l1[2:7]))})
             i += 3
         else:
             i += 1
@@ -475,7 +484,7 @@ def parse_swpc_alerts(rows: list, now: float | None = None, hours: float = 24, l
             else 2 if kind in ("ALERT", "WARNING", "EXTENDED WARNING", "CONTINUED ALERT") else 1
         out.append({"id": f"swpc:{r.get('product_id')}:{int(ts)}", "kind": kind.title(), "title": _txt(title, 140),
                     "time": ts, "severity": sev, "code": _txt(r.get("product_id"), 12),
-                    "link": "https://www.swpc.noaa.gov/products/alerts-watches-and-warnings"})
+                    "link": sl.SWPC["alerts"], "source_url": sl.SWPC["alerts"]})
     out.sort(key=lambda a: -a["time"])
     return out[:limit]
 
@@ -647,10 +656,11 @@ async def src_swpc(env) -> dict:
              "kp_label": kp_label(kp), "kp_3h": hist,
              "scales": parse_scales(got["scales"]) if got["scales"] else None,
              "wind": parse_wind(got["speed"], got["mag"]) if got["speed"] or got["mag"] else None,
-             "alerts": parse_swpc_alerts(got["alerts"]) if got["alerts"] else [], "errors": errs}
+             "alerts": parse_swpc_alerts(got["alerts"]) if got["alerts"] else [], "errors": errs,
+             "links": dict(sl.SWPC)}
     return {"items": [], "space": space, "meta": {"errors": errs}}
 
 
 async def src_ovation(env) -> dict:
     d = (await env.get(SWPC + "/json/ovation_aurora_latest.json")).ok().json()
-    return {"items": [], "aurora": parse_ovation(d)}
+    return {"items": [], "aurora": {**parse_ovation(d), "source_url": sl.SWPC["aurora"]}}

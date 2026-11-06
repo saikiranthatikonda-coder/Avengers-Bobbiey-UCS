@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 
 import httpx
 
+from source_links import safe_url
+
 # (source label, feed URL, category)
 RSS_FEEDS = [
     ("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml", "world"),
@@ -58,8 +60,8 @@ def parse_rss(xml_text: str, source: str, category: str, limit: int = 8) -> list
             el = it.find(f"{atom}link")
             link = el.get("href", "") if el is not None else ""
         when = it.findtext("pubDate") or it.findtext(f"{atom}updated") or it.findtext(f"{atom}published")
-        if title and link.startswith("http"):
-            out.append({"title": title[:200], "source": source, "url": link,
+        if title and safe_url(link):
+            out.append({"title": title[:200], "source": source, "url": safe_url(link),
                         "ts": _iso(when), "category": category})
         if len(out) >= limit:
             break
@@ -69,8 +71,9 @@ def parse_rss(xml_text: str, source: str, category: str, limit: int = 8) -> list
 def parse_hn(data: dict, limit: int = 8) -> list[dict]:
     out = []
     for h in data.get("hits", [])[:limit]:
-        url = h.get("url") or f"https://news.ycombinator.com/item?id={h.get('objectID')}"
-        if h.get("title"):
+        oid = str(h.get("objectID") or "")
+        url = safe_url(h.get("url")) or (f"https://news.ycombinator.com/item?id={oid}" if oid.isdigit() else None)
+        if h.get("title") and url:
             out.append({"title": h["title"][:200], "source": "Hacker News", "url": url,
                         "ts": h.get("created_at"), "category": "tech"})
     return out

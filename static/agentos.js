@@ -8,6 +8,20 @@
     : String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c])));
   const log = (html, kind = "info") => { try { logEvent(`<span class="tag">[ai core]</span> ${html}`, kind); } catch (e) {} };
   const $a = (id) => document.getElementById(id);
+  const SRC = window.BUCS_SRC || null;     // app.js source-link helpers (http(s) only, new tab, noopener)
+  const linkify = (escaped) => (SRC ? SRC.linkify(escaped) : escaped);
+  // web tools (web_lookup / news_search) fetch live sources: list them as links back to the original pages
+  async function showCites(steps) {
+    const qs = [...new Set(steps.filter((s) => s.ok && ["web_lookup", "news_search"].includes(s.tool) && s.arguments && s.arguments.query)
+      .map((s) => String(s.arguments.query)))].slice(0, 3);
+    const box = $a("ao-cites"); if (!box || !qs.length || !SRC) return;
+    const all = [];
+    for (const q of qs) {
+      try { const d = await post("/api/livefacts/sources", { query: q }); all.push(...((d && d.sources) || [])); } catch (e) {}
+    }
+    if (all.length && box.isConnected)
+      box.innerHTML = `<span class="ao-dim">SOURCES</span> ` + all.slice(0, 8).map((c) => SRC.link(c.url, (c.kind === "Google News" ? c.source : c.kind || c.source) + (c.title ? ": " + String(c.title).slice(0, 60) : ""))).join(" · ");
+  }
   const post = (u, b) => fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b || {}) })
     .then(async (r) => { try { return await r.json(); } catch (e) { return { ok: false, error: "HTTP " + r.status }; } })
     .catch((e) => ({ ok: false, error: e.message }));
@@ -31,6 +45,7 @@
     <div class="bs-head">
       <div class="bs-title">AI CORE · AGENTS, MEMORY, MODELS</div>
       <div class="bs-sub" id="ao-sub">discovering providers…</div>
+      <div class="bs-sub"><span class="src-local">SOURCE · this install (provider discovery + health checks); web answers list their sources below</span></div>
     </div>
     <div class="ao-approvals" id="ao-approvals" hidden></div>
     <div class="ao-tabs" role="tablist">${TABS.map(([k, l]) => `<button type="button" role="tab" class="ao-tab" data-tab="${k}">${l}</button>`).join("")}</div>
@@ -473,10 +488,12 @@
         const r = await post("/api/agentos/chat", body);
         el.disabled = false;
         out.innerHTML = `${r.ok === false && !r.decision ? `<div class="ao-bad">${esc(r.error || "failed")}</div>` : ""}
-          <div class="ao-answer">${esc(r.answer || r.error || "(no answer)")}</div>
+          <div class="ao-answer">${linkify(esc(r.answer || r.error || "(no answer)"))}</div>
           <div class="ao-dim">${ms(Math.round(performance.now() - t0))} total${(r.citations || []).length ? " · memory used: " + r.citations.map((c) => esc(c.id)).join(", ") : ""}</div>
           ${(r.steps || []).length ? `<div class="ao-steps">${r.steps.map((s) => `<div class="${s.ok ? "" : "ao-bad"}">⚙ <b>${esc(s.tool)}</b> ${esc(JSON.stringify(s.arguments))} → ${s.ok ? esc((s.result_preview || "").slice(0, 220)) : esc(s.error)} <span class="ao-dim">${ms(s.ms)}</span></div>`).join("")}</div>` : ""}
+          <div class="ao-cites" id="ao-cites"></div>
           ${decisionHTML(r.decision)}`;
+        showCites(r.steps || []);
         refresh(); break;
       }
       case "approve": case "reject": done(await post(`/api/agentos/approvals/${encodeURIComponent(id)}`, { approve: a === "approve" }), a === "approve" ? "approved" : "rejected"); break;

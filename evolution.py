@@ -43,6 +43,12 @@ from pydantic import BaseModel
 
 import evolution_core as core
 from evolution_core import scrub
+from source_links import safe_url as _safe_url
+
+
+def _pypi_url(name: str) -> str | None:
+    """PyPI's public project page (documented pattern) for a requirement name."""
+    return f"https://pypi.org/project/{name}/" if re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,100}$", name or "") else None
 
 HERE = Path(__file__).resolve().parent
 STATE_FILE = HERE / ".update" / "evolution.json"
@@ -590,7 +596,8 @@ class Evolution:
                     import livefacts
                     for q in ("new AI model release LLM", "Ollama new model", "Anthropic Claude release"):
                         try:
-                            watch += [scrub(h.lstrip("- "), 200) for h in await livefacts._news(c, q)][:4]
+                            watch += [(scrub(f"{n['title']} ({n['source']}, {n['when']})", 200), n.get("url"))
+                                      for n in await livefacts._news_items(c, q)][:4]
                         except Exception as e:
                             errors.append(f"news '{q}': {type(e).__name__}")
                 except Exception as e:
@@ -599,9 +606,12 @@ class Evolution:
             errors.append(f"research: {type(e).__name__}")
         outdated = [d for d in deps if d.get("installed") and d.get("latest") and _vless(d["installed"], d["latest"])]
         suggestions = [{"kind": "dependency", "title": f"{d['name']} {d['installed']} → {d['latest']}",
-                        "source": "PyPI", "url": d.get("notes_url")} for d in outdated]
-        suggestions += [{"kind": "capability-watch", "title": h, "source": "Google News (7 days)", "url": None}
-                        for h in dict.fromkeys(watch)][:10]
+                        "source": "PyPI", "url": d.get("notes_url") or _pypi_url(d["name"])} for d in outdated]
+        seen_w: dict[str, str | None] = {}
+        for h, u in watch:
+            seen_w.setdefault(h, u)
+        suggestions += [{"kind": "capability-watch", "title": h, "source": "Google News (7 days)",
+                         "url": _safe_url(u)} for h, u in seen_w.items()][:10]
         self.research = {"ts": time.time(), "running": False, "deps": deps, "outdated": outdated,
                          "suggestions": suggestions, "errors": errors[:10]}
         self._note(None, "research", note=f"{len(deps)} deps checked, {len(outdated)} outdated, {len(watch)} headlines")

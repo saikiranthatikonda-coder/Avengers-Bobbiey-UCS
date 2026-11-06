@@ -19,6 +19,8 @@ import re
 import time
 from pathlib import Path
 
+from source_links import safe_url
+
 ROOT = Path(__file__).parent
 
 SOURCE_WEIGHT = {
@@ -91,7 +93,7 @@ class KnowledgeHub:
             for ev in list(self.threats.events)[:25]:
                 docs.append({"source": "incident", "ts": ev.get("ts", now),
                              "text": f"{ev.get('title', '')}. {ev.get('detail', '')}",
-                             "ref": f"threat · {ev.get('category', '')}"})
+                             "ref": f"threat · {ev.get('category', '')}", "url": ev.get("url")})
 
         if self.agenda is not None:
             try:
@@ -100,12 +102,12 @@ class KnowledgeHub:
                     docs.append({"source": "calendar", "ts": e.get("start_ts", now),
                                  "text": f"{e['title']} at {e.get('location') or 'no location'} "
                                          f"with {', '.join(e.get('attendees') or []) or 'no attendees'}",
-                                 "ref": "google calendar"})
+                                 "ref": "google calendar", "url": e.get("url")})
                 for m in snap.get("emails", []):
                     docs.append({"source": "email", "ts": m.get("ts", now),
                                  "text": f"{m.get('subject', '')} — from {m.get('sender', '')}. "
                                          f"{m.get('snippet', '')}",
-                                 "ref": "gmail"})
+                                 "ref": "gmail", "url": m.get("url")})
             except Exception:
                 pass
 
@@ -113,7 +115,7 @@ class KnowledgeHub:
             for a in (self.news.recent or [])[:15]:
                 docs.append({"source": "news", "ts": now,
                              "text": a.get("title", ""),
-                             "ref": a.get("source", "news feed")})
+                             "ref": a.get("source", "news feed"), "url": a.get("url")})
 
         if self.team_memory is not None:
             for e in self.team_memory.recent(n=30):
@@ -153,6 +155,7 @@ class KnowledgeHub:
             "results": [{
                 "source": d["source"], "ref": d["ref"],
                 "text": d["text"][:260], "ts": d.get("ts"),
+                "url": safe_url(d.get("url")),
                 "score": round(s, 3),
             } for s, d in scored[:limit]],
         }

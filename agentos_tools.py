@@ -577,6 +577,15 @@ def builtin_tools(state: dict, memory=None, folders_fn=lambda: []) -> list[Tool]
                              for f in (snap.get("findings") or [])[: int(a.get("limit") or 10)]],
                 "last_scan": snap.get("last_scan")}
 
+    async def dashboard_read(a, t):
+        import dashboard_context
+        sec = str(a.get("section") or "").strip().lower()
+        q = str(a.get("query") or "")[:300]
+        if sec in ("", "auto"):
+            secs = dashboard_context.route(q or "dashboard overview") or list(dashboard_context.OVERVIEW_SET)
+            return {"sections": await dashboard_context.read_sections(state, secs, q, commander=t.commander)}
+        return await dashboard_context.read_section(state, sec, q, commander=t.commander)
+
     async def computer_use(a, t):
         fn, name = _computeruse_hook(state)
         if fn is None:
@@ -657,6 +666,15 @@ def builtin_tools(state: dict, memory=None, folders_fn=lambda: []) -> list[Tool]
         Tool("security_findings", "Open findings from the BUCS cyber analyst (dependency CVEs, secrets, exposure).",
              S({"limit": {"type": "integer", "minimum": 1, "maximum": 30}}), "read", security_findings,
              available=lambda: (state.get("secagent") is not None, "security agent not running")),
+        Tool("dashboard_read", "Read the LIVE state of a BUCS dashboard section (read-only): system, hardware, network, "
+             "threats, insights, decisions, missions, productivity, agenda, weather, news, fleet, devices, disaster, "
+             "globalmap, secagent (cyber analyst), computeruse, phone, evolution, aicore, selfheal, enterprise, licence, "
+             "brain, roadmap — or 'auto' to pick from the query. Answer from it and name the section.",
+             S({"section": {**st, "enum": ["auto", "system", "hardware", "network", "threats", "insights", "decisions",
+                                            "missions", "productivity", "agenda", "weather", "news", "fleet", "devices",
+                                            "disaster", "globalmap", "secagent", "computeruse", "phone", "evolution",
+                                            "aicore", "selfheal", "enterprise", "licence", "brain", "roadmap"]},
+                "query": {**st, "maxLength": 300}}, ["section"]), "read", dashboard_read),
         Tool("computer_use_task", "Launch a computer-use task on this PC (drives mouse/keyboard). Always needs approval.",
              S({"goal": {**st, "maxLength": 600}}, ["goal"]), "destructive", computer_use,
              available=lambda: (_computeruse_hook(state)[0] is not None, "computer-use module exposes no task API")),

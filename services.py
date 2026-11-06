@@ -6,6 +6,7 @@ import httpx
 import psutil
 
 from hub import Hub
+from source_links import safe_url
 
 
 class SystemMonitor:
@@ -84,7 +85,7 @@ class NewsService:
                 {
                     "title": a.get("title"),
                     "source": (a.get("source") or {}).get("name"),
-                    "url": a.get("url"),
+                    "url": safe_url(a.get("url")),
                     "ts": a.get("publishedAt"),
                 }
                 for a in data.get("articles", [])

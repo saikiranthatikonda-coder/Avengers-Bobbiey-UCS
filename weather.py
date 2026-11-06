@@ -5,6 +5,8 @@ import time
 
 import httpx
 
+from source_links import open_meteo as open_meteo_url
+
 
 WMO_LABELS = {
     0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast",
@@ -110,6 +112,8 @@ class WeatherService:
             "label": WMO_LABELS.get(code, "—"),
             "glyph": WMO_GLYPH.get(code, "◐"),
             "fetched_at": time.time(),
+            "source": "Open-Meteo",
+            "source_url": open_meteo_url(use_lat, use_lon),
         }
         # 5-minute cache per coord pair; the last good reading is kept for outages
         self._cache[key] = (result, time.time() + 300)

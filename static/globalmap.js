@@ -39,6 +39,13 @@
   const $ = (s, r = mount) => r.querySelector(s);
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const safeUrl = u => (typeof u === "string" && /^https?:\/\/[^\s"'<>]+$/.test(u) ? u : null);
+  // public source pages built from documented patterns with the real id (validated), else no link
+  const adsbx = icao => (/^[0-9a-f]{6}$/i.test(String(icao || "")) ? `https://globe.adsbexchange.com/?icao=${String(icao).toLowerCase()}` : null);
+  const satUrl = s => safeUrl(s && s.url) || (/^\d{1,6}$/.test(String(s && s.id)) && +s.id > 0 ? `https://www.n2yo.com/satellite/?s=${+s.id}` : null);
+  const celestrakUrl = id => (/^\d{1,6}$/.test(String(id)) && +id > 0 ? `https://celestrak.org/NORAD/elements/gp.php?CATNR=${+id}&FORMAT=tle` : null);
+  const SWPC_LINKS = { kp: "https://www.swpc.noaa.gov/products/planetary-k-index", scales: "https://www.swpc.noaa.gov/noaa-scales-explanation",
+    wind: "https://www.swpc.noaa.gov/products/real-time-solar-wind", aurora: "https://www.swpc.noaa.gov/products/aurora-30-minute-forecast",
+    alerts: "https://www.swpc.noaa.gov/products/alerts-watches-and-warnings" };
   const nowS = () => Date.now() / 1000;
   function ago(ts) {
     if (!ts) return "—";
@@ -748,7 +755,7 @@
         ${i.mag != null ? row("MAGNITUDE", "M" + Number(i.mag).toFixed(1)) : ""}
         ${row("POSITION", ll(i.lat, i.lon) + (i.approx ? " · approx (area centroid)" : ""))}${distRow(i.lat, i.lon)}
         ${row("SOURCE", esc(i.source) + (src ? ` · fetched ${ago(src.last_ok)}` : ""))}${i.stale ? row("STATUS", "STALE — source unreachable, last good data") : ""}</dl>
-        ${safeUrl(i.link) ? `<a href="${esc(safeUrl(i.link))}" target="_blank" rel="noopener noreferrer">OPEN SOURCE ↗</a>` : ""}`;
+        ${safeUrl(i.link) ? `<a href="${esc(safeUrl(i.link))}" target="_blank" rel="noopener noreferrer">OPEN SOURCE · ${esc(i.source)} ↗</a>` : `<p class="gm-nosrc">SOURCE · ${esc(i.source)} (no public page for this item)</p>`}`;
     } else if (o.kind === "flight") {
       const r = S.flights.rows[o.n], m = S.flights.meta || {};
       const sq = r[10] && { 7500: "unlawful interference", 7600: "radio failure", 7700: "general emergency" }[r[10]];
@@ -759,8 +766,8 @@
         ${row("CLIMB", r[8] != null ? r[8] + " m/s" : "")}${sq ? row("SQUAWK", `${r[10]} · ${sq} (as transmitted)`) : ""}
         ${row("POSITION", ll(S.fl.lat[o.n], S.fl.lon[o.n]))}${distRow(S.fl.lat[o.n], S.fl.lon[o.n])}
         ${row("REPORTED", `${utc(m.time)} · position extrapolated ${Math.round(S.fl.dt || 0)} s from heading & speed`)}
-        ${row("SOURCE", "OpenSky Network (anonymous)")}</dl>
-        <a href="https://opensky-network.org/aircraft-profile?icao24=${encodeURIComponent(r[0])}" target="_blank" rel="noopener noreferrer">OPENSKY PROFILE ↗</a>`;
+        ${row("SOURCE", "OpenSky Network (anonymous state vectors)")}</dl>
+        ${adsbx(r[0]) ? `<a href="${esc(adsbx(r[0]))}" target="_blank" rel="noopener noreferrer">OPEN ON ADS-B EXCHANGE ↗</a>` : `<p class="gm-nosrc">SOURCE · OpenSky Network (no valid ICAO address to link)</p>`}`;
     } else if (o.kind === "sat") {
       const q = S.satPos.find(q => q.s.id === o.id); if (!q) return;
       const mm = parseFloat(q.s.l2.slice(52, 63)), period = mm ? 1440 / mm : null, inc = parseFloat(q.s.l2.slice(8, 16));
@@ -770,16 +777,19 @@
         ${row("PERIOD", period ? period.toFixed(1) + " min" : "")}${row("INCLINATION", isFinite(inc) ? inc.toFixed(1) + "°" : "")}
         ${row("SUB-POINT", ll(q.lat, q.lon))}${distRow(q.lat, q.lon)}
         ${row("SOURCE", esc((S.sats.meta && S.sats.meta.provider) || "CelesTrak") + " element set · SGP4 propagated in your browser" + (S.sats.source ? " · fetched " + ago(S.sats.source.last_ok) : ""))}</dl>
-        <a href="https://celestrak.org/NORAD/elements/gp.php?CATNR=${q.s.id}&FORMAT=tle" target="_blank" rel="noopener noreferrer">ELEMENT SET ↗</a>`;
+        ${satUrl(q.s) ? `<a href="${esc(satUrl(q.s))}" target="_blank" rel="noopener noreferrer">SATELLITE PAGE · N2YO ↗</a>` : ""}
+        ${celestrakUrl(q.s.id) ? `<a href="${esc(celestrakUrl(q.s.id))}" target="_blank" rel="noopener noreferrer">ELEMENT SET · CELESTRAK ↗</a>` : ""}`;
     } else if (o.kind === "fleet") {
       const f = S.fleet;
       h = `<div class="gm-card-h" style="--c:${S.accent}"><span>BUCS FLEET</span><em>${f.online}/${f.nodes.length} ONLINE</em></div>
         <h3>${esc(f.city || "Fleet site")}</h3>
         <dl>${f.nodes.slice(0, 8).map(n => row(esc((n.name || n.node_id || "node").toUpperCase()), `${esc(n.status)}${n.cpu != null ? ` · CPU ${Math.round(n.cpu)}%` : ""}`)).join("")}
-        ${row("LOCATION", "host public-IP geolocation (approximate)")}</dl>`;
+        ${row("LOCATION", "host public-IP geolocation (approximate)")}</dl>
+        <p class="gm-nosrc">SOURCE · BUCS fleet registry (/api/fleet node reports; no web page)</p>`;
     } else if (o.kind === "op") {
       h = `<div class="gm-card-h" style="--c:#fff"><span>OPERATOR</span><em>YOU</em></div><h3>${ll(S.op.lat, S.op.lon)}</h3>
-        <dl>${row("FROM", esc(S.op.how))}${row(`WITHIN ${NEAR_KM} KM`, nearCount() + " event(s)")}</dl>`;
+        <dl>${row("FROM", esc(S.op.how))}${row(`WITHIN ${NEAR_KM} KM`, nearCount() + " event(s)")}</dl>
+        <p class="gm-nosrc">SOURCE · this browser / this machine (location; no web page)</p>`;
     }
     openCard(h); invalidate();
   }
@@ -799,7 +809,7 @@
   function showSpaceCard() {
     const sp = S.data && S.data.space, a = S.data && S.data.aurora, st = S.data && S.data.layers.space;
     if (!sp) { openCard(`<div class="gm-card-h"><span>SPACE WEATHER</span><em>${esc(st ? st.status.toUpperCase() : "—")}</em></div><p>NOAA SWPC data not available yet.</p>`); return; }
-    const sc = sp.scales || {}, w = sp.wind || {};
+    const sc = sp.scales || {}, w = sp.wind || {}, swpcLinks = sp.links || SWPC_LINKS;
     const bars = (sp.kp_3h || []).map(h => `<i title="${utc(h.time)} Kp ${h.kp}" style="height:${Math.max(6, h.kp / 9 * 100)}%;--c:${h.kp >= 5 ? SEV[3] : h.kp >= 4 ? SEV[2] : "#39ff9f"}"></i>`).join("");
     openCard(`<div class="gm-card-h" style="--c:#39ff9f"><span>SPACE WEATHER · NOAA SWPC</span><em>${esc(sp.kp_label.toUpperCase())}</em></div>
       <h3>Kp ${sp.kp != null ? sp.kp.toFixed(2) : "—"} <small>${ago(sp.kp_time)}</small></h3>
@@ -807,8 +817,9 @@
       <dl>${row("NOAA SCALES", `G${sc.G ?? "—"} · S${sc.S ?? "—"} · R${sc.R ?? "—"}`)}${row("SOLAR WIND", w.speed_kms != null ? `${w.speed_kms} km/s` : "—")}
       ${row("IMF", w.bt_nt != null ? `Bt ${w.bt_nt} nT · Bz ${w.bz_nt} nT` : "—")}
       ${a ? row("AURORA OVAL", `equatorward edge of ≥${a.threshold}% probability · OVATION ${utc(a.forecast)}`) : ""}</dl>
-      ${(sp.alerts || []).slice(0, 4).map(x => `<p class="gm-al">${utc(x.time)} · <b>${esc(x.kind)}</b> ${esc(x.title)}</p>`).join("") || "<p>No SWPC alerts in the last 24 h.</p>"}
-      <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener noreferrer">SWPC ↗</a>`);
+      ${(sp.alerts || []).slice(0, 4).map(x => `<p class="gm-al">${utc(x.time)} · ${safeUrl(x.link) ? `<a href="${esc(safeUrl(x.link))}" target="_blank" rel="noopener noreferrer"><b>${esc(x.kind)}</b> ${esc(x.title)} ↗</a>` : `<b>${esc(x.kind)}</b> ${esc(x.title)}`}</p>`).join("") || "<p>No SWPC alerts in the last 24 h.</p>"}
+      <div class="gm-srcs">${[["kp", "Kp INDEX"], ["scales", "NOAA SCALES"], ["wind", "SOLAR WIND"], ["aurora", "AURORA"], ["alerts", "ALERTS"]]
+        .map(([k, l]) => safeUrl(swpcLinks[k]) ? `<a href="${esc(safeUrl(swpcLinks[k]))}" target="_blank" rel="noopener noreferrer">${l} · SWPC ↗</a>` : "").join("")}</div>`);
   }
   $("#gm-kp").addEventListener("click", () => { api.highlight("space"); showSpaceCard(); });
 

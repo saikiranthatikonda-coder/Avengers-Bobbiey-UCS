@@ -30,6 +30,8 @@ from typing import Any, Awaitable, Callable
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+import source_links as sl
+
 POLL_EVERY = 300            # loop wake-up; each source also has its own TTL below
 FIRST_POLL_DELAY = 8
 REFRESH_MIN_GAP = 60        # POST /api/disaster/refresh at most once a minute
@@ -71,10 +73,9 @@ def _valid_ll(lat, lon) -> tuple[float, float] | None:
 
 
 def _url(u) -> str | None:
-    """Only plain http(s) links ever reach the dashboard."""
-    if isinstance(u, str) and re.match(r"^https?://[^\s\"'<>]+$", u.strip()):
-        return u.strip()[:500]
-    return None
+    """Only plain http(s) links ever reach the dashboard (see source_links.safe_url)."""
+    u = sl.safe_url(u)
+    return u if u and len(u) <= 500 else None
 
 
 def _txt(s, n: int = 240) -> str:
@@ -120,6 +121,7 @@ def _item(**kw) -> dict:
     kw["title"] = _txt(kw.get("title"), 160)
     kw["detail"] = _txt(kw.get("detail"), 280)
     kw["link"] = _url(kw.get("link"))
+    kw["source_url"] = kw["link"]          # explicit alias: the item's original source page (None = no page)
     kw.setdefault("lat", None)
     kw.setdefault("lon", None)
     return kw
@@ -156,7 +158,8 @@ def parse_usgs(payload: dict, src: str = "USGS") -> list[dict]:
             title=p.get("title") or f"M{mag:.1f} {p.get('place') or ''}",
             detail=" · ".join(bits), severity=sev, mag=mag,
             lat=ll[0] if ll else None, lon=ll[1] if ll else None,
-            time=(t / 1000) if t else None, source=src, link=p.get("url")))
+            time=(t / 1000) if t else None, source=src,
+            link=_url(p.get("url")) or sl.usgs_event(f.get("id") or p.get("code"))))
     return out
 
 
@@ -191,7 +194,8 @@ def parse_gdacs(payload: dict) -> list[dict]:
             detail=detail, severity=sev, alertlevel=level or None,
             lat=ll[0] if ll else None, lon=ll[1] if ll else None,
             time=_iso_ts(p.get("datemodified")) or _iso_ts(p.get("todate")) or _iso_ts(p.get("fromdate")),
-            source="GDACS", link=url.get("report") if isinstance(url, dict) else None))
+            source="GDACS", link=(_url(url.get("report")) if isinstance(url, dict) else None)
+            or sl.gdacs_report(p.get("eventtype"), p.get("eventid"), p.get("episodeid"))))
     return out
 
 
@@ -243,8 +247,16 @@ def parse_eonet(payload: dict) -> list[dict]:
         out.append(_item(
             id="eonet:" + str(e.get("id")), category="physical", type=typ, title=title,
             detail=detail, severity=sev, lat=ll[0] if ll else None, lon=ll[1] if ll else None,
-            time=_iso_ts(last.get("date")), source="NASA EONET", link=e.get("link")))
+            time=_iso_ts(last.get("date")), source="NASA EONET", link=_eonet_link(e)))
     return out
+
+
+def _eonet_link(e: dict) -> str | None:
+    """The event's own page at the agency EONET cites (InciWeb, GDACS, JTWC…), else EONET's record."""
+    for s in e.get("sources") or []:
+        if isinstance(s, dict) and _url(s.get("url")):
+            return _url(s.get("url"))
+    return _url(e.get("link")) or sl.eonet_event(e.get("id"))
 
 
 def _sachet_type(t: str) -> str:
@@ -308,7 +320,7 @@ def parse_kev(payload: dict, limit: int = 15) -> list[dict]:
             id="kev:" + cve, category="digital", type="vulnerability",
             title=f"{cve} · {v.get('vulnerabilityName') or ''}", detail=detail,
             severity=3 if ransom else 2, time=_iso_ts(v.get("dateAdded")), source="CISA KEV",
-            link=f"https://nvd.nist.gov/vuln/detail/{cve}" if re.match(r"^CVE-\d{4}-\d+$", cve) else None))
+            link=sl.nvd_cve(cve)))
     return out
 
 
@@ -329,7 +341,7 @@ def parse_statuspage(name: str, status: dict, unresolved: dict | None, page_url:
             detail=f"{impact} impact · {inc.get('status') or ''}",
             severity=_IMPACT_SEV.get(impact, 1),
             time=_iso_ts(inc.get("updated_at")) or _iso_ts(inc.get("created_at")),
-            source=f"{name} Statuspage", link=inc.get("shortlink") or page_url))
+            source=f"{name} Statuspage", link=_url(inc.get("shortlink")) or page_url))
     desc = _txt(st.get("description"), 80) or ind
     sev = _INDICATOR_SEV.get(ind, 0)
     if sev >= 2 and not incidents:     # degraded components without a declared incident
@@ -353,7 +365,7 @@ def parse_slack(payload: dict) -> tuple[dict, list[dict]]:
             id=f"status:Slack:{inc.get('id')}", category="digital", type="service",
             title=f"Slack: {inc.get('title') or kind}", detail=f"{kind} · {inc.get('status') or ''}",
             severity=3 if kind == "outage" else 2, time=_iso_ts(inc.get("date_updated")),
-            source="Slack Status", link=inc.get("url") or "https://slack-status.com/"))
+            source="Slack Status", link=_url(inc.get("url")) or "https://slack-status.com/"))
     sev = 0 if s == "ok" else max([i["severity"] for i in items] or [2])
     svc = {"name": "Slack", "indicator": "none" if s == "ok" else "major" if sev >= 3 else "minor",
            "description": "All systems operational" if s == "ok" else f"{len(items)} active incident(s)",
@@ -382,8 +394,7 @@ def parse_ioda(payload: dict, now: float | None = None, limit: int = 12) -> list
                                           f"score {score:,.0f}",
                                           f"ongoing {hrs:.0f} h" if hrs is not None else "") if x),
             severity=3 if score >= 1_000_000 else 2, score=score, time=frm, source="IODA (Georgia Tech)",
-            link=f"https://ioda.inetintel.cc.gatech.edu/country/{ent.get('code')}"
-            if re.match(r"^[A-Z]{2}$", str(ent.get("code") or "")) else None))
+            link=sl.ioda_country(ent.get("code"))))
     # one row per country (several datasources may fire), strongest first
     best: dict[str, dict] = {}
     for it in sorted(out, key=lambda i: -i["score"]):

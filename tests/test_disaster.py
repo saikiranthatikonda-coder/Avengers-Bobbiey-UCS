@@ -87,7 +87,8 @@ class Parsers(unittest.TestCase):
         self.assertEqual(big["type"], "earthquake")
         self.assertAlmostEqual(big["lat"], -35.0)
         self.assertEqual(small["severity"], 3)               # PAGER orange + tsunami flag
-        self.assertIsNone(small["link"])                     # javascript: URL dropped
+        # javascript: URL dropped; the documented USGS event page for the real id is used instead
+        self.assertEqual(small["link"], "https://earthquake.usgs.gov/earthquakes/eventpage/us7000b")
 
     def test_gdacs(self):
         items = disaster.parse_gdacs(GDACS)

@@ -23,6 +23,8 @@ from urllib.parse import quote
 
 import httpx
 
+import source_links as sl
+
 UA = {"User-Agent": "BUCS-LiveFacts/1.0 (personal assistant; https://saikiranthatikonda-coder.github.io/Avengers-Bobbiey-UCS/)"}
 BUDGET_S = 3.5                    # total time a voice answer may wait for live sources
 CACHE_S = 120
@@ -42,6 +44,9 @@ STOP = {"what", "whats", "what's", "is", "the", "a", "an", "of", "in", "on", "fo
         "show", "any", "are", "there", "who", "how", "much", "does", "do", "did", "can", "you", "i", "my"}
 
 _cache: dict[str, tuple[float, str]] = {}
+# the same live sources as structured citations (title, source, url, when) so the dashboard can
+# link an answer back to them; keyed like _cache, kept for CACHE_S
+_sources: dict[str, tuple[float, list[dict]]] = {}
 
 
 def is_time_sensitive(q: str) -> bool:
@@ -73,26 +78,55 @@ def search_terms(q: str) -> str:
     return " ".join(keep[:8]) or (q or "")[:60]
 
 
-async def _news(c: httpx.AsyncClient, q: str) -> list[str]:
-    r = await c.get("https://news.google.com/rss/search",
-                    params={"q": search_terms(q) + " when:7d", "hl": "en-IN", "gl": "IN", "ceid": "IN:en"})
-    r.raise_for_status()
+def parse_news_rss(xml_text: str, limit: int = 6) -> list[dict]:
+    """Google News RSS search → citations. url = the item's <link> as Google returns it
+    (falls back to the publisher's site from <source url=…>)."""
     out = []
-    for it in ET.fromstring(r.text).iter("item"):
+    for it in ET.fromstring(xml_text).iter("item"):
         title = (it.findtext("title") or "").strip()
-        src = (it.findtext("source") or "").strip()
+        src_el = it.find("source")
+        src = ((src_el.text if src_el is not None else "") or "").strip()
         try:
             when = parsedate_to_datetime(it.findtext("pubDate") or "").astimezone().strftime("%d %b %H:%M")
         except Exception:
             when = "?"
+        url = sl.safe_url((it.findtext("link") or "").strip()) or \
+            sl.safe_url(src_el.get("url") if src_el is not None else None)
         if title:
-            out.append(f"- {title} ({src or 'news'}, {when})")
-        if len(out) >= 6:
+            out.append({"title": title[:200], "source": src or "news", "when": when, "url": url,
+                        "kind": "Google News"})
+        if len(out) >= limit:
             break
     return out
 
 
+async def _news_items(c: httpx.AsyncClient, q: str) -> list[dict]:
+    r = await c.get("https://news.google.com/rss/search",
+                    params={"q": search_terms(q) + " when:7d", "hl": "en-IN", "gl": "IN", "ceid": "IN:en"})
+    r.raise_for_status()
+    return parse_news_rss(r.text)
+
+
+def _remember(q: str, items: list[dict]) -> list[dict]:
+    """Keep citations of tool-driven lookups (AI Core web_lookup/news_search) for sources_for()."""
+    if items:
+        key = search_terms(q)
+        prev = _sources.get(key)
+        old = prev[1] if prev and time.time() - prev[0] < CACHE_S else []
+        seen = {x.get("url") or x.get("title") for x in items}
+        _sources[key] = (time.time(), items + [x for x in old if (x.get("url") or x.get("title")) not in seen][:12])
+    return items
+
+
+async def _news(c: httpx.AsyncClient, q: str) -> list[str]:
+    return [f"- {n['title']} ({n['source']}, {n['when']})" for n in _remember(q, await _news_items(c, q))]
+
+
 async def _wiki(c: httpx.AsyncClient, q: str) -> list[str]:
+    return [f"- Wikipedia “{w['title']}” (revised {w['when']}): {w['extract']}" for w in _remember(q, await _wiki_items(c, q))]
+
+
+async def _wiki_items(c: httpx.AsyncClient, q: str) -> list[dict]:
     m = ENTITY_Q.match(q or "")
     if not m:
         return []
@@ -107,10 +141,18 @@ async def _wiki(c: httpx.AsyncClient, q: str) -> list[str]:
     d = r.json()
     extract = (d.get("extract") or "").strip()
     stamp = (d.get("timestamp") or "")[:10]
-    return [f"- Wikipedia “{title}” (revised {stamp}): {extract[:700]}"] if extract else []
+    page = (((d.get("content_urls") or {}).get("desktop") or {}).get("page"))
+    url = page if (sl.safe_url(page) or "").startswith("https://en.wikipedia.org/") else sl.wikipedia_article(title)
+    return [{"title": title, "source": "Wikipedia", "when": stamp, "url": url, "extract": extract[:700],
+             "kind": "Wikipedia"}] if extract else []
 
 
 async def _crypto(c: httpx.AsyncClient, q: str) -> list[str]:
+    return [f"- {x['coin']}: ${x['usd']:,} / ₹{x['inr']:,} ({x['change']:+.2f}% 24 h, CoinGecko {x['when']})"
+            for x in await _crypto_items(c, q)]
+
+
+async def _crypto_items(c: httpx.AsyncClient, q: str) -> list[dict]:
     ids = sorted({v for k, v in COINS.items() if re.search(rf"\b{re.escape(k)}\b", (q or "").lower())})
     if not ids:
         return []
@@ -120,8 +162,29 @@ async def _crypto(c: httpx.AsyncClient, q: str) -> list[str]:
     out = []
     for k, v in r.json().items():
         when = datetime.fromtimestamp(v.get("last_updated_at", time.time())).strftime("%H:%M")
-        out.append(f"- {k}: ${v.get('usd'):,} / ₹{v.get('inr'):,} ({v.get('usd_24h_change', 0):+.2f}% 24 h, CoinGecko {when})")
+        out.append({"coin": k, "usd": v.get("usd"), "inr": v.get("inr"), "change": v.get("usd_24h_change", 0) or 0,
+                    "when": when, "title": f"{k} price", "source": "CoinGecko", "url": sl.coingecko_coin(k),
+                    "kind": "CoinGecko"})
     return out
+
+
+def _line(name: str, x: dict) -> str:
+    """Prompt line for one citation (format unchanged from the string helpers above)."""
+    if name == "Wikipedia":
+        return f"- Wikipedia “{x['title']}” (revised {x['when']}): {x['extract']}"
+    if name == "CoinGecko":
+        return f"- {x['coin']}: ${x['usd']:,} / ₹{x['inr']:,} ({x['change']:+.2f}% 24 h, CoinGecko {x['when']})"
+    return f"- {x['title']} ({x['source']}, {x['when']})"
+
+
+def sources_for(question: str) -> list[dict]:
+    """Citations fetched for this question in the last CACHE_S (empty when none / not time-sensitive).
+    Only http(s) urls; an item without a valid url keeps url=None (shown unlinked)."""
+    hit = _sources.get(search_terms(question or ""))
+    if not hit or time.time() - hit[0] >= CACHE_S:
+        return []
+    return [{"title": s.get("title"), "source": s.get("source"), "kind": s.get("kind"), "when": s.get("when"),
+             "url": sl.safe_url(s.get("url"))} for s in hit[1]]
 
 
 async def ground(state: dict | None, question: str, client: httpx.AsyncClient | None = None,
@@ -139,14 +202,18 @@ async def ground(state: dict | None, question: str, client: httpx.AsyncClient | 
     c = client or httpx.AsyncClient(timeout=httpx.Timeout(BUDGET_S, connect=2.0), headers=UA, follow_redirects=True)
     try:
         tasks = {name: asyncio.create_task(fn(c, question)) for name, fn in
-                 (("Google News (last 7 days)", _news), ("Wikipedia", _wiki), ("CoinGecko", _crypto))}
+                 (("Google News (last 7 days)", _news_items), ("Wikipedia", _wiki_items), ("CoinGecko", _crypto_items))}
         done, pending = await asyncio.wait(tasks.values(), timeout=BUDGET_S)
         for t in pending:
             t.cancel()
-        lines = []
+        lines, cites = [], []
         for name, t in tasks.items():
             if t in done and not t.exception() and t.result():
-                lines.append(f"{name}:\n" + "\n".join(t.result()))
+                try:
+                    lines.append(f"{name}:\n" + "\n".join(_line(name, x) for x in t.result()))
+                    cites += t.result()
+                except (KeyError, TypeError, ValueError):     # malformed upstream row: skip that source
+                    continue
     finally:
         if own:
             await c.aclose()
@@ -160,4 +227,5 @@ async def ground(state: dict | None, question: str, client: httpx.AsyncClient | 
         live = ("[LIVE SOURCES — none reachable right now. For current facts (news, scores, prices, office "
                 "holders) say you can't verify them live instead of guessing.]\n")
     _cache[key] = (time.time(), live)
+    _sources[key] = (time.time(), cites)
     return block + live
