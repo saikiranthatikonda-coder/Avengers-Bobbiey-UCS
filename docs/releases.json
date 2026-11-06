@@ -1,13 +1,13 @@
 {
   "kind": "bucs-release",
-  "version": "8.2.0",
+  "version": "8.2.1",
   "date": "2026-11-06",
-  "commit": "3a1c3ba",
+  "commit": "ed14388",
   "notes": [
-    "v8.2.0: JARVIS and every agent can read every dashboard section and answer from live data; Computer Use can be started from chat or voice (with confirmation, all safety gates intact); every data item links to its original source; fixed text buttons spinning on hover."
+    "v8.2.1: desktop installer build fix (macOS build image updated). Same features as v8.2.0."
   ],
-  "url": "releases/bucs-8.2.0.zip",
-  "sha256": "3f72ac0aa0e6bc2b4b1079e8580b81bdffb418e35de146cd2f7f7be36da21eda",
-  "size": 825001,
-  "sig": "hHJgXgEdd5JhhCJ8nATNohzOSyjUrPta78JizSoxuZI1DNoTy0jInG9XG9lgb1h19H7L4cW__E7liv-rZbNMCA"
+  "url": "releases/bucs-8.2.1.zip",
+  "sha256": "da184eed549da685c3741b5339806ddd9fced213cf9f98f5b18e7c475256dc2f",
+  "size": 825105,
+  "sig": "PQGATZDD22Im7JXR1sSbBSS2MCQuEP5Z9k2zVFJGE7jv-Iwj3zmuKe75PoN6KnOOD5nEHvo8OyzH8opnSey3AA"
 }
