@@ -1,13 +1,13 @@
 {
   "kind": "bucs-release",
-  "version": "8.1.0",
-  "date": "2026-11-04",
-  "commit": "16334c0",
+  "version": "8.2.0",
+  "date": "2026-11-06",
+  "commit": "3a1c3ba",
   "notes": [
-    "v8.1.0: UNIFIED COMMAND SYSTEM stays exactly centred at every window size; redesigned version chip and power button with an in-theme shutdown confirmation; the mic ON/SLEEP/OFF/TALK controls are removed (the mic always listens for its wake words)."
+    "v8.2.0: JARVIS and every agent can read every dashboard section and answer from live data; Computer Use can be started from chat or voice (with confirmation, all safety gates intact); every data item links to its original source; fixed text buttons spinning on hover."
   ],
-  "url": "releases/bucs-8.1.0.zip",
-  "sha256": "9350243d6a9d745a9fa0380b85ed71995da4ac1c819c992bd6cadf1a0d60f59c",
-  "size": 796163,
-  "sig": "Jt7cbJaU1ptHVz_s4M8gYBN8wiRCXc-DPLmIvioRCa1s497_SKiYlI58NMEuQZQNmvTp3fP0g8pDnp_DEW2wCQ"
+  "url": "releases/bucs-8.2.0.zip",
+  "sha256": "3f72ac0aa0e6bc2b4b1079e8580b81bdffb418e35de146cd2f7f7be36da21eda",
+  "size": 825001,
+  "sig": "hHJgXgEdd5JhhCJ8nATNohzOSyjUrPta78JizSoxuZI1DNoTy0jInG9XG9lgb1h19H7L4cW__E7liv-rZbNMCA"
 }
