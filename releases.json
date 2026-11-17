@@ -1,0 +1,13 @@
+{
+  "kind": "bucs-release",
+  "version": "8.3.0",
+  "date": "2026-11-17",
+  "commit": "7c59a9a",
+  "notes": [
+    "v8.3.0: create your own custom agents; new OPEN INTELLIGENCE deck with live keyless open data (air quality, launches, asteroids, ISS, exchange rates, arXiv, Hacker News, CO2, WHO outbreaks, holidays); edit world clocks, quick access, weather location, news sources, notes, events, tasks, incidents, decisions, operators and goals; disaster radius and saved map places."
+  ],
+  "url": "releases/bucs-8.3.0.zip",
+  "sha256": "b20a17812941968649be7359446c8654707ee55ab7be98d0dc05458568fc5af1",
+  "size": 912999,
+  "sig": "wnx6e2XKKtEseke742j7_hoGSjLwWv9HDkHYSbPok-a4MfpMKhqX5UCdeJI9Ta6luieRx-KaTJMv1X9I7i9cBg"
+}
