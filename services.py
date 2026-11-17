@@ -50,6 +50,7 @@ class NewsService:
         self.hub = hub
         self.recent: list[dict] = []
         self.source = "none"          # "newsapi" | "open" | "none"
+        self.store = None             # corestore.CoreStore: the operator's source selection (open feeds)
         self.last_ok = 0.0
 
     async def fetch_top(self, country: str = "us", page_size: int = 12) -> list[dict]:
@@ -62,7 +63,9 @@ class NewsService:
 
     async def fetch_open(self) -> list[dict]:
         from open_news import fetch_open_news
-        articles, failed = await fetch_open_news()
+        prefs = (self.store.data.get("news") or {}) if self.store is not None else {}
+        articles, failed = await fetch_open_news(disabled=prefs.get("disabled") or (),
+                                                 custom=prefs.get("custom") or ())
         self.source = "open"
         if articles:
             self.recent = articles

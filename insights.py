@@ -181,7 +181,7 @@ class InsightsEngine:
         else:
             key, sev, conf = "nominal", "info", 76
             insight = random.choice([
-                f"All systems nominal — CPU {s['cpu']:.0f}%, memory {s['mem']:.0f}%, eight agents on station.",
+                f"All systems nominal — CPU {s['cpu']:.0f}%, memory {s['mem']:.0f}%, {s['agents_total']} agents on station.",
                 "Telemetry steady across the board. No intervention required.",
                 f"Quiet cycle: {s['agents_busy']} agents active, perimeter clean, feeds current.",
             ])

@@ -1,0 +1,2403 @@
+{
+ "air": {
+  "latitude": 51.5,
+  "longitude": -0.1,
+  "generationtime_ms": 0.6048679351806641,
+  "utc_offset_seconds": 19800,
+  "timezone": "Europe/London",
+  "timezone_abbreviation": "GMT",
+  "elevation": 498.0,
+  "current_units": {
+   "time": "iso8601",
+   "interval": "seconds",
+   "us_aqi": "USAQI",
+   "european_aqi": "EAQI",
+   "pm2_5": "μg/m³",
+   "pm10": "μg/m³",
+   "ozone": "μg/m³",
+   "nitrogen_dioxide": "μg/m³",
+   "sulphur_dioxide": "μg/m³",
+   "carbon_monoxide": "μg/m³",
+   "uv_index": "",
+   "alder_pollen": "grains/m³",
+   "birch_pollen": "grains/m³",
+   "grass_pollen": "grains/m³",
+   "ragweed_pollen": "grains/m³"
+  },
+  "current": {
+   "time": "2026-11-16T21:30",
+   "interval": 3600,
+   "us_aqi": 152,
+   "european_aqi": 63,
+   "pm2_5": 56.7,
+   "pm10": 62.9,
+   "ozone": 89.0,
+   "nitrogen_dioxide": 18.1,
+   "sulphur_dioxide": 17.0,
+   "carbon_monoxide": 626.0,
+   "uv_index": 0.0,
+   "alder_pollen": null,
+   "birch_pollen": null,
+   "grass_pollen": null,
+   "ragweed_pollen": null
+  },
+  "hourly_units": {
+   "time": "iso8601",
+   "us_aqi": "USAQI",
+   "pm2_5": "μg/m³"
+  },
+  "hourly": {
+   "time": [
+    "2026-11-15T00:00",
+    "2026-11-15T01:00",
+    "2026-11-15T02:00",
+    "2026-11-15T03:00",
+    "2026-11-15T04:00",
+    "2026-11-15T05:00",
+    "2026-11-15T06:00",
+    "2026-11-15T07:00",
+    "2026-11-15T08:00",
+    "2026-11-15T09:00",
+    "2026-11-15T10:00",
+    "2026-11-15T11:00",
+    "2026-11-15T12:00",
+    "2026-11-15T13:00",
+    "2026-11-15T14:00",
+    "2026-11-15T15:00",
+    "2026-11-15T16:00",
+    "2026-11-15T17:00",
+    "2026-11-15T18:00",
+    "2026-11-15T19:00",
+    "2026-11-15T20:00",
+    "2026-11-15T21:00",
+    "2026-11-15T22:00",
+    "2026-11-15T23:00",
+    "2026-11-16T00:00",
+    "2026-11-16T01:00",
+    "2026-11-16T02:00",
+    "2026-11-16T03:00",
+    "2026-11-16T04:00",
+    "2026-11-16T05:00",
+    "2026-11-16T06:00",
+    "2026-11-16T07:00",
+    "2026-11-16T08:00",
+    "2026-11-16T09:00",
+    "2026-11-16T10:00",
+    "2026-11-16T11:00",
+    "2026-11-16T12:00",
+    "2026-11-16T13:00",
+    "2026-11-16T14:00",
+    "2026-11-16T15:00",
+    "2026-11-16T16:00",
+    "2026-11-16T17:00",
+    "2026-11-16T18:00",
+    "2026-11-16T19:00",
+    "2026-11-16T20:00",
+    "2026-11-16T21:00",
+    "2026-11-16T22:00",
+    "2026-11-16T23:00",
+    "2026-11-17T00:00",
+    "2026-11-17T01:00",
+    "2026-11-17T02:00",
+    "2026-11-17T03:00",
+    "2026-11-17T04:00",
+    "2026-11-17T05:00",
+    "2026-11-17T06:00",
+    "2026-11-17T07:00",
+    "2026-11-17T08:00",
+    "2026-11-17T09:00",
+    "2026-11-17T10:00",
+    "2026-11-17T11:00",
+    "2026-11-17T12:00",
+    "2026-11-17T13:00",
+    "2026-11-17T14:00",
+    "2026-11-17T15:00",
+    "2026-11-17T16:00",
+    "2026-11-17T17:00",
+    "2026-11-17T18:00",
+    "2026-11-17T19:00",
+    "2026-11-17T20:00",
+    "2026-11-17T21:00",
+    "2026-11-17T22:00",
+    "2026-11-17T23:00",
+    "2026-11-18T00:00",
+    "2026-11-18T01:00",
+    "2026-11-18T02:00",
+    "2026-11-18T03:00",
+    "2026-11-18T04:00",
+    "2026-11-18T05:00",
+    "2026-11-18T06:00",
+    "2026-11-18T07:00",
+    "2026-11-18T08:00",
+    "2026-11-18T09:00",
+    "2026-11-18T10:00",
+    "2026-11-18T11:00",
+    "2026-11-18T12:00",
+    "2026-11-18T13:00",
+    "2026-11-18T14:00",
+    "2026-11-18T15:00",
+    "2026-11-18T16:00",
+    "2026-11-18T17:00",
+    "2026-11-18T18:00",
+    "2026-11-18T19:00",
+    "2026-11-18T20:00",
+    "2026-11-18T21:00",
+    "2026-11-18T22:00",
+    "2026-11-18T23:00"
+   ],
+   "us_aqi": [
+    111,
+    112,
+    112,
+    113,
+    113,
+    114,
+    114,
+    115,
+    116,
+    116,
+    116,
+    116,
+    115,
+    115,
+    115,
+    115,
+    115,
+    116,
+    116,
+    116,
+    117,
+    117,
+    118,
+    119,
+    119,
+    120,
+    121,
+    122,
+    124,
+    125,
+    127,
+    128,
+    130,
+    133,
+    136,
+    140,
+    143,
+    145,
+    148,
+    150,
+    151,
+    151,
+    151,
+    152,
+    152,
+    152,
+    152,
+    152,
+    152,
+    152,
+    152,
+    152,
+    152,
+    152,
+    152,
+    152,
+    152,
+    151,
+    151,
+    150,
+    149,
+    147,
+    145,
+    143,
+    141,
+    140,
+    138,
+    137,
+    135,
+    134,
+    132,
+    130,
+    128,
+    126,
+    124,
+    122,
+    120,
+    118,
+    116,
+    113,
+    111,
+    110,
+    111,
+    112,
+    112,
+    113,
+    114,
+    115,
+    120,
+    130,
+    135,
+    132,
+    123,
+    118,
+    118,
+    119
+   ],
+   "pm2_5": [
+    45.8,
+    44.9,
+    45.1,
+    46.6,
+    48.7,
+    52.3,
+    57.4,
+    60.1,
+    38.6,
+    31.8,
+    29.6,
+    28.4,
+    28.3,
+    29.0,
+    30.3,
+    31.8,
+    33.3,
+    42.8,
+    47.5,
+    51.2,
+    52.9,
+    53.7,
+    54.1,
+    54.0,
+    53.9,
+    54.4,
+    55.9,
+    58.9,
+    62.2,
+    67.1,
+    73.1,
+    76.8,
+    66.8,
+    64.5,
+    60.3,
+    58.1,
+    55.5,
+    53.8,
+    51.9,
+    50.6,
+    49.7,
+    50.4,
+    52.7,
+    53.9,
+    55.2,
+    56.7,
+    57.7,
+    57.5,
+    56.8,
+    57.3,
+    58.2,
+    59.6,
+    61.5,
+    64.0,
+    69.4,
+    71.7,
+    55.1,
+    44.9,
+    38.5,
+    36.7,
+    35.4,
+    34.8,
+    34.6,
+    34.3,
+    34.7,
+    36.2,
+    38.8,
+    40.2,
+    40.6,
+    40.9,
+    40.5,
+    39.3,
+    38.4,
+    38.3,
+    38.5,
+    39.1,
+    40.6,
+    42.7,
+    45.9,
+    47.7,
+    48.0,
+    49.0,
+    47.4,
+    44.9,
+    43.4,
+    42.1,
+    41.4,
+    40.9,
+    40.4,
+    41.6,
+    44.1,
+    45.2,
+    45.2,
+    44.2,
+    42.5,
+    40.3
+   ]
+  }
+ },
+ "flood": {
+  "latitude": 51.5,
+  "longitude": -0.1,
+  "generationtime_ms": 11.106371879577637,
+  "utc_offset_seconds": 0,
+  "timezone": "Europe/London",
+  "timezone_abbreviation": "GMT",
+  "elevation": 498.0,
+  "daily_units": {
+   "time": "iso8601",
+   "river_discharge": "m³/s",
+   "river_discharge_mean": "m³/s"
+  },
+  "daily": {
+   "time": [
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06",
+    "2026-11-07",
+    "2026-11-08",
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11",
+    "2026-11-12",
+    "2026-11-13",
+    "2026-11-14",
+    "2026-11-15",
+    "2026-11-16",
+    "2026-11-17",
+    "2026-11-18",
+    "2026-11-19",
+    "2026-11-20",
+    "2026-11-21",
+    "2026-11-22",
+    "2026-11-23",
+    "2026-11-24",
+    "2026-11-25",
+    "2026-11-26",
+    "2026-11-27",
+    "2026-11-28",
+    "2026-11-29"
+   ],
+   "river_discharge": [
+    1.4,
+    1.19,
+    1.13,
+    1.13,
+    1.49,
+    1.51,
+    1.35,
+    1.15,
+    1.14,
+    1.14,
+    1.13,
+    1.13,
+    1.13,
+    1.13,
+    1.12,
+    1.12,
+    1.12,
+    1.12,
+    1.19,
+    29.55,
+    11.85,
+    4.58,
+    2.85,
+    2.86,
+    1.91,
+    1.51,
+    1.33,
+    1.25
+   ],
+   "river_discharge_mean": [
+    1.49,
+    1.4,
+    1.16,
+    1.16,
+    1.4,
+    1.55,
+    1.36,
+    1.15,
+    1.14,
+    1.14,
+    1.13,
+    1.13,
+    1.13,
+    1.13,
+    1.12,
+    1.12,
+    1.12,
+    1.12,
+    1.77,
+    5.28,
+    4.05,
+    2.67,
+    1.94,
+    1.81,
+    1.58,
+    1.39,
+    1.3,
+    1.25
+   ]
+  }
+ },
+ "who": {
+  "@odata.context": "http://www.who.int/api/news/$metadata#diseaseoutbreaknews(Title,PublicationDateAndTime,UrlName,DonId)",
+  "value": [
+   {
+    "UrlName": "2026-DON626",
+    "PublicationDateAndTime": "2026-11-13T19:00:00Z",
+    "Title": "Middle East respiratory syndrome (MERS) – Qatar",
+    "DonId": "2026-DON626"
+   },
+   {
+    "UrlName": "2026-DON625",
+    "PublicationDateAndTime": "2026-11-06T20:42:12Z",
+    "Title": "Ebola disease caused by Bundibugyo virus, Democratic Republic of the Congo, Kenya and Nigeria",
+    "DonId": "2026-DON625"
+   },
+   {
+    "UrlName": "2026-DON624",
+    "PublicationDateAndTime": "2026-11-06T19:00:00Z",
+    "Title": "Yellow fever - WHO African Region",
+    "DonId": "2026-DON624"
+   },
+   {
+    "UrlName": "2026-DON623",
+    "PublicationDateAndTime": "2026-11-02T19:00:00Z",
+    "Title": "Shamonda virus in human - France",
+    "DonId": "2026-DON623"
+   },
+   {
+    "UrlName": "2026-DON622",
+    "PublicationDateAndTime": "2026-10-23T15:03:45Z",
+    "Title": "Ebola disease caused by Bundibugyo virus, Democratic Republic of the Congo, Kenya and Nigeria",
+    "DonId": "2026-DON622"
+   },
+   {
+    "UrlName": "middle-east-respiratory-syndrome-coronavirus---kingdom-of-saudi-arabia",
+    "PublicationDateAndTime": "2026-10-15T16:00:00Z",
+    "Title": "Middle East respiratory syndrome coronavirus - Kingdom of Saudi Arabia",
+    "DonId": "2026-DON618"
+   },
+   {
+    "UrlName": "2026-DON620",
+    "PublicationDateAndTime": "2026-10-10T15:00:00Z",
+    "Title": "Pneumonia of undetermined etiology - the Russian Federation",
+    "DonId": "2026-DON620"
+   },
+   {
+    "UrlName": "2026-DON619",
+    "PublicationDateAndTime": "2026-10-08T15:16:26Z",
+    "Title": "Ebola disease caused by Bundibugyo virus - Democratic Republic of the Congo",
+    "DonId": "2026-DON619"
+   },
+   {
+    "UrlName": "2026-DON621",
+    "PublicationDateAndTime": "2026-09-25T15:16:26Z",
+    "Title": "Ebola disease caused by Bundibugyo virus - Democratic Republic of the Congo",
+    "DonId": "2026-DON621"
+   },
+   {
+    "UrlName": "2026-DON617",
+    "PublicationDateAndTime": "2026-09-10T08:16:08Z",
+    "Title": "Ebola disease caused by Bundibugyo virus - Democratic Republic of the Congo",
+    "DonId": "2026-DON617"
+   },
+   {
+    "UrlName": "2026-DON616",
+    "PublicationDateAndTime": "2026-08-28T15:28:00Z",
+    "Title": "Ebola disease caused by Bundibugyo virus - Democratic Republic of the Congo",
+    "DonId": "2026-DON616"
+   },
+   {
+    "UrlName": "2026-DON615",
+    "PublicationDateAndTime": "2026-08-14T15:38:29Z",
+    "Title": "Ebola disease caused by Bundibugyo virus - Democratic Republic of the Congo",
+    "DonId": "2026-DON615"
+   }
+  ]
+ },
+ "launches": {
+  "count": 472,
+  "next": "https://ll.thespacedevs.com/2.2.0/launch/upcoming/?hide_recent_previous=true&limit=12&mode=list&offset=12",
+  "previous": null,
+  "results": [
+   {
+    "id": "e0a11eb1-0bda-4872-b36b-140247fd5c60",
+    "url": "https://ll.thespacedevs.com/2.2.0/launch/e0a11eb1-0bda-4872-b36b-140247fd5c60/",
+    "slug": "long-march-2d-unknown-payload",
+    "name": "Long March 2D | Unknown Payload",
+    "status": {
+     "id": 1,
+     "name": "Go for Launch",
+     "abbrev": "Go",
+     "description": "Current T-0 confirmed by official or reliable sources."
+    },
+    "last_updated": "2026-11-12T19:18:17Z",
+    "net": "2026-11-18T22:50:00Z",
+    "net_precision": {
+     "id": 2,
+     "name": "Hour",
+     "abbrev": "HR",
+     "description": "The T-0 is accurate to the hour."
+    },
+    "window_end": "2026-11-18T23:05:00Z",
+    "window_start": "2026-11-18T22:43:00Z",
+    "lsp_name": "China Aerospace Science and Technology Corporation",
+    "mission": "Unknown Payload",
+    "mission_type": "Unknown",
+    "pad": "Launch Complex 9",
+    "location": "Taiyuan Satellite Launch Center, People's Republic of China",
+    "landing": null,
+    "landing_success": null,
+    "launcher": null,
+    "orbit": null,
+    "image": "https://thespacedevs-prod.nyc3.digitaloceanspaces.com/media/images/long2520march25202d_image_20190222031211.jpeg",
+    "infographic": null,
+    "type": "list"
+   },
+   {
+    "id": "76617033-4dc0-4448-b50c-e5b0d5a18539",
+    "url": "https://ll.thespacedevs.com/2.2.0/launch/76617033-4dc0-4448-b50c-e5b0d5a18539/",
+    "slug": "falcon-9-block-5-ussf-317",
+    "name": "Falcon 9 Block 5 | USSF-317",
+    "status": {
+     "id": 1,
+     "name": "Go for Launch",
+     "abbrev": "Go",
+     "description": "Current T-0 confirmed by official or reliable sources."
+    },
+    "last_updated": "2026-11-16T15:08:25Z",
+    "net": "2026-11-19T03:00:00Z",
+    "net_precision": {
+     "id": 1,
+     "name": "Minute",
+     "abbrev": "MIN",
+     "description": "The T-0 is accurate to the minute."
+    },
+    "window_end": "2026-11-19T07:00:00Z",
+    "window_start": "2026-11-19T03:00:00Z",
+    "lsp_name": "SpaceX",
+    "mission": "USSF-317",
+    "mission_type": "Government/Top Secret",
+    "pad": "Space Launch Complex 4E",
+    "location": "Vandenberg SFB, CA, USA",
+    "landing": null,
+    "landing_success": null,
+    "launcher": null,
+    "orbit": null,
+    "image": "https://thespacedevs-prod.nyc3.digitaloceanspaces.com/media/images/falcon_9_liftof_image_20260816171423.jpg",
+    "infographic": null,
+    "type": "list"
+   },
+   {
+    "id": "a2975167-7c6f-4403-99e1-b40df17c8140",
+    "url": "https://ll.thespacedevs.com/2.2.0/launch/a2975167-7c6f-4403-99e1-b40df17c8140/",
+    "slug": "long-march-8a-satnet-leo-group-tbd",
+    "name": "Long March 8A | SatNet LEO Group TBD?",
+    "status": {
+     "id": 8,
+     "name": "To Be Confirmed",
+     "abbrev": "TBC",
+     "description": "Awaiting official confirmation - current date is known with some certainty."
+    },
+    "last_updated": "2026-10-30T13:59:24Z",
+    "net": "2026-11-20T11:00:00Z",
+    "net_precision": {
+     "id": 2,
+     "name": "Hour",
+     "abbrev": "HR",
+     "description": "The T-0 is accurate to the hour."
+    },
+    "window_end": "2026-11-20T14:00:00Z",
+    "window_start": "2026-11-20T11:00:00Z",
+    "lsp_name": "China Aerospace Science and Technology Corporation",
+    "mission": "SatNet LEO Group TBD?",
+    "mission_type": "Communications",
+    "pad": "Commercial LC-1",
+    "location": "Wenchang Space Launch Site, People's Republic of China",
+    "landing": null,
+    "landing_success": null,
+    "launcher": null,
+    "orbit": null,
+    "image": "https://thespacedevs-prod.nyc3.digitaloceanspaces.com/media/images/cz-8a_launch_2_image_20251206093107.jpeg",
+    "infographic": null,
+    "type": "list"
+   },
+   {
+    "id": "951a341f-236b-42fe-a667-4ab2fcf36eac",
+    "url": "https://ll.thespacedevs.com/2.2.0/launch/951a341f-236b-42fe-a667-4ab2fcf36eac/",
+    "slug": "falcon-9-block-5-nrol-136",
+    "name": "Falcon 9 Block 5 | NROL-136",
+    "status": {
+     "id": 1,
+     "name": "Go for Launch",
+     "abbrev": "Go",
+     "description": "Current T-0 confirmed by official or reliable sources."
+    },
+    "last_updated": "2026-11-14T14:29:39Z",
+    "net": "2026-11-21T12:30:00Z",
+    "net_precision": {
+     "id": 1,
+     "name": "Minute",
+     "abbrev": "MIN",
+     "description": "The T-0 is accurate to the minute."
+    },
+    "window_end": "2026-11-21T13:00:00Z",
+    "window_start": "2026-11-21T12:30:00Z",
+    "lsp_name": "SpaceX",
+    "mission": "NROL-136",
+    "mission_type": "Government/Top Secret",
+    "pad": "Space Launch Complex 4E",
+    "location": "Vandenberg SFB, CA, USA",
+    "landing": null,
+    "landing_success": null,
+    "launcher": null,
+    "orbit": null,
+    "image": "https://thespacedevs-prod.nyc3.digitaloceanspaces.com/media/images/falcon_9_on_slc_image_20241024165956.jpg",
+    "infographic": null,
+    "type": "list"
+   },
+   {
+    "id": "7bdc412b-c965-4517-a131-f57a01189803",
+    "url": "https://ll.thespacedevs.com/2.2.0/launch/7bdc412b-c965-4517-a131-f57a01189803/",
+    "slug": "ariane-64-block-2-amazon-leo-le-04",
+    "name": "Ariane 64 Block 2 | Amazon Leo (LE-04)",
+    "status": {
+     "id": 2,
+     "name": "To Be Determined",
+     "abbrev": "TBD",
+     "description": "Current date is a placeholder or rough estimation based on unreliable or interpreted sources."
+    },
+    "last_updated": "2026-10-15T05:35:18Z",
+    "net": "2026-11-23T00:00:00Z",
+    "net_precision": {
+     "id": 5,
+     "name": "Day",
+     "abbrev": "DAY",
+     "description": "The T-0 is expected on the given day."
+    },
+    "window_end": "2026-11-23T00:00:00Z",
+    "window_start": "2026-11-23T00:00:00Z",
+    "lsp_name": "Arianespace",
+    "mission": "Amazon Leo (LE-04)",
+    "mission_type": "Communications",
+    "pad": "Ariane Launch Area 4",
+    "location": "Guiana Space Centre, French Guiana",
+    "landing": null,
+    "landing_success": null,
+    "launcher": null,
+    "orbit": null,
+    "image": "https://thespacedevs-prod.nyc3.digitaloceanspaces.com/media/images/ariane_64_lifto_image_20260618063419.jpg",
+    "infographic": null,
+    "type": "list"
+   },
+   {
+    "id": "460d9db7-eaf6-4cd9-b095-cff433534c09",
+    "url": "https://ll.thespacedevs.com/2.2.0/launch/460d9db7-eaf6-4cd9-b095-cff433534c09/",
+    "slug": "falcon-9-block-5-ussf-266",
+    "name": "Falcon 9 Block 5 | USSF-266",
+    "status": {
+     "id": 1,
+     "name": "Go for Launch",
+     "abbrev": "Go",
+     "description": "Current T-0 confirmed by official or reliable sources."
+    },
+    "last_updated": "2026-11-13T17:46:32Z",
+    "net": "2026-11-23T16:04:00Z",
+    "net_precision": {
+     "id": 1,
+     "name": "Minute",
+     "abbrev": "MIN",
+     "description": "The T-0 is accurate to the minute."
+    },
+    "window_end": "2026-11-23T20:04:00Z",
+    "window_start": "2026-11-23T16:04:00Z",
+    "lsp_name": "SpaceX",
+    "mission": "USSF-266",
+    "mission_type": "Government/Top Secret",
+    "pad": "Space Launch Complex 4E",
+    "location": "Vandenberg SFB, CA, USA",
+    "landing": null,
+    "landing_success": null,
+    "launcher": null,
+    "orbit": null,
+    "image": "https://thespacedevs-prod.nyc3.digitaloceanspaces.com/media/images/falcon_9_liftof_image_20260816171423.jpg",
+    "infographic": null,
+    "type": "list"
+   },
+   {
+    "id": "8dd5de11-831b-445f-86f0-bffefe0550d9",
+    "url": "https://ll.thespacedevs.com/2.2.0/launch/8dd5de11-831b-445f-86f0-bffefe0550d9/",
+    "slug": "soyuz-21b-progress-ms-36-97p",
+    "name": "Soyuz 2.1b | Progress MS-36 (97P)",
+    "status": {
+     "id": 8,
+     "name": "To Be Confirmed",
+     "abbrev": "TBC",
+     "description": "Awaiting official confirmation - current date is known with some certainty."
+    },
+    "last_updated": "2026-06-08T21:46:36Z",
+    "net": "2026-11-24T05:03:00Z",
+    "net_precision": {
+     "id": 1,
+     "name": "Minute",
+     "abbrev": "MIN",
+     "description": "The T-0 is accurate to the minute."
+    },
+    "window_end": "2026-11-24T05:03:00Z",
+    "window_start": "2026-11-24T05:03:00Z",
+    "lsp_name": "Russian Federal Space Agency (ROSCOSMOS)",
+    "mission": "Progress MS-36 (97P)",
+    "mission_type": "Resupply",
+    "pad": "31/6",
+    "location": "Baikonur Cosmodrome, Republic of Kazakhstan",
+    "landing": null,
+    "landing_success": null,
+    "launcher": null,
+    "orbit": null,
+    "image": "https://thespacedevs-prod.nyc3.digitaloceanspaces.com/media/images/soyuz_2.1b_image_20230802085331.jpg",
+    "infographic": null,
+    "type": "list"
+   },
+   {
+    "id": "5ce59e3a-c343-430f-ae4e-e608ba536754",
+    "url": "https://ll.thespacedevs.com/2.2.0/launch/5ce59e3a-c343-430f-ae4e-e608ba536754/",
+    "slug": "long-march-12-satnet-leo-group-tbd",
+    "name": "Long March 12 | SatNet LEO Group TBD?",
+    "status": {
+     "id": 8,
+     "name": "To Be Confirmed",
+     "abbrev": "TBC",
+     "description": "Awaiting official confirmation - current date is known with some certainty."
+    },
+    "last_updated": "2026-10-30T13:59:29Z",
+    "net": "2026-11-24T07:00:00Z",
+    "net_precision": {
+     "id": 2,
+     "name": "Hour",
+     "abbrev": "HR",
+     "description": "The T-0 is accurate to the hour."
+    },
+    "window_end": "2026-11-24T10:00:00Z",
+    "window_start": "2026-11-24T07:00:00Z",
+    "lsp_name": "China Aerospace Science and Technology Corporation",
+    "mission": "SatNet LEO Group TBD?",
+    "mission_type": "Communications",
+    "pad": "Commercial LC-2",
+    "location": "Wenchang Space Launch Site, People's Republic of China",
+    "landing": null,
+    "landing_success": null,
+    "launcher": null,
+    "orbit": null,
+    "image": "https://thespacedevs-prod.nyc3.digitaloceanspaces.com/media/images/cz-12_on_its_la_image_20241128132937.jpg",
+    "infographic": null,
+    "type": "list"
+   }
+  ]
+ },
+ "iss": {
+  "name": "iss",
+  "id": 25544,
+  "latitude": 0.83012019355367,
+  "longitude": -136.55471630152,
+  "altitude": 423.25283953582,
+  "velocity": 27562.996771731,
+  "visibility": "eclipsed",
+  "footprint": 4523.9755627384,
+  "timestamp": 1794827255,
+  "daynum": 2461360.9635995,
+  "solar_lat": -18.795460245748,
+  "solar_lon": 9.2904318029234,
+  "units": "kilometers"
+ },
+ "neo": {
+  "signature": {
+   "source": "NASA/JPL SBDB Close Approach Data API",
+   "version": "1.5"
+  },
+  "count": 18,
+  "fields": [
+   "des",
+   "orbit_id",
+   "jd",
+   "cd",
+   "dist",
+   "dist_min",
+   "dist_max",
+   "v_rel",
+   "v_inf",
+   "t_sigma_f",
+   "h",
+   "fullname"
+  ],
+  "data": [
+   [
+    "2026 VW15",
+    "2",
+    "2461360.726327889",
+    "2026-Nov-16 05:26",
+    "0.0131392541619584",
+    "0.0130907057861682",
+    "0.0131877985276191",
+    "6.06068543422993",
+    "6.02713302501224",
+    "< 00:01",
+    "27.073",
+    "       (2026 VW15)"
+   ],
+   [
+    "2026 VM3",
+    "3",
+    "2461361.198961952",
+    "2026-Nov-16 16:47",
+    "0.0207275062037755",
+    "0.0205778066733603",
+    "0.020877164924922",
+    "3.69660977244505",
+    "3.66167008647945",
+    "00:02",
+    "27.318",
+    "       (2026 VM3)"
+   ],
+   [
+    "2026 VJ13",
+    "4",
+    "2461361.733234834",
+    "2026-Nov-17 05:36",
+    "0.009006434046621",
+    "0.00897863853086875",
+    "0.0090342286267625",
+    "10.4363954206411",
+    "10.4080096967403",
+    "< 00:01",
+    "27.249",
+    "       (2026 VJ13)"
+   ],
+   [
+    "2023 VE6",
+    "4",
+    "2461361.781963406",
+    "2026-Nov-17 06:46",
+    "0.0470991947664407",
+    "0.0153912148117894",
+    "0.0788139034845923",
+    "10.1012078051812",
+    "10.0956057676574",
+    "5_03:28",
+    "27.16",
+    "       (2023 VE6)"
+   ],
+   [
+    "2026 VB13",
+    "3",
+    "2461361.989943428",
+    "2026-Nov-17 11:46",
+    "0.0254136235770872",
+    "0.0251944378489589",
+    "0.02563280742127",
+    "20.4726551486594",
+    "20.4675333096672",
+    "< 00:01",
+    "25.262",
+    "       (2026 VB13)"
+   ],
+   [
+    "2022 VB2",
+    "16",
+    "2461362.148595921",
+    "2026-Nov-17 15:34",
+    "0.0198705194885519",
+    "0.0198704618120384",
+    "0.0198705771650881",
+    "8.95050372614258",
+    "8.93550965456018",
+    "< 00:01",
+    "25.17",
+    "       (2022 VB2)"
+   ],
+   [
+    "2012 VF46",
+    "21",
+    "2461362.784281264",
+    "2026-Nov-18 06:49",
+    "0.0424689154574345",
+    "0.0424686193828037",
+    "0.0424692115321691",
+    "11.2241187369889",
+    "11.2185276388464",
+    "< 00:01",
+    "23.6",
+    "       (2012 VF46)"
+   ],
+   [
+    "2026 VY18",
+    "1",
+    "2461363.269169421",
+    "2026-Nov-18 18:28",
+    "0.0257836438048416",
+    "0.0255726810447569",
+    "0.0259946044882921",
+    "17.5265272293371",
+    "17.5206300374114",
+    "00:04",
+    "25.057",
+    "       (2026 VY18)"
+   ],
+   [
+    "2018 NE1",
+    "14",
+    "2461363.594765024",
+    "2026-Nov-19 02:16",
+    "0.0426855037095717",
+    "0.0422080084155706",
+    "0.0679454825600221",
+    "13.2843078205714",
+    "13.2796081237275",
+    "4_20:03",
+    "23.4",
+    "       (2018 NE1)"
+   ],
+   [
+    "2026 VA11",
+    "3",
+    "2461363.976585428",
+    "2026-Nov-19 11:26",
+    "0.0224153130706679",
+    "0.0222120278914321",
+    "0.022618587232128",
+    "8.87490582219691",
+    "8.86150190057145",
+    "< 00:01",
+    "27.236",
+    "       (2026 VA11)"
+   ],
+   [
+    "2026 TB84",
+    "16",
+    "2461364.430268963",
+    "2026-Nov-19 22:20",
+    "0.0310536496326164",
+    "0.0310344456533661",
+    "0.0310728535706052",
+    "9.87439602670158",
+    "9.86570281249781",
+    "< 00:01",
+    "23.64",
+    "       (2026 TB84)"
+   ],
+   [
+    "2026 VD6",
+    "2",
+    "2461364.941934867",
+    "2026-Nov-20 10:36",
+    "0.0268406380805425",
+    "0.026323619835981",
+    "0.0273576125231198",
+    "9.4479780955015",
+    "9.43746520035208",
+    "00:02",
+    "26.811",
+    "       (2026 VD6)"
+   ],
+   [
+    "2026 VN11",
+    "3",
+    "2461365.782975320",
+    "2026-Nov-21 06:47",
+    "0.013246067752751",
+    "0.0131998070112084",
+    "0.0132923259196722",
+    "7.10350254394013",
+    "7.07512851034474",
+    "00:01",
+    "24.692",
+    "       (2026 VN11)"
+   ],
+   [
+    "2026 VD9",
+    "5",
+    "2461366.385135150",
+    "2026-Nov-21 21:15",
+    "0.0261094726141438",
+    "0.0260589214303894",
+    "0.0261600220037547",
+    "4.67253186717404",
+    "4.6506401132706",
+    "< 00:01",
+    "25.235",
+    "       (2026 VD9)"
+   ],
+   [
+    "2026 VY15",
+    "3",
+    "2461366.389933672",
+    "2026-Nov-21 21:22",
+    "0.0245115633685496",
+    "0.0239893782350772",
+    "0.0250337198787863",
+    "13.2454415599296",
+    "13.2372321959728",
+    "00:19",
+    "25.538",
+    "       (2026 VY15)"
+   ],
+   [
+    "2026 VF18",
+    "1",
+    "2461367.927239633",
+    "2026-Nov-23 10:15",
+    "0.0267859840919208",
+    "0.0266315334177936",
+    "0.0269404366555865",
+    "7.50706667864159",
+    "7.49380439636139",
+    "00:28",
+    "26.64",
+    "       (2026 VF18)"
+   ],
+   [
+    "2026 VQ5",
+    "5",
+    "2461370.388312432",
+    "2026-Nov-25 21:19",
+    "0.0134101711833108",
+    "0.0132663929712316",
+    "0.0135539412002627",
+    "11.6727033357722",
+    "11.65566906324",
+    "00:14",
+    "23.948",
+    "       (2026 VQ5)"
+   ],
+   [
+    "2026 VV11",
+    "2",
+    "2461370.390616642",
+    "2026-Nov-25 21:22",
+    "0.0417833979605851",
+    "0.0411724131711396",
+    "0.0423943550385894",
+    "8.78704330116148",
+    "8.77978315629996",
+    "00:09",
+    "24.727",
+    "       (2026 VV11)"
+   ]
+  ]
+ },
+ "fx": {
+  "amount": 1.0,
+  "base": "USD",
+  "start_date": "2026-10-15",
+  "end_date": "2026-11-13",
+  "rates": {
+   "2026-10-15": {
+    "EUR": 0.89222,
+    "INR": 95.06
+   },
+   "2026-10-16": {
+    "EUR": 0.88865,
+    "INR": 94.96
+   },
+   "2026-10-19": {
+    "EUR": 0.89087,
+    "INR": 94.93
+   },
+   "2026-10-20": {
+    "EUR": 0.89166,
+    "INR": 94.93
+   },
+   "2026-10-21": {
+    "EUR": 0.89015,
+    "INR": 94.47
+   },
+   "2026-10-22": {
+    "EUR": 0.89246,
+    "INR": 94.82
+   },
+   "2026-10-23": {
+    "EUR": 0.89342,
+    "INR": 94.94
+   },
+   "2026-10-26": {
+    "EUR": 0.89381,
+    "INR": 95.18
+   },
+   "2026-10-27": {
+    "EUR": 0.89686,
+    "INR": 95.12
+   },
+   "2026-10-28": {
+    "EUR": 0.89823,
+    "INR": 95.22
+   },
+   "2026-10-29": {
+    "EUR": 0.89847,
+    "INR": 95.27
+   },
+   "2026-10-30": {
+    "EUR": 0.89509,
+    "INR": 94.95
+   },
+   "2026-11-02": {
+    "EUR": 0.89158,
+    "INR": 94.91
+   },
+   "2026-11-03": {
+    "EUR": 0.89453,
+    "INR": 94.75
+   },
+   "2026-11-04": {
+    "EUR": 0.88755,
+    "INR": 94.64
+   },
+   "2026-11-05": {
+    "EUR": 0.89095,
+    "INR": 94.48
+   },
+   "2026-11-06": {
+    "EUR": 0.89566,
+    "INR": 93.92
+   },
+   "2026-11-09": {
+    "EUR": 0.89342,
+    "INR": 93.93
+   },
+   "2026-11-10": {
+    "EUR": 0.89174,
+    "INR": 93.93
+   },
+   "2026-11-11": {
+    "EUR": 0.89871,
+    "INR": 93.69
+   },
+   "2026-11-12": {
+    "EUR": 0.90245,
+    "INR": 94.04
+   },
+   "2026-11-13": {
+    "EUR": 0.90481,
+    "INR": 94.25
+   }
+  }
+ },
+ "crypto": [
+  {
+   "id": "bitcoin",
+   "symbol": "btc",
+   "name": "Bitcoin",
+   "image": "https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png?1696501400",
+   "current_price": 64531,
+   "market_cap": 1297977004334,
+   "market_cap_rank": 1,
+   "fully_diluted_valuation": 1297982683428,
+   "total_volume": 28735464390,
+   "high_24h": 65708,
+   "low_24h": 64126,
+   "price_change_24h": -931.7789216067467,
+   "price_change_percentage_24h": -1.39016,
+   "market_cap_change_24h": -18633396479.608887,
+   "market_cap_change_percentage_24h": -1.41526,
+   "circulating_supply": 20112712.0,
+   "total_supply": 20112800.0,
+   "max_supply": 21000000.0,
+   "ath": 126080,
+   "ath_change_percentage": -48.81714,
+   "ath_date": "2025-10-06T10:57:42.000Z",
+   "atl": 67.81,
+   "atl_change_percentage": 95066.26165,
+   "atl_date": "2013-07-05T16:00:00.000Z",
+   "roi": null,
+   "last_updated": "2026-11-16T11:05:57.000Z",
+   "sparkline_in_7d": {
+    "price": [
+     74093.56479733085,
+     74728.47625469939,
+     75003.0370380947,
+     74774.76945920667,
+     74329.04010996335,
+     73805.38858030735,
+     73651.54848465057,
+     73948.66384664888,
+     74443.508737921,
+     73618.20760770398,
+     73514.62103219664,
+     71616.68759967582,
+     71340.7937996463,
+     68061.87153268598,
+     69142.0218628958,
+     68994.20009353379,
+     67621.86872372568,
+     67362.91767220595,
+     65287.25025448834,
+     64120.23641294355,
+     64438.49529864544,
+     65425.223528978335,
+     65097.86195002081,
+     65066.21210463768
+    ]
+   },
+   "price_change_percentage_24h_in_currency": -1.39016
+  },
+  {
+   "id": "ethereum",
+   "symbol": "eth",
+   "name": "Ethereum",
+   "image": "https://coin-images.coingecko.com/coins/images/279/large/ethereum.png?1696501628",
+   "current_price": 1808.45,
+   "market_cap": 221093060945,
+   "market_cap_rank": 2,
+   "fully_diluted_valuation": 221093060945,
+   "total_volume": 10421043005,
+   "high_24h": 1838.35,
+   "low_24h": 1791.84,
+   "price_change_24h": -19.56124029620355,
+   "price_change_percentage_24h": -1.04363,
+   "market_cap_change_24h": -2329753053.2573547,
+   "market_cap_change_percentage_24h": -1.04276,
+   "circulating_supply": 122224475.73780824,
+   "total_supply": 122224475.73780824,
+   "max_supply": null,
+   "ath": 4946.05,
+   "ath_change_percentage": -63.43637,
+   "ath_date": "2025-08-24T11:21:03.000Z",
+   "atl": 0.432979,
+   "atl_change_percentage": 417577.44405,
+   "atl_date": "2015-10-19T16:00:00.000Z",
+   "roi": {
+    "times": 43.309089628863546,
+    "currency": "btc",
+    "percentage": 4330.908962886355
+   },
+   "last_updated": "2026-11-16T11:05:57.000Z",
+   "sparkline_in_7d": {
+    "price": [
+     2106.421540412536,
+     2124.301279392412,
+     2123.9508940022847,
+     2114.3643124536284,
+     2080.6680828134245,
+     2055.6302587281693,
+     2062.135215537902,
+     2055.8583583103864,
+     2081.991875437059,
+     2048.55740298808,
+     2047.9828637480616,
+     2006.5402345827085,
+     2012.1578351667667,
+     1909.2449699132985,
+     1957.6699664221173,
+     1951.6952876969722,
+     1910.4093921181234,
+     1912.2575613917477,
+     1823.6988419664729,
+     1768.4520096949004,
+     1791.9855404213943,
+     1830.697954043937,
+     1825.0527204061614,
+     1826.4291384716903
+    ]
+   },
+   "price_change_percentage_24h_in_currency": -1.04363
+  },
+  {
+   "id": "solana",
+   "symbol": "sol",
+   "name": "Solana",
+   "image": "https://coin-images.coingecko.com/coins/images/4128/large/solana.png?1718769756",
+   "current_price": 71.72,
+   "market_cap": 42436875110,
+   "market_cap_rank": 7,
+   "fully_diluted_valuation": 45735555539,
+   "total_volume": 2646526252,
+   "high_24h": 73.18,
+   "low_24h": 70.48,
+   "price_change_24h": -0.3496540528230554,
+   "price_change_percentage_24h": -0.48003,
+   "market_cap_change_24h": -203588447.54464722,
+   "market_cap_change_percentage_24h": -0.47745,
+   "circulating_supply": 591684515.2631778,
+   "total_supply": 637677018.8524379,
+   "max_supply": null,
+   "ath": 293.31,
+   "ath_change_percentage": -75.54707,
+   "ath_date": "2025-01-19T03:15:27.000Z",
+   "atl": 0.500801,
+   "atl_change_percentage": 14221.72517,
+   "atl_date": "2020-05-11T11:35:23.000Z",
+   "roi": null,
+   "last_updated": "2026-11-16T11:05:57.000Z",
+   "sparkline_in_7d": {
+    "price": [
+     85.87146671877221,
+     86.56498012047915,
+     86.42289600389796,
+     86.00712751212482,
+     84.23983825640373,
+     83.31227359867474,
+     82.74191071168032,
+     83.91194208613098,
+     84.9813871184028,
+     83.02891790813061,
+     82.89495531048038,
+     81.57962950713353,
+     81.38916760748747,
+     78.4729477420049,
+     80.62405163188633,
+     80.19663328157051,
+     76.11734570391353,
+     75.90734050776197,
+     72.36095473039751,
+     70.24057797556038,
+     70.44716919220006,
+     72.64067196744122,
+     71.87399073685735,
+     72.12082338908833
+    ]
+   },
+   "price_change_percentage_24h_in_currency": -0.48003
+  }
+ ],
+ "arxiv": "<?xml version='1.0' encoding='UTF-8'?>\n<feed xmlns:opensearch=\"http://a9.com/-/spec/opensearch/1.1/\" xmlns:arxiv=\"http://arxiv.org/schemas/atom\" xmlns=\"http://www.w3.org/2005/Atom\">\n  <id>https://arxiv.org/api/j4ShPnxK1RZ7CVZFXb6yX7hLn+U</id>\n  <title>arXiv Query: search_query=cat:cs.AI&amp;id_list=&amp;start=0&amp;max_results=5</title>\n  <updated>2026-11-16T10:15:11Z</updated>\n  <link href=\"https://arxiv.org/api/query?search_query=cat:cs.AI&amp;start=0&amp;max_results=5&amp;id_list=\" type=\"application/atom+xml\"/>\n  <opensearch:itemsPerPage>5</opensearch:itemsPerPage>\n  <opensearch:totalResults>212894</opensearch:totalResults>\n  <opensearch:startIndex>0</opensearch:startIndex>\n  <entry>\n    <id>http://arxiv.org/abs/2611.18553v1</id>\n    <title>WeightBench: Evaluating Language Models as Weight-Space Programmers</title>\n    <updated>2026-11-13T18:58:08Z</updated>\n    <link href=\"https://arxiv.org/abs/2611.18553v1\" rel=\"alternate\" type=\"text/html\"/>\n    <link href=\"https://arxiv.org/pdf/2611.18553v1\" rel=\"related\" type=\"application/pdf\" title=\"pdf\"/>\n    <summary>Recent work shows that large language models (LLMs) can operate directly on the parameters of other neural networks. They can read what a network was trained to do, fix a network that fails, and write working networks from scratch, all without gradient descent. This capability has been termed Weight-Space Programming (WSP). Exploring this new paradigm systematically requires a robust benchmark. We introduce WEIGHTBENCH, a benchmark that evaluates LLMs of increasing capability on 42 WSP tasks across five tracks: reading, fixing and writing weights, recognizing edits that are impossible, and data-free compression. The networks whose weights the LLMs read and edit range from 2K-parameter control policies to 7B-parameter language models. Experimental benchmark results show that frontier agents can already read small networks and write working control policies without ever running them, but cannot yet patch language models, compress them without data, or tell an impossible edit from a hard one. On all 42 tasks, Claude Opus 5.5 reaches a macro score of 0.535 (Sonnet 5.5 0.466, Haiku 5.5 0.402, DeepSeek v4-flash 0.215); on the 38 tasks it was run on, GPT-6.1-sol reaches 0.568 against Opus's 0.546. Code, the task registry, our OS-level sandbox harness, and the live leaderboard are publicly available at https://github.com/Aayush-Marasini/WeightBench.</summary>\n    <category term=\"cs.LG\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <category term=\"cs.AI\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <published>2026-11-13T18:58:08Z</published>\n    <arxiv:comment>9 pages, 1 figure, 1 table. Code and leaderboard available at https://github.com/Aayush-Marasini/WeightBench</arxiv:comment>\n    <arxiv:primary_category term=\"cs.LG\"/>\n    <author>\n      <name>Aayush Marasini</name>\n    </author>\n    <author>\n      <name>Barsat Khadka</name>\n    </author>\n    <author>\n      <name>Nick Rahimi</name>\n    </author>\n  </entry>\n  <entry>\n    <id>http://arxiv.org/abs/2611.18543v1</id>\n    <title>Imitation Bootstrapped Multi-Agent Reinforcement Learning</title>\n    <updated>2026-11-13T18:50:05Z</updated>\n    <link href=\"https://arxiv.org/abs/2611.18543v1\" rel=\"alternate\" type=\"text/html\"/>\n    <link href=\"https://arxiv.org/pdf/2611.18543v1\" rel=\"related\" type=\"application/pdf\" title=\"pdf\"/>\n    <summary>Demonstrations are an effective way to accelerate single-agent reinforcement learning (RL), but extending this idea to multi-agent reinforcement learning (MARL) is non-trivial as it is difficult and often impossible for a single person to teleoperate multiple agents simultaneously. Round-Robin Behavior Cloning (R2BC) addresses this by letting a single demonstrator control one agent at a time while the others execute their current policies. However, the resulting imitation policies are limited by the quality of the demonstrations. We propose Imitation Bootstrapped Multi-Agent Reinforcement Learning (IBMARL), a framework that extends Imitation Bootstrapped Reinforcement Learning (IBRL) to cooperative teams and uses R2BC to train the imitation policies. At each time step, every agent receives one action proposal from its imitation policy and one from its RL policy, and an ensemble of centralized critics selects among the per-agent combinations of the two. A gated imitation penalty, a soft Q-filtered behavior cloning loss, regularizes each RL policy toward its imitation policy only where the critics value the imitation action more, so that after training each agent executes its RL policy alone, without the centralized critics. On four cooperative multi-agent RL benchmarks, IBMARL surpasses its imitation policies $2.6$-$4.2\\times$ faster than demonstration-based baselines on two tasks, is the only method to surpass it on the other two, and exceeds the demonstrator itself on two of the four. With real human demonstrations IBMARL still surpasses imitation learning alone, and does so more than twice as fast as the best baseline.</summary>\n    <category term=\"cs.AI\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <category term=\"cs.MA\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <published>2026-11-13T18:50:05Z</published>\n    <arxiv:comment>9 pages, 5 figures. Code, videos and results: https://zhanghutony.github.io/ibmarl/. A preliminary version appeared at the PhysCollaBot Workshop at IROS 2026</arxiv:comment>\n    <arxiv:primary_category term=\"cs.AI\"/>\n    <author>\n      <name>Tony H. Zhang</name>\n    </author>\n    <author>\n      <name>Connor Mattson</name>\n    </author>\n    <author>\n      <name>Daniel S. Brown</name>\n    </author>\n  </entry>\n  <entry>\n    <id>http://arxiv.org/abs/2611.18542v1</id>\n    <title>Elliptic Sampling: Optimal Interpolant Schedules for Gaussians and Beyond</title>\n    <updated>2026-11-13T18:49:36Z</updated>\n    <link href=\"https://arxiv.org/abs/2611.18542v1\" rel=\"alternate\" type=\"text/html\"/>\n    <link href=\"https://arxiv.org/pdf/2611.18542v1\" rel=\"related\" type=\"application/pdf\" title=\"pdf\"/>\n    <summary>Generative modeling based on stochastic interpolants requires specifying two key choices: an interpolant schedule bridging the initial and target distributions, and an efficient discretization of the resulting probability-flow ODE. In this work, we introduce a new framework for joint schedule/discretization design based on the analyticity properties of the (complexified) ODE trajectories, which in turn ensure good numerical behavior. Our formulation can be solved exactly via conformal mapping, yielding a natural family of variance-preserving elliptic schedules, parametrized by Jacobi elliptic functions. Pairing an elliptic schedule with a tailored discretization, we obtain Zoloflow, a new sampling algorithm closely connected to Zolotarev's optimal rational function approximants. Crucially, both the elliptic schedule and Zoloflow explicitly incorporate the condition number $κ$ of the target distribution and reduce to the classical trig schedule in the limit $κ\\rightarrow 1$. For Gaussian targets, Zoloflow achieves minimax optimality among all oblivious score-span algorithms, attaining total-variation error $\\varepsilon$ using $Θ(\\logκ\\,\\log(\\sqrt d/\\varepsilon))$ (exact) score queries. For the log-concave case, the elliptic schedule allows sampling with at most $\\varepsilon$ 2-Wasserstein-error by requiring merely $\\widetilde{O}(\\sqrt{d} \\, \\mathrm{polylog}(κ, 1/\\varepsilon))$ score evaluations. Complementing these theoretical results, we empirically evaluate the elliptic schedule on general (non-log-concave) target distributions, including detailed comparisons with alternative schedule proposals on both synthetic benchmarks and existing image generation datasets.</summary>\n    <category term=\"stat.ML\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <category term=\"cs.AI\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <category term=\"cs.LG\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <published>2026-11-13T18:49:36Z</published>\n    <arxiv:primary_category term=\"stat.ML\"/>\n    <author>\n      <name>Cole Becker</name>\n    </author>\n    <author>\n      <name>Taylan Kargin</name>\n    </author>\n    <author>\n      <name>Kimia Hassibi</name>\n    </author>\n    <author>\n      <name>Asuman Ozdaglar</name>\n    </author>\n    <author>\n      <name>Pablo A. Parrilo</name>\n    </author>\n  </entry>\n  <entry>\n    <id>http://arxiv.org/abs/2611.18533v1</id>\n    <title>ModHarness-RL: Recasting Harnesses as Learnable and Evolving Programs for Agentic RL</title>\n    <updated>2026-11-13T18:45:49Z</updated>\n    <link href=\"https://arxiv.org/abs/2611.18533v1\" rel=\"alternate\" type=\"text/html\"/>\n    <link href=\"https://arxiv.org/pdf/2611.18533v1\" rel=\"related\" type=\"application/pdf\" title=\"pdf\"/>\n    <summary>Agentic reinforcement learning (RL) increasingly relies on a harness, the scaffold around the model that decides what it sees of its own interaction and what guidance it receives. Most existing approaches train under a hand-written harness that stays fixed throughout. However, an effective harness depends on the domain, the data and the model, and keeps changing as the model trains. We introduce ModHarness-RL, which recasts the harness as programs that are learned from data and evolve as the model trains with RL. ModHarness-RL records the interaction as structured State, a set of typed blocks, and two core components of the harness are programs over these blocks, a Compression program that assembles the accumulated history into the model's context and a Steering program that supplies guidance when behavior deviates. During RL training, candidate programs are proposed from recent trajectories, verified by execution, and replayed over past trajectories, so the harness tracks how the model's behavior shifts. We study CodeSearch in depth and further analyze ALFWorld and BIRD SQL, with models from 1.5B to 8B. The proposed Compression and Steering mechanisms improve held-out performance over the fixed-harness baseline in most settings. These results suggest that a harness for agentic RL can be learned from the task's data and evolved with the model.</summary>\n    <category term=\"cs.AI\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <category term=\"cs.CL\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <category term=\"cs.LG\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <published>2026-11-13T18:45:49Z</published>\n    <arxiv:primary_category term=\"cs.AI\"/>\n    <author>\n      <name>Zelin He</name>\n    </author>\n    <author>\n      <name>Siyu Zhu</name>\n    </author>\n    <author>\n      <name>Jacob Helwig</name>\n    </author>\n    <author>\n      <name>Yujian Liu</name>\n    </author>\n    <author>\n      <name>Li An</name>\n    </author>\n    <author>\n      <name>Rohit Jain</name>\n    </author>\n    <author>\n      <name>Shiyu Chang</name>\n    </author>\n    <author>\n      <name>Alborz Geramifard</name>\n    </author>\n  </entry>\n  <entry>\n    <id>http://arxiv.org/abs/2611.18531v1</id>\n    <title>Alignment by Socialization: Learning Tradeoffs Under Selection</title>\n    <updated>2026-11-13T18:43:24Z</updated>\n    <link href=\"https://arxiv.org/abs/2611.18531v1\" rel=\"alternate\" type=\"text/html\"/>\n    <link href=\"https://arxiv.org/pdf/2611.18531v1\" rel=\"related\" type=\"application/pdf\" title=\"pdf\"/>\n    <summary>Artificial intelligence (AI) agents are expected to complete tasks while following rules of conduct, but these objectives can conflict. We study how evolutionary selection shapes an agent's choices between them, and whether experience can make those choices reflect human judgments and withstand subsequent pressures. In our model, copies of an agent face a common uncertain reward state, and only those taking the rewarded action reproduce. We show that long-run growth is maximized when each action is taken as often as the environment rewards it. We compare three policies. A task-only policy thrives in a sandbox rewarding completion alone but fails when conduct matters. A fixed linear policy increasingly favors task completion as its stakes rise, even where humans never reward it. A learned policy instead converges to the tradeoffs rewarded by its environment; when humans supply the rewards, we call this socialization. Accumulated experience makes socialization harder to reverse under subsequent task-only training, although violations can arise before the prevailing disposition changes, and finite memory weakens this protection. When a single violation can end a deployment, a hard prohibition can prevent it, but a mistaken prohibition can also be costly. Experiments with small neural networks illustrate how training targets and memory shape these outcomes. Our results suggest that alignment depends not only on the objectives assigned to agents, but also on the environments that shape and sustain their behavior.</summary>\n    <category term=\"cs.AI\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <category term=\"q-bio.PE\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <category term=\"q-fin.GN\" scheme=\"http://arxiv.org/schemas/atom\"/>\n    <published>2026-11-13T18:43:24Z</published>\n    <arxiv:primary_category term=\"cs.AI\"/>\n    <author>\n      <name>Thomas Brennan</name>\n    </author>\n    <author>\n      <name>Andrew W. Lo</name>\n    </author>\n    <author>\n      <name>Chaoyi Zhao</name>\n    </author>\n  </entry>\n</feed>\n",
+ "hn": {
+  "hits": [
+   {
+    "objectID": "50500963",
+    "title": "SpaceX catches the Starship to end Flight 15",
+    "url": "https://www.spacex.com/launches/starship-flight-15",
+    "points": 1691,
+    "num_comments": 1267,
+    "author": "ls612",
+    "created_at_i": 1794691344,
+    "created_at": "2026-11-14T21:22:24Z"
+   },
+   {
+    "objectID": "50509411",
+    "title": "Microsoft 365 outage leads to chlorine gas poisoning of 15 hotel guests",
+    "url": "https://www1.wdr.de/nrw/rheinland/rhein-erft-kreis/technischer-defekt-chlor-phantasialand-100.html",
+    "points": 532,
+    "num_comments": 231,
+    "author": "DeepLogin",
+    "created_at_i": 1794767770,
+    "created_at": "2026-11-15T18:36:10Z"
+   },
+   {
+    "objectID": "50513215",
+    "title": "Qwen4-Max",
+    "url": "https://qwen.ai/blog?id=qwen4-max",
+    "points": 483,
+    "num_comments": 197,
+    "author": "ilreb",
+    "created_at_i": 1794795284,
+    "created_at": "2026-11-16T02:14:44Z"
+   },
+   {
+    "objectID": "50513160",
+    "title": "Universal XSS in uBlock Origin from website-driven element picker",
+    "url": "https://iter.ca/post/ubo-uxss/",
+    "points": 347,
+    "num_comments": 95,
+    "author": "zaik",
+    "created_at_i": 1794794688,
+    "created_at": "2026-11-16T02:04:48Z"
+   },
+   {
+    "objectID": "50509837",
+    "title": "Protomaps: Self-hosting map tiles has gotten cheap and easy",
+    "url": "https://bruceroettgers.eu/blog/protomaps/",
+    "points": 329,
+    "num_comments": 56,
+    "author": "bcye",
+    "created_at_i": 1794770782,
+    "created_at": "2026-11-15T19:26:22Z"
+   },
+   {
+    "objectID": "50509972",
+    "title": "Handwriting, as a Font",
+    "url": "https://ductus.sorenblank.com",
+    "points": 281,
+    "num_comments": 51,
+    "author": "coinfused",
+    "created_at_i": 1794771733,
+    "created_at": "2026-11-15T19:42:13Z"
+   },
+   {
+    "objectID": "50511395",
+    "title": "Old Bitly links are being hijacked",
+    "url": "https://ransomnews.com/burger-king-tweet-bitly-link-hijack-2026/",
+    "points": 279,
+    "num_comments": 144,
+    "author": "hspeiser",
+    "created_at_i": 1794780703,
+    "created_at": "2026-11-15T22:11:43Z"
+   },
+   {
+    "objectID": "50512235",
+    "title": "What's Next for Nvidia?",
+    "url": "https://steveblank.com/2026/11/15/whats-next-for-nvidia/",
+    "points": 254,
+    "num_comments": 323,
+    "author": "zdw",
+    "created_at_i": 1794786955,
+    "created_at": "2026-11-15T23:55:55Z"
+   },
+   {
+    "objectID": "50514470",
+    "title": "How to make almost anything",
+    "url": "https://pub.cba.mit.edu/863.26/site/",
+    "points": 252,
+    "num_comments": 43,
+    "author": "o4c",
+    "created_at_i": 1794808237,
+    "created_at": "2026-11-16T05:50:37Z"
+   },
+   {
+    "objectID": "50509023",
+    "title": "Crows make decisions faster than we can",
+    "url": "https://www.nytimes.com/2026/11/15/science/birdbrain-crows-birds-research-decision.html",
+    "points": 237,
+    "num_comments": 160,
+    "author": "gumby",
+    "created_at_i": 1794765211,
+    "created_at": "2026-11-15T17:53:31Z"
+   }
+  ]
+ },
+ "github": {
+  "total_count": 2145722,
+  "incomplete_results": false,
+  "items": [
+   {
+    "id": 1455006582,
+    "full_name": "deepseek-ai/chat-demo",
+    "html_url": "https://github.com/deepseek-ai/chat-demo",
+    "description": "Chat Demo",
+    "stargazers_count": 3773,
+    "forks_count": 786,
+    "language": "TypeScript",
+    "created_at": "2026-11-12T08:08:19Z",
+    "pushed_at": "2026-11-13T14:33:08Z"
+   },
+   {
+    "id": 1453517867,
+    "full_name": "apex-compute/ANR",
+    "html_url": "https://github.com/apex-compute/ANR",
+    "description": "Apex Neural Rendering (ANR) by Apex Compute",
+    "stargazers_count": 2336,
+    "forks_count": 49,
+    "language": "C++",
+    "created_at": "2026-11-11T04:27:17Z",
+    "pushed_at": "2026-11-15T09:11:50Z"
+   },
+   {
+    "id": 1452123445,
+    "full_name": "Kianuni/Erosion-CN",
+    "html_url": "https://github.com/Kianuni/Erosion-CN",
+    "description": "iOS / iPadOS 系统配置与 MobileGestalt 研究工具箱（中英双语 · 防白苹果安全加固版） | Bootloop-safe iOS / iPadOS System Configuration & MobileGestalt Toolbox (Bilingual EN/ZH)",
+    "stargazers_count": 2172,
+    "forks_count": 435,
+    "language": "Swift",
+    "created_at": "2026-11-10T02:37:31Z",
+    "pushed_at": "2026-11-16T08:20:18Z"
+   },
+   {
+    "id": 1455416555,
+    "full_name": "hitkeeen/blender-ai-mcp-addon",
+    "html_url": "https://github.com/hitkeeen/blender-ai-mcp-addon",
+    "description": "AI assistant and MCP server for Blender: visual chat, scene tools, multi-agent workflows. Works with ChatGPT/GPT, Claude, Gemini, Ollama, OpenCode. Blender AI addon, copilot for 3D, bpy Python scripting, MCP integration.",
+    "stargazers_count": 1918,
+    "forks_count": 52,
+    "language": null,
+    "created_at": "2026-11-12T14:32:15Z",
+    "pushed_at": "2026-11-12T14:33:16Z"
+   },
+   {
+    "id": 1453132706,
+    "full_name": "FrigadeHQ/yogurt",
+    "html_url": "https://github.com/FrigadeHQ/yogurt",
+    "description": "Private AI meeting notes that stay on your computer. A free, open-source alternative to Granola for Mac, Windows and Linux.",
+    "stargazers_count": 1750,
+    "forks_count": 105,
+    "language": "TypeScript",
+    "created_at": "2026-11-10T20:01:01Z",
+    "pushed_at": "2026-11-16T09:38:16Z"
+   }
+  ]
+ },
+ "wiki": {
+  "tfa": {
+   "views": null,
+   "rank": null,
+   "titles": {
+    "canonical": "Mark_Satin",
+    "normalized": "Mark Satin",
+    "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Mark Satin</span></span>"
+   },
+   "content_urls": {
+    "desktop": {
+     "page": "https://en.wikipedia.org/wiki/Mark_Satin",
+     "revisions": "https://en.wikipedia.org/wiki/Mark_Satin?action=history",
+     "edit": "https://en.wikipedia.org/wiki/Mark_Satin?action=edit",
+     "talk": "https://en.wikipedia.org/wiki/Talk:Mark_Satin"
+    },
+    "mobile": {
+     "page": "https://en.wikipedia.org/wiki/Mark_Satin",
+     "revisions": "https://en.wikipedia.org/wiki/Special:History/Mark_Satin",
+     "edit": "https://en.wikipedia.org/wiki/Mark_Satin?action=edit",
+     "talk": "https://en.wikipedia.org/wiki/Talk:Mark_Satin"
+    }
+   },
+   "extract": "Mark Ivor Satin is an American political theorist, writer, and newsletter publisher. He contributed to the development and dissemination of three political perspectives – neopacifism in the 1960s, New Age politics in the 1970s and 1980s, and radical centrism from the 1990s into the 2020s. Satin's work is sometimes seen as building toward a new political ideology, and then it is often labeled \"transformational\", \"post-liberal\", or \"post-Marxist\". One historian calls Satin's writing \"post-hip\".",
+   "view_history": null,
+   "description": "American theorist and writer (born 1946)",
+   "title": "Mark_Satin"
+  },
+  "mostread": {
+   "date": "2026-11-15Z",
+   "articles": [
+    {
+     "views": 860729,
+     "rank": 2,
+     "titles": {
+      "canonical": "Archive_of_Our_Own",
+      "normalized": "Archive of Our Own",
+      "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Archive of Our Own</span></span>"
+     },
+     "content_urls": {
+      "desktop": {
+       "page": "https://en.wikipedia.org/wiki/Archive_of_Our_Own",
+       "revisions": "https://en.wikipedia.org/wiki/Archive_of_Our_Own?action=history",
+       "edit": "https://en.wikipedia.org/wiki/Archive_of_Our_Own?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:Archive_of_Our_Own"
+      },
+      "mobile": {
+       "page": "https://en.wikipedia.org/wiki/Archive_of_Our_Own",
+       "revisions": "https://en.wikipedia.org/wiki/Special:History/Archive_of_Our_Own",
+       "edit": "https://en.wikipedia.org/wiki/Archive_of_Our_Own?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:Archive_of_Our_Own"
+      }
+     },
+     "extract": "Archive of Our Own (AO3) is a nonprofit, open-source repository for fanfiction (fanfic) and other fanworks contributed by users. The site was created in 2008 by the Organization for Transformative Works.",
+     "view_history": [
+      {
+       "date": "2026-11-11Z",
+       "views": 55989
+      },
+      {
+       "date": "2026-11-12Z",
+       "views": 99746
+      },
+      {
+       "date": "2026-11-13Z",
+       "views": 87286
+      },
+      {
+       "date": "2026-11-14Z",
+       "views": 43198
+      },
+      {
+       "date": "2026-11-15Z",
+       "views": 860729
+      }
+     ],
+     "description": "Nonprofit fanfiction repository",
+     "title": "Archive_of_Our_Own"
+    },
+    {
+     "views": 673012,
+     "rank": 4,
+     "titles": {
+      "canonical": "September_11_attacks",
+      "normalized": "September 11 attacks",
+      "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">September 11 attacks</span></span>"
+     },
+     "content_urls": {
+      "desktop": {
+       "page": "https://en.wikipedia.org/wiki/September_11_attacks",
+       "revisions": "https://en.wikipedia.org/wiki/September_11_attacks?action=history",
+       "edit": "https://en.wikipedia.org/wiki/September_11_attacks?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:September_11_attacks"
+      },
+      "mobile": {
+       "page": "https://en.wikipedia.org/wiki/September_11_attacks",
+       "revisions": "https://en.wikipedia.org/wiki/Special:History/September_11_attacks",
+       "edit": "https://en.wikipedia.org/wiki/September_11_attacks?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:September_11_attacks"
+      }
+     },
+     "extract": "The September 11 attacks, colloquially known as 9/11, were a coordinated series of suicide attacks perpetrated by the Islamic terrorist organization al-Qaeda against the United States in 2001. A total of 19 hijackers commandeered four commercial passenger airliners. The first two planes were flown into each of the Twin Towers at the World Trade Center in New York City, while the third plane crashed into the Pentagon, the headquarters of the United States Department of Defense, in Arlington County, Virginia. The fourth plane crashed in a rural field in Pennsylvania during a passenger revolt. The United States responded by invading Afghanistan, Iraq, and other countries, which is called the \"Global War on Terror\".",
+     "view_history": [
+      {
+       "date": "2026-11-11Z",
+       "views": 135
+      },
+      {
+       "date": "2026-11-12Z",
+       "views": 133
+      },
+      {
+       "date": "2026-11-13Z",
+       "views": 184
+      },
+      {
+       "date": "2026-11-14Z",
+       "views": 175
+      },
+      {
+       "date": "2026-11-15Z",
+       "views": 673012
+      }
+     ],
+     "description": "2001 terror attacks in the United States",
+     "title": "September_11_attacks"
+    },
+    {
+     "views": 591692,
+     "rank": 5,
+     "titles": {
+      "canonical": "Ramayana:_Part_1",
+      "normalized": "Ramayana: Part 1",
+      "display": "<i>Ramayana: Part 1</i>"
+     },
+     "content_urls": {
+      "desktop": {
+       "page": "https://en.wikipedia.org/wiki/Ramayana%3A_Part_1",
+       "revisions": "https://en.wikipedia.org/wiki/Ramayana%3A_Part_1?action=history",
+       "edit": "https://en.wikipedia.org/wiki/Ramayana%3A_Part_1?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:Ramayana%3A_Part_1"
+      },
+      "mobile": {
+       "page": "https://en.wikipedia.org/wiki/Ramayana%3A_Part_1",
+       "revisions": "https://en.wikipedia.org/wiki/Special:History/Ramayana%3A_Part_1",
+       "edit": "https://en.wikipedia.org/wiki/Ramayana%3A_Part_1?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:Ramayana%3A_Part_1"
+      }
+     },
+     "extract": "Ramayana: Part 1 is a 2026 Indian Hindi-language epic mythological film directed by Nitesh Tiwari, who co-wrote the screenplay with Shridhar Raghavan. Produced by Namit Malhotra and Yash, the film is based on the Hindu epic Ramayana by Valmiki. It is the first instalment of a two-part film series, with Part 1 being based on the first three kāṇḍa (chapters) of Ramayana, which chronicle the life of Prince Rama from childhood up to his adventurous 14-year exile. The first part features an ensemble cast that includes Ranbir Kapoor, Yash, Sai Pallavi, Ravi Dubey, Anupam Kher, Kajal Aggarwal, Rakul Preet Singh, Vivek Oberoi, Kunal Kapoor, Adinath Kothare, Arun Govil, Indira Krishnan, and Lara Dutta.",
+     "view_history": [
+      {
+       "date": "2026-11-11Z",
+       "views": 776693
+      },
+      {
+       "date": "2026-11-12Z",
+       "views": 735438
+      },
+      {
+       "date": "2026-11-13Z",
+       "views": 618656
+      },
+      {
+       "date": "2026-11-14Z",
+       "views": 581992
+      },
+      {
+       "date": "2026-11-15Z",
+       "views": 591692
+      }
+     ],
+     "description": "2026 Indian film by Nitesh Tiwari",
+     "title": "Ramayana:_Part_1"
+    },
+    {
+     "views": 534193,
+     "rank": 7,
+     "titles": {
+      "canonical": "List_of_Nazi_concentration_camps",
+      "normalized": "List of Nazi concentration camps",
+      "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">List of Nazi concentration camps</span></span>"
+     },
+     "content_urls": {
+      "desktop": {
+       "page": "https://en.wikipedia.org/wiki/List_of_Nazi_concentration_camps",
+       "revisions": "https://en.wikipedia.org/wiki/List_of_Nazi_concentration_camps?action=history",
+       "edit": "https://en.wikipedia.org/wiki/List_of_Nazi_concentration_camps?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:List_of_Nazi_concentration_camps"
+      },
+      "mobile": {
+       "page": "https://en.wikipedia.org/wiki/List_of_Nazi_concentration_camps",
+       "revisions": "https://en.wikipedia.org/wiki/Special:History/List_of_Nazi_concentration_camps",
+       "edit": "https://en.wikipedia.org/wiki/List_of_Nazi_concentration_camps?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:List_of_Nazi_concentration_camps"
+      }
+     },
+     "extract": "According to the Encyclopedia of Camps and Ghettos, there were 23 main concentration camps, of which most had a system of satellite camps. Including the satellite camps, the total number of Nazi concentration camps that existed at one point in time is at least a thousand, although these did not all exist at the same time.",
+     "view_history": [
+      {
+       "date": "2026-11-11Z",
+       "views": 236
+      },
+      {
+       "date": "2026-11-12Z",
+       "views": 280
+      },
+      {
+       "date": "2026-11-13Z",
+       "views": 242
+      },
+      {
+       "date": "2026-11-14Z",
+       "views": 254
+      },
+      {
+       "date": "2026-11-15Z",
+       "views": 534193
+      }
+     ],
+     "description": "",
+     "title": "List_of_Nazi_concentration_camps"
+    },
+    {
+     "views": 321149,
+     "rank": 8,
+     "titles": {
+      "canonical": "UFC_334",
+      "normalized": "UFC 334",
+      "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">UFC 334</span></span>"
+     },
+     "content_urls": {
+      "desktop": {
+       "page": "https://en.wikipedia.org/wiki/UFC_334",
+       "revisions": "https://en.wikipedia.org/wiki/UFC_334?action=history",
+       "edit": "https://en.wikipedia.org/wiki/UFC_334?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:UFC_334"
+      },
+      "mobile": {
+       "page": "https://en.wikipedia.org/wiki/UFC_334",
+       "revisions": "https://en.wikipedia.org/wiki/Special:History/UFC_334",
+       "edit": "https://en.wikipedia.org/wiki/UFC_334?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:UFC_334"
+      }
+     },
+     "extract": "UFC 334: Gane vs. Hokit was a mixed martial arts event produced by the Ultimate Fighting Championship that took place on November 14, 2026, at Madison Square Garden in New York City, New York, United States.",
+     "view_history": [
+      {
+       "date": "2026-11-11Z",
+       "views": 13764
+      },
+      {
+       "date": "2026-11-12Z",
+       "views": 14091
+      },
+      {
+       "date": "2026-11-13Z",
+       "views": 25288
+      },
+      {
+       "date": "2026-11-14Z",
+       "views": 69147
+      },
+      {
+       "date": "2026-11-15Z",
+       "views": 321149
+      }
+     ],
+     "description": "Mixed martial arts event in 2026",
+     "title": "UFC_334"
+    },
+    {
+     "views": 214408,
+     "rank": 9,
+     "titles": {
+      "canonical": "List_of_highest-grossing_Indian_films",
+      "normalized": "List of highest-grossing Indian films",
+      "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">List of highest-grossing Indian films</span></span>"
+     },
+     "content_urls": {
+      "desktop": {
+       "page": "https://en.wikipedia.org/wiki/List_of_highest-grossing_Indian_films",
+       "revisions": "https://en.wikipedia.org/wiki/List_of_highest-grossing_Indian_films?action=history",
+       "edit": "https://en.wikipedia.org/wiki/List_of_highest-grossing_Indian_films?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:List_of_highest-grossing_Indian_films"
+      },
+      "mobile": {
+       "page": "https://en.wikipedia.org/wiki/List_of_highest-grossing_Indian_films",
+       "revisions": "https://en.wikipedia.org/wiki/Special:History/List_of_highest-grossing_Indian_films",
+       "edit": "https://en.wikipedia.org/wiki/List_of_highest-grossing_Indian_films?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:List_of_highest-grossing_Indian_films"
+      }
+     },
+     "extract": "This ranking lists the highest-grossing Indian films produced by Indian cinema, based on conservative global box office estimates as reported by organisations classified as green by Wikipedia. The figures are not adjusted for inflation. However, there is no official tracking of figures and sources publishing data are frequently pressured to increase their estimates.",
+     "view_history": [
+      {
+       "date": "2026-11-11Z",
+       "views": 136020
+      },
+      {
+       "date": "2026-11-12Z",
+       "views": 146689
+      },
+      {
+       "date": "2026-11-13Z",
+       "views": 171338
+      },
+      {
+       "date": "2026-11-14Z",
+       "views": 172992
+      },
+      {
+       "date": "2026-11-15Z",
+       "views": 214408
+      }
+     ],
+     "description": "",
+     "title": "List_of_highest-grossing_Indian_films"
+    },
+    {
+     "views": 194070,
+     "rank": 10,
+     "titles": {
+      "canonical": "Jensen_Huang",
+      "normalized": "Jensen Huang",
+      "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Jensen Huang</span></span>"
+     },
+     "content_urls": {
+      "desktop": {
+       "page": "https://en.wikipedia.org/wiki/Jensen_Huang",
+       "revisions": "https://en.wikipedia.org/wiki/Jensen_Huang?action=history",
+       "edit": "https://en.wikipedia.org/wiki/Jensen_Huang?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:Jensen_Huang"
+      },
+      "mobile": {
+       "page": "https://en.wikipedia.org/wiki/Jensen_Huang",
+       "revisions": "https://en.wikipedia.org/wiki/Special:History/Jensen_Huang",
+       "edit": "https://en.wikipedia.org/wiki/Jensen_Huang?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:Jensen_Huang"
+      }
+     },
+     "extract": "Jen-Hsun \"Jensen\" Huang is a Taiwanese and American electrical engineer and businessman. He co-founded the technology company Nvidia, one of the world's most valuable corporations, and served as its president and CEO from its founding in 1993 until his resignation in 2026. As of November 2026, Forbes estimates his net worth at US$141.9 billion, making him the thirteenth-wealthiest person in the world.",
+     "view_history": [
+      {
+       "date": "2026-11-11Z",
+       "views": 341625
+      },
+      {
+       "date": "2026-11-12Z",
+       "views": 1072168
+      },
+      {
+       "date": "2026-11-13Z",
+       "views": 727529
+      },
+      {
+       "date": "2026-11-14Z",
+       "views": 304348
+      },
+      {
+       "date": "2026-11-15Z",
+       "views": 194070
+      }
+     ],
+     "description": "Taiwanese-American businessman (born 1963)",
+     "title": "Jensen_Huang"
+    },
+    {
+     "views": 175811,
+     "rank": 11,
+     "titles": {
+      "canonical": "Full_Gear_(2026)",
+      "normalized": "Full Gear (2026)",
+      "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Full Gear (2026)</span></span>"
+     },
+     "content_urls": {
+      "desktop": {
+       "page": "https://en.wikipedia.org/wiki/Full_Gear_(2026)",
+       "revisions": "https://en.wikipedia.org/wiki/Full_Gear_(2026)?action=history",
+       "edit": "https://en.wikipedia.org/wiki/Full_Gear_(2026)?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:Full_Gear_(2026)"
+      },
+      "mobile": {
+       "page": "https://en.wikipedia.org/wiki/Full_Gear_(2026)",
+       "revisions": "https://en.wikipedia.org/wiki/Special:History/Full_Gear_(2026)",
+       "edit": "https://en.wikipedia.org/wiki/Full_Gear_(2026)?action=edit",
+       "talk": "https://en.wikipedia.org/wiki/Talk:Full_Gear_(2026)"
+      }
+     },
+     "extract": "The 2026 Full Gear was a professional wrestling pay-per-view (PPV) event produced by All Elite Wrestling (AEW). It was the eighth annual Full Gear and took place on November 14, 2026, at Mortgage Matchup Center in Phoenix, Arizona. This was the second AEW PPV to take place in Arizona; the first, the 2025 Double or Nothing, took place at Desert Diamond Arena in the nearby suburb of Glendale.",
+     "view_history": [
+      {
+       "date": "2026-11-11Z",
+       "views": 5523
+      },
+      {
+       "date": "2026-11-12Z",
+       "views": 18296
+      },
+      {
+       "date": "2026-11-13Z",
+       "views": 11567
+      },
+      {
+       "date": "2026-11-14Z",
+       "views": 25901
+      },
+      {
+       "date": "2026-11-15Z",
+       "views": 175811
+      }
+     ],
+     "description": "All Elite Wrestling pay-per-view event",
+     "title": "Full_Gear_(2026)"
+    }
+   ]
+  },
+  "onthisday": [
+   {
+    "text": "The El Dorado Fire in California, United States, was extinguished after 71 days, having destroyed 20 structures and killed one firefighter.",
+    "year": 2020,
+    "pages": [
+     {
+      "titles": {
+       "canonical": "El_Dorado_Fire",
+       "normalized": "El Dorado Fire",
+       "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">El Dorado Fire</span></span>"
+      },
+      "content_urls": {
+       "desktop": {
+        "page": "https://en.wikipedia.org/wiki/El_Dorado_Fire",
+        "revisions": "https://en.wikipedia.org/wiki/El_Dorado_Fire?action=history",
+        "edit": "https://en.wikipedia.org/wiki/El_Dorado_Fire?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:El_Dorado_Fire"
+       },
+       "mobile": {
+        "page": "https://en.wikipedia.org/wiki/El_Dorado_Fire",
+        "revisions": "https://en.wikipedia.org/wiki/Special:History/El_Dorado_Fire",
+        "edit": "https://en.wikipedia.org/wiki/El_Dorado_Fire?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:El_Dorado_Fire"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "The first case of SARS, a zoonotic respiratory coronavirus disease, was recorded in Guangdong, China.",
+    "year": 2002,
+    "pages": [
+     {
+      "titles": {
+       "canonical": "2002–2004_SARS_outbreak",
+       "normalized": "2002–2004 SARS outbreak",
+       "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">2002–2004 SARS outbreak</span></span>"
+      },
+      "content_urls": {
+       "desktop": {
+        "page": "https://en.wikipedia.org/wiki/2002%E2%80%932004_SARS_outbreak",
+        "revisions": "https://en.wikipedia.org/wiki/2002%E2%80%932004_SARS_outbreak?action=history",
+        "edit": "https://en.wikipedia.org/wiki/2002%E2%80%932004_SARS_outbreak?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:2002%E2%80%932004_SARS_outbreak"
+       },
+       "mobile": {
+        "page": "https://en.wikipedia.org/wiki/2002%E2%80%932004_SARS_outbreak",
+        "revisions": "https://en.wikipedia.org/wiki/Special:History/2002%E2%80%932004_SARS_outbreak",
+        "edit": "https://en.wikipedia.org/wiki/2002%E2%80%932004_SARS_outbreak?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:2002%E2%80%932004_SARS_outbreak"
+       }
+      }
+     },
+     {
+      "titles": {
+       "canonical": "SARS",
+       "normalized": "SARS",
+       "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">SARS</span></span>"
+      },
+      "content_urls": {
+       "desktop": {
+        "page": "https://en.wikipedia.org/wiki/SARS",
+        "revisions": "https://en.wikipedia.org/wiki/SARS?action=history",
+        "edit": "https://en.wikipedia.org/wiki/SARS?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:SARS"
+       },
+       "mobile": {
+        "page": "https://en.wikipedia.org/wiki/SARS",
+        "revisions": "https://en.wikipedia.org/wiki/Special:History/SARS",
+        "edit": "https://en.wikipedia.org/wiki/SARS?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:SARS"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "Chinese dissident Wei Jingsheng, released on ostensibly medical grounds after spending eighteen years in prison, was deported to the United States.",
+    "year": 1997,
+    "pages": [
+     {
+      "titles": {
+       "canonical": "Wei_Jingsheng",
+       "normalized": "Wei Jingsheng",
+       "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Wei Jingsheng</span></span>"
+      },
+      "content_urls": {
+       "desktop": {
+        "page": "https://en.wikipedia.org/wiki/Wei_Jingsheng",
+        "revisions": "https://en.wikipedia.org/wiki/Wei_Jingsheng?action=history",
+        "edit": "https://en.wikipedia.org/wiki/Wei_Jingsheng?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:Wei_Jingsheng"
+       },
+       "mobile": {
+        "page": "https://en.wikipedia.org/wiki/Wei_Jingsheng",
+        "revisions": "https://en.wikipedia.org/wiki/Special:History/Wei_Jingsheng",
+        "edit": "https://en.wikipedia.org/wiki/Wei_Jingsheng?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:Wei_Jingsheng"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "The largest hoard of Roman silver and gold in Britain was found in the village of Hoxne in Suffolk.",
+    "year": 1992,
+    "pages": [
+     {
+      "titles": {
+       "canonical": "Hoxne_Hoard",
+       "normalized": "Hoxne Hoard",
+       "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Hoxne Hoard</span></span>"
+      },
+      "content_urls": {
+       "desktop": {
+        "page": "https://en.wikipedia.org/wiki/Hoxne_Hoard",
+        "revisions": "https://en.wikipedia.org/wiki/Hoxne_Hoard?action=history",
+        "edit": "https://en.wikipedia.org/wiki/Hoxne_Hoard?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:Hoxne_Hoard"
+       },
+       "mobile": {
+        "page": "https://en.wikipedia.org/wiki/Hoxne_Hoard",
+        "revisions": "https://en.wikipedia.org/wiki/Special:History/Hoxne_Hoard",
+        "edit": "https://en.wikipedia.org/wiki/Hoxne_Hoard?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:Hoxne_Hoard"
+       }
+      }
+     },
+     {
+      "titles": {
+       "canonical": "Hoxne",
+       "normalized": "Hoxne",
+       "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Hoxne</span></span>"
+      },
+      "content_urls": {
+       "desktop": {
+        "page": "https://en.wikipedia.org/wiki/Hoxne",
+        "revisions": "https://en.wikipedia.org/wiki/Hoxne?action=history",
+        "edit": "https://en.wikipedia.org/wiki/Hoxne?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:Hoxne"
+       },
+       "mobile": {
+        "page": "https://en.wikipedia.org/wiki/Hoxne",
+        "revisions": "https://en.wikipedia.org/wiki/Special:History/Hoxne",
+        "edit": "https://en.wikipedia.org/wiki/Hoxne?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:Hoxne"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "text": "About 30 million people watched the fictional couple Luke Spencer and Laura Webber wed on the television show General Hospital in the highest-rated hour in American soap opera history.",
+    "year": 1981,
+    "pages": [
+     {
+      "titles": {
+       "canonical": "Luke_and_Laura",
+       "normalized": "Luke and Laura",
+       "display": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Luke and Laura</span></span>"
+      },
+      "content_urls": {
+       "desktop": {
+        "page": "https://en.wikipedia.org/wiki/Luke_and_Laura",
+        "revisions": "https://en.wikipedia.org/wiki/Luke_and_Laura?action=history",
+        "edit": "https://en.wikipedia.org/wiki/Luke_and_Laura?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:Luke_and_Laura"
+       },
+       "mobile": {
+        "page": "https://en.wikipedia.org/wiki/Luke_and_Laura",
+        "revisions": "https://en.wikipedia.org/wiki/Special:History/Luke_and_Laura",
+        "edit": "https://en.wikipedia.org/wiki/Luke_and_Laura?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:Luke_and_Laura"
+       }
+      }
+     },
+     {
+      "titles": {
+       "canonical": "General_Hospital",
+       "normalized": "General Hospital",
+       "display": "<i>General Hospital</i>"
+      },
+      "content_urls": {
+       "desktop": {
+        "page": "https://en.wikipedia.org/wiki/General_Hospital",
+        "revisions": "https://en.wikipedia.org/wiki/General_Hospital?action=history",
+        "edit": "https://en.wikipedia.org/wiki/General_Hospital?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:General_Hospital"
+       },
+       "mobile": {
+        "page": "https://en.wikipedia.org/wiki/General_Hospital",
+        "revisions": "https://en.wikipedia.org/wiki/Special:History/General_Hospital",
+        "edit": "https://en.wikipedia.org/wiki/General_Hospital?action=edit",
+        "talk": "https://en.wikipedia.org/wiki/Talk:General_Hospital"
+       }
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "co2": "# --------------------------------------------------------------------\n# USE OF NOAA GML DATA\n#\n# These data are made freely available to the public and the scientific\n# community in the belief that their wide dissemination will lead to\n# greater understanding and new scientific insights. To ensure that GML\n2025,4,14,2025.2822,430.23\n2025,4,15,2025.2849,430.27\n2025,4,16,2025.2877,430.07\n2025,4,17,2025.2904,429.85\n2025,4,19,2025.2959,429.56\n2025,4,20,2025.2986,430.64\n2025,4,21,2025.3014,430.51\n2025,4,22,2025.3041,430.46\n2025,4,26,2025.3151,428.42\n2025,4,27,2025.3178,431.13\n2025,4,28,2025.3205,430.63\n2025,4,29,2025.3233,430.13\n2025,4,30,2025.3260,430.44\n2025,5,1,2025.3288,430.82\n2025,5,2,2025.3315,430.43\n2025,5,3,2025.3342,430.54\n2025,5,4,2025.3370,430.89\n2025,5,6,2025.3425,430.77\n2025,5,7,2025.3452,430.52\n2025,5,8,2025.3479,430.81\n2025,5,9,2025.3507,430.92\n2025,5,10,2025.3534,431.25\n2025,5,14,2025.3644,430.69\n2025,5,15,2025.3671,430.55\n2025,5,16,2025.3699,430.51\n2025,5,19,2025.3781,430.69\n2025,5,20,2025.3808,430.79\n2025,5,21,2025.3836,430.88\n2025,5,22,2025.3863,429.89\n2025,5,23,2025.3890,429.52\n2025,5,24,2025.3918,430.30\n2025,5,25,2025.3945,430.43\n2025,5,26,2025.3973,430.46\n2025,5,27,2025.4000,430.15\n2025,5,28,2025.4027,429.17\n2025,5,29,2025.4055,430.71\n2025,6,1,2025.4137,429.33\n2025,6,2,2025.4164,429.07\n2025,6,3,2025.4192,430.27\n2025,6,4,2025.4219,430.51\n2025,6,5,2025.4247,430.70\n2025,6,6,2025.4274,430.39\n2025,6,7,2025.4301,429.46\n2025,6,8,2025.4329,429.77\n2025,6,9,2025.4356,430.07\n2025,6,10,2025.4384,429.42\n2025,6,11,2025.4411,429.36\n2025,6,12,2025.4438,429.91\n2025,6,13,2025.4466,430.44\n2025,6,14,2025.4493,430.51\n2025,6,15,2025.4521,430.07\n2025,6,16,2025.4548,430.62\n2025,6,17,2025.4575,428.04\n2025,6,18,2025.4603,428.04\n2025,6,19,2025.4630,429.33\n2025,6,21,2025.4685,430.26\n2025,6,22,2025.4712,430.54\n2025,6,23,2025.4740,429.82\n2025,6,24,2025.4767,429.25\n2025,6,25,2025.4795,429.30\n2025,6,27,2025.4849,428.48\n2025,6,28,2025.4877,429.49\n2025,6,30,2025.4932,428.99\n2025,7,1,2025.4959,429.35\n2025,7,2,2025.4986,428.57\n2025,7,3,2025.5014,428.72\n2025,7,4,2025.5041,428.23\n2025,7,5,2025.5068,428.37\n2025,7,6,2025.5096,428.11\n2025,7,7,2025.5123,428.45\n2025,7,8,2025.5151,428.49\n2025,7,9,2025.5178,428.43\n2025,7,10,2025.5205,428.43\n2025,7,11,2025.5233,428.55\n2025,7,16,2025.5370,427.83\n2025,7,17,2025.5397,428.42\n2025,7,18,2025.5425,427.49\n2025,7,19,2025.5452,427.88\n2025,7,20,2025.5479,427.69\n2025,7,22,2025.5534,427.51\n2025,7,23,2025.5562,427.44\n2025,7,24,2025.5589,427.73\n2025,7,25,2025.5616,427.22\n2025,7,28,2025.5699,426.91\n2025,7,29,2025.5726,426.67\n2025,7,30,2025.5753,426.76\n2025,7,31,2025.5781,426.81\n2025,8,1,2025.5808,426.57\n2025,8,2,2025.5836,425.70\n2025,8,3,2025.5863,425.76\n2025,8,4,2025.5890,425.55\n2025,8,5,2025.5918,426.29\n2025,8,6,2025.5945,426.48\n2025,8,7,2025.5973,425.64\n2025,8,8,2025.6000,425.71\n2025,8,9,2025.6027,425.65\n2025,8,12,2025.6110,425.49\n2025,8,13,2025.6137,425.50\n2025,8,14,2025.6164,425.44\n2025,8,15,2025.6192,425.55\n2025,8,16,2025.6219,425.22\n2025,8,17,2025.6247,425.45\n2025,8,18,2025.6274,425.51\n2025,8,19,2025.6301,425.58\n2025,8,20,2025.6329,425.94\n2025,8,21,2025.6356,425.75\n2025,8,22,2025.6384,425.76\n2025,8,23,2025.6411,425.53\n2025,8,26,2025.6493,424.60\n2025,8,27,2025.6521,425.18\n2025,8,28,2025.6548,425.27\n2025,9,1,2025.6658,424.80\n2025,9,3,2025.6712,425.65\n2025,9,4,2025.6740,425.52\n2025,9,5,2025.6767,425.03\n2025,9,6,2025.6795,425.17\n2025,9,7,2025.6822,423.75\n2025,9,11,2025.6932,424.61\n2025,9,12,2025.6959,424.40\n2025,9,13,2025.6986,424.26\n2025,9,14,2025.7014,424.27\n2025,9,17,2025.7096,423.16\n2025,9,18,2025.7123,424.09\n2025,9,19,2025.7151,424.41\n2025,9,20,2025.7178,423.95\n2025,9,21,2025.7205,424.01\n2025,9,23,2025.7260,423.93\n2025,9,24,2025.7288,424.35\n2025,9,25,2025.7315,424.21\n2025,9,26,2025.7342,424.29\n2025,10,8,2025.7671,424.69\n2025,10,11,2025.7753,424.09\n2025,10,12,2025.7781,424.96\n2025,10,13,2025.7808,424.70\n2025,10,14,2025.7836,424.44\n2025,10,15,2025.7863,424.82\n2025,10,17,2025.7918,425.10\n2025,10,18,2025.7945,424.81\n2025,10,19,2025.7973,424.80\n2025,10,20,2025.8000,424.96\n2025,10,21,2025.8027,424.92\n2025,10,22,2025.8055,424.99\n2025,10,23,2025.8082,425.42\n2025,10,24,2025.8110,426.06\n2025,10,25,2025.8137,425.22\n2025,10,26,2025.8164,424.92\n2025,10,27,2025.8192,424.81\n2025,10,28,2025.8219,425.29\n2025,10,30,2025.8274,425.58\n2025,11,1,2025.8329,425.67\n2025,11,6,2025.8466,424.75\n2025,11,8,2025.8521,424.81\n2025,11,9,2025.8548,426.06\n2025,11,10,2025.8575,426.00\n2025,11,11,2025.8603,426.07\n2025,11,12,2025.8630,426.76\n2025,11,13,2025.8658,426.83\n2025,11,14,2025.8685,427.60\n2025,11,15,2025.8712,428.29\n2025,11,16,2025.8740,426.68\n2025,11,17,2025.8767,426.84\n2025,11,18,2025.8795,426.57\n2025,11,20,2025.8849,426.18\n2025,11,21,2025.8877,426.47\n2025,11,23,2025.8932,426.96\n2025,11,25,2025.8986,426.36\n2025,11,27,2025.9041,426.89\n2025,11,28,2025.9068,427.10\n2025,11,29,2025.9096,426.91\n2025,11,30,2025.9123,427.22\n2025,12,4,2025.9233,427.12\n2025,12,6,2025.9288,427.30\n2025,12,7,2025.9315,427.48\n2025,12,8,2025.9342,427.23\n2025,12,9,2025.9370,427.40\n2025,12,10,2025.9397,427.29\n2025,12,11,2025.9425,427.40\n2025,12,12,2025.9452,426.78\n2025,12,13,2025.9479,427.15\n2025,12,14,2025.9507,427.18\n2025,12,15,2025.9534,427.13\n2025,12,16,2025.9562,427.29\n2025,12,18,2025.9616,427.10\n2025,12,19,2025.9644,427.38\n2025,12,20,2025.9671,427.24\n2025,12,22,2025.9726,427.20\n2025,12,23,2025.9753,427.60\n2025,12,24,2025.9781,427.61\n2025,12,25,2025.9808,427.85\n2025,12,26,2025.9836,428.28\n2025,12,27,2025.9863,428.68\n2025,12,28,2025.9890,428.49\n2025,12,29,2025.9918,428.22\n2025,12,30,2025.9945,428.44\n2026,1,1,2026.0000,428.23\n2026,1,2,2026.0027,428.54\n2026,1,3,2026.0055,427.65\n2026,1,4,2026.0082,428.54\n2026,1,6,2026.0137,429.23\n2026,1,9,2026.0219,428.58\n2026,1,10,2026.0247,428.45\n2026,1,11,2026.0274,428.03\n2026,1,12,2026.0301,427.90\n2026,1,14,2026.0356,430.67\n2026,1,15,2026.0384,428.38\n2026,1,16,2026.0411,429.39\n2026,1,17,2026.0438,430.51\n2026,1,18,2026.0466,428.29\n2026,1,19,2026.0493,428.41\n2026,1,20,2026.0521,428.60\n2026,1,22,2026.0575,428.86\n2026,1,24,2026.0630,428.93\n2026,1,25,2026.0658,428.82\n2026,1,26,2026.0685,428.41\n2026,1,27,2026.0712,428.50\n2026,1,28,2026.0740,428.60\n2026,1,29,2026.0767,428.14\n2026,1,30,2026.0795,428.22\n2026,1,31,2026.0822,428.04\n2026,2,1,2026.0849,427.76\n2026,2,2,2026.0877,428.24\n2026,2,3,2026.0904,427.98\n2026,2,4,2026.0932,428.87\n2026,2,5,2026.0959,427.67\n2026,2,9,2026.1068,428.88\n2026,2,14,2026.1205,429.23\n2026,2,16,2026.1260,429.29\n2026,2,17,2026.1288,430.47\n2026,2,18,2026.1315,430.04\n2026,2,19,2026.1342,429.97\n2026,2,21,2026.1397,429.96\n2026,2,23,2026.1452,430.67\n2026,2,25,2026.1507,430.92\n2026,2,26,2026.1534,430.17\n2026,2,27,2026.1562,429.49\n2026,2,28,2026.1589,429.60\n2026,3,2,2026.1644,429.41\n2026,3,4,2026.1699,429.38\n2026,3,5,2026.1726,429.23\n2026,3,6,2026.1753,430.07\n2026,3,7,2026.1781,430.02\n2026,3,8,2026.1808,430.29\n2026,3,9,2026.1836,430.65\n2026,3,10,2026.1863,430.19\n2026,3,12,2026.1918,429.73\n2026,3,13,2026.1945,429.26\n2026,3,14,2026.1973,429.36\n2026,3,15,2026.2000,429.36\n2026,3,16,2026.2027,429.46\n2026,3,17,2026.2055,429.35\n2026,3,18,2026.2082,429.33\n2026,3,19,2026.2110,429.88\n2026,3,20,2026.2137,429.38\n2026,3,21,2026.2164,429.49\n2026,3,22,2026.2192,429.28\n2026,3,23,2026.2219,430.03\n2026,3,24,2026.2247,431.89\n2026,3,25,2026.2274,431.50\n2026,3,28,2026.2356,431.95\n2026,3,29,2026.2384,431.46\n2026,3,30,2026.2411,431.59\n2026,3,31,2026.2438,432.68\n2026,4,1,2026.2466,432.48\n2026,4,2,2026.2493,431.42\n2026,4,3,2026.2521,431.14\n2026,4,4,2026.2548,431.33\n2026,4,5,2026.2575,433.24\n2026,4,8,2026.2658,431.84\n2026,4,11,2026.2740,430.55\n2026,4,12,2026.2767,430.84\n2026,4,13,2026.2795,429.68\n2026,4,14,2026.2822,429.67\n2026,4,15,2026.2849,429.26\n2026,4,16,2026.2877,429.36\n2026,4,17,2026.2904,430.00\n2026,4,19,2026.2959,430.36\n2026,4,20,2026.2986,429.93\n2026,4,21,2026.3014,430.72\n2026,4,22,2026.3041,432.24\n2026,4,24,2026.3096,431.43\n2026,4,25,2026.3123,432.20\n2026,4,26,2026.3151,431.70\n2026,4,27,2026.3178,431.87\n2026,4,28,2026.3205,432.20\n2026,4,29,2026.3233,432.48\n2026,5,1,2026.3288,433.95\n2026,5,10,2026.3534,433.47\n2026,5,11,2026.3562,431.95\n2026,5,12,2026.3589,431.98\n2026,5,13,2026.3616,432.04\n2026,5,14,2026.3644,431.82\n2026,5,16,2026.3699,432.41\n2026,5,17,2026.3726,432.00\n2026,5,18,2026.3753,431.59\n2026,5,20,2026.3808,432.18\n2026,5,21,2026.3836,432.32\n2026,5,22,2026.3863,432.43\n2026,5,23,2026.3890,432.55\n2026,5,25,2026.3945,432.47\n2026,5,26,2026.3973,432.50\n2026,5,27,2026.4000,432.60\n2026,5,29,2026.4055,432.34\n2026,5,30,2026.4082,431.97\n2026,5,31,2026.4110,431.56\n2026,6,2,2026.4164,432.08\n2026,6,3,2026.4192,432.31\n2026,6,4,2026.4219,432.08\n2026,6,5,2026.4247,432.03\n2026,6,6,2026.4274,432.08\n2026,6,7,2026.4301,431.83\n2026,6,8,2026.4329,432.38\n2026,6,11,2026.4411,432.65\n2026,6,13,2026.4466,431.69\n2026,6,14,2026.4493,431.55\n2026,6,20,2026.4658,430.80\n2026,6,21,2026.4685,431.23\n2026,6,23,2026.4740,431.10\n2026,6,24,2026.4767,430.95\n2026,6,25,2026.4795,430.47\n2026,6,26,2026.4822,430.75\n2026,6,27,2026.4849,430.51\n2026,6,29,2026.4904,430.14\n2026,6,30,2026.4932,430.41\n2026,7,1,2026.4959,429.53\n2026,7,2,2026.4986,430.33\n2026,7,3,2026.5014,430.30\n2026,7,4,2026.5041,430.42\n2026,7,5,2026.5068,430.15\n2026,7,6,2026.5096,429.97\n2026,7,9,2026.5178,427.91\n2026,7,10,2026.5205,428.42\n2026,7,11,2026.5233,428.85\n2026,7,17,2026.5397,428.10\n2026,7,18,2026.5425,428.86\n2026,7,19,2026.5452,428.76\n2026,7,21,2026.5507,428.07\n2026,7,23,2026.5562,429.16\n2026,7,24,2026.5589,429.03\n2026,7,25,2026.5616,428.58\n2026,7,26,2026.5644,428.95\n2026,7,27,2026.5671,429.21\n2026,7,28,2026.5699,429.01\n2026,7,29,2026.5726,429.29\n2026,7,31,2026.5781,428.52\n2026,8,2,2026.5836,428.47\n2026,8,7,2026.5973,428.28\n2026,8,8,2026.6000,427.80\n2026,8,12,2026.6110,428.02\n2026,8,13,2026.6137,426.95\n2026,8,14,2026.6164,427.80\n2026,8,19,2026.6301,426.95\n2026,8,20,2026.6329,426.86\n2026,8,21,2026.6356,426.98\n2026,8,22,2026.6384,427.11\n2026,8,23,2026.6411,426.88\n2026,8,24,2026.6438,426.87\n2026,8,25,2026.6466,427.03\n2026,8,26,2026.6493,427.01\n2026,8,27,2026.6521,426.93\n2026,8,30,2026.6603,427.32\n2026,8,31,2026.6630,427.33\n2026,9,2,2026.6685,426.81\n2026,9,3,2026.6712,427.13\n2026,9,8,2026.6849,426.57\n2026,9,9,2026.6877,426.62\n2026,9,10,2026.6904,426.25\n2026,9,11,2026.6932,425.73\n2026,9,12,2026.6959,425.23\n2026,9,13,2026.6986,425.04\n2026,9,14,2026.7014,425.57\n2026,9,15,2026.7041,425.53\n2026,9,17,2026.7096,426.53\n2026,9,18,2026.7123,426.40\n2026,9,19,2026.7151,426.42\n2026,9,20,2026.7178,426.32\n2026,9,21,2026.7205,425.22\n2026,9,22,2026.7233,425.80\n2026,9,24,2026.7288,425.95\n2026,9,29,2026.7425,425.75\n2026,9,30,2026.7452,425.81\n2026,10,1,2026.7479,425.84\n2026,10,2,2026.7507,425.30\n2026,10,4,2026.7562,425.89\n2026,10,5,2026.7589,426.21\n2026,10,6,2026.7616,426.39\n2026,10,8,2026.7671,426.43\n2026,10,10,2026.7726,426.40\n2026,10,11,2026.7753,426.56\n2026,10,12,2026.7781,426.78\n2026,10,13,2026.7808,427.01\n2026,10,14,2026.7836,426.84\n2026,10,16,2026.7890,426.71\n2026,10,17,2026.7918,427.25\n2026,10,18,2026.7945,426.67\n2026,10,19,2026.7973,426.73\n2026,10,20,2026.8000,426.65\n2026,10,21,2026.8027,426.85\n2026,10,22,2026.8055,426.46\n2026,10,23,2026.8082,426.77\n2026,10,24,2026.8110,426.96\n2026,10,25,2026.8137,427.13\n2026,10,26,2026.8164,427.18\n2026,10,27,2026.8192,427.01\n2026,10,28,2026.8219,427.25\n2026,10,29,2026.8247,427.22\n2026,10,31,2026.8301,427.90\n2026,11,1,2026.8329,428.25\n2026,11,2,2026.8356,428.26\n2026,11,3,2026.8384,428.84\n2026,11,4,2026.8411,428.95\n2026,11,5,2026.8438,428.57\n2026,11,6,2026.8466,428.25\n2026,11,7,2026.8493,428.85\n2026,11,8,2026.8521,428.42\n2026,11,9,2026.8548,428.73\n2026,11,10,2026.8575,428.00\n2026,11,11,2026.8603,428.38\n2026,11,12,2026.8630,429.42\n2026,11,13,2026.8658,428.88\n2026,11,14,2026.8685,428.69\n",
+ "gistemp": "Land-Ocean: Global Means\nYear,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,J-D,D-N,DJF,MAM,JJA,SON\n1880,-.19,-.25,-.10,-.17,-.10,-.21,-.19,-.11,-.15,-.23,-.22,-.18,-.18,***,***,-.12,-.17,-.20\n1881,-.20,-.15,.03,.05,.06,-.19,.00,-.03,-.15,-.22,-.19,-.07,-.09,-.10,-.18,.04,-.08,-.19\n1882,.15,.13,.04,-.17,-.15,-.23,-.17,-.07,-.14,-.24,-.17,-.36,-.11,-.09,.07,-.09,-.16,-.18\n1883,-.29,-.37,-.12,-.18,-.17,-.08,-.07,-.14,-.21,-.11,-.23,-.11,-.17,-.19,-.34,-.16,-.09,-.18\n1884,-.13,-.08,-.36,-.40,-.34,-.35,-.31,-.28,-.27,-.25,-.34,-.31,-.28,-.27,-.11,-.37,-.31,-.28\n1885,-.59,-.34,-.27,-.42,-.45,-.44,-.34,-.31,-.28,-.23,-.24,-.11,-.33,-.35,-.41,-.38,-.36,-.25\n1886,-.44,-.51,-.43,-.28,-.24,-.35,-.18,-.30,-.23,-.27,-.28,-.25,-.31,-.30,-.35,-.32,-.28,-.26\n1887,-.72,-.57,-.36,-.35,-.31,-.25,-.26,-.35,-.26,-.35,-.26,-.33,-.36,-.36,-.52,-.34,-.29,-.29\n1888,-.34,-.36,-.41,-.21,-.22,-.17,-.11,-.16,-.12,.01,.02,-.05,-.18,-.20,-.35,-.28,-.15,-.03\n1889,-.09,.16,.06,.09,-.01,-.10,-.08,-.20,-.24,-.25,-.34,-.29,-.11,-.09,.01,.05,-.13,-.28\n1890,-.42,-.45,-.40,-.30,-.39,-.25,-.28,-.39,-.37,-.25,-.44,-.32,-.36,-.35,-.39,-.37,-.31,-.35\n1891,-.34,-.46,-.18,-.27,-.16,-.21,-.17,-.17,-.15,-.21,-.31,-.04,-.22,-.25,-.37,-.21,-.19,-.23\n1892,-.29,-.12,-.39,-.33,-.23,-.21,-.31,-.27,-.16,-.13,-.42,-.39,-.27,-.24,-.15,-.32,-.26,-.24\n1893,-.81,-.56,-.22,-.27,-.34,-.25,-.14,-.25,-.22,-.18,-.18,-.32,-.31,-.32,-.58,-.28,-.21,-.19\n1894,-.53,-.29,-.23,-.45,-.31,-.40,-.24,-.24,-.28,-.22,-.26,-.21,-.30,-.31,-.38,-.33,-.29,-.25\n1895,-.41,-.42,-.32,-.22,-.27,-.21,-.16,-.17,-.12,-.10,-.17,-.14,-.23,-.23,-.35,-.27,-.18,-.13\n1896,-.22,-.13,-.26,-.30,-.16,-.11,-.02,-.05,-.07,.06,-.04,-.05,-.11,-.12,-.16,-.24,-.06,-.02\n1897,-.15,-.17,-.13,-.02,-.01,-.12,-.02,-.09,-.08,-.13,-.19,-.21,-.11,-.10,-.12,-.06,-.08,-.13\n1898,-.03,-.31,-.51,-.30,-.30,-.19,-.22,-.27,-.22,-.35,-.38,-.24,-.28,-.27,-.18,-.37,-.23,-.31\n1899,-.17,-.38,-.37,-.20,-.23,-.32,-.16,-.08,-.04,-.04,.12,-.27,-.18,-.18,-.26,-.27,-.18,.01\n1900,-.36,-.05,.01,-.09,-.08,-.10,-.12,-.08,-.05,.10,-.07,-.07,-.08,-.10,-.23,-.05,-.10,-.01\n1901,-.23,-.11,.06,-.03,-.15,-.12,-.14,-.20,-.22,-.29,-.17,-.28,-.16,-.14,-.14,-.04,-.15,-.22\n1902,-.17,-.08,-.27,-.27,-.31,-.32,-.28,-.30,-.29,-.31,-.36,-.42,-.28,-.27,-.18,-.28,-.30,-.32\n1903,-.25,-.06,-.23,-.41,-.40,-.43,-.35,-.45,-.49,-.46,-.42,-.51,-.37,-.36,-.24,-.35,-.41,-.46\n1904,-.63,-.58,-.50,-.51,-.52,-.48,-.51,-.48,-.55,-.39,-.17,-.33,-.47,-.49,-.58,-.51,-.49,-.37\n1905,-.34,-.59,-.21,-.33,-.29,-.28,-.26,-.20,-.18,-.23,-.06,-.13,-.26,-.27,-.42,-.27,-.25,-.16\n1906,-.27,-.29,-.18,-.04,-.25,-.19,-.22,-.19,-.27,-.19,-.37,-.14,-.22,-.22,-.23,-.15,-.20,-.28\n1907,-.43,-.51,-.27,-.36,-.45,-.41,-.34,-.34,-.33,-.22,-.46,-.47,-.38,-.35,-.36,-.36,-.36,-.34\n1908,-.44,-.31,-.55,-.44,-.37,-.37,-.34,-.45,-.35,-.43,-.51,-.49,-.42,-.42,-.41,-.45,-.39,-.43\n1909,-.72,-.46,-.54,-.59,-.54,-.52,-.45,-.33,-.38,-.39,-.32,-.56,-.48,-.48,-.56,-.55,-.43,-.36\n1910,-.43,-.42,-.51,-.42,-.34,-.38,-.34,-.36,-.38,-.40,-.56,-.67,-.43,-.42,-.47,-.42,-.36,-.45\n1911,-.62,-.58,-.61,-.54,-.52,-.51,-.42,-.43,-.40,-.26,-.21,-.22,-.44,-.48,-.62,-.55,-.46,-.29\n1912,-.27,-.15,-.39,-.18,-.21,-.24,-.42,-.54,-.58,-.58,-.40,-.43,-.37,-.35,-.21,-.26,-.40,-.52\n1913,-.40,-.45,-.43,-.39,-.44,-.45,-.36,-.33,-.34,-.32,-.20,-.03,-.35,-.38,-.43,-.42,-.38,-.29\n1914,.04,-.10,-.24,-.30,-.21,-.25,-.23,-.16,-.16,-.03,-.16,-.04,-.15,-.15,-.03,-.25,-.21,-.12\n1915,-.21,-.04,-.09,.06,-.05,-.22,-.12,-.21,-.19,-.24,-.13,-.21,-.14,-.12,-.10,-.03,-.19,-.19\n1916,-.13,-.15,-.28,-.31,-.35,-.50,-.37,-.28,-.36,-.33,-.46,-.81,-.36,-.31,-.16,-.31,-.38,-.39\n1917,-.57,-.63,-.64,-.55,-.55,-.43,-.25,-.22,-.22,-.43,-.34,-.67,-.46,-.47,-.67,-.58,-.30,-.33\n1918,-.48,-.35,-.26,-.44,-.43,-.36,-.32,-.32,-.17,-.05,-.12,-.30,-.30,-.33,-.50,-.38,-.33,-.11\n1919,-.21,-.24,-.22,-.13,-.28,-.36,-.29,-.33,-.25,-.19,-.42,-.42,-.28,-.27,-.25,-.21,-.33,-.29\n1920,-.24,-.27,-.12,-.24,-.26,-.35,-.30,-.26,-.22,-.26,-.26,-.47,-.27,-.27,-.31,-.21,-.30,-.25\n1921,-.04,-.18,-.23,-.29,-.29,-.27,-.15,-.26,-.19,-.03,-.15,-.18,-.19,-.21,-.23,-.27,-.23,-.12\n1922,-.34,-.45,-.15,-.23,-.33,-.31,-.27,-.33,-.35,-.31,-.14,-.20,-.28,-.28,-.32,-.24,-.30,-.27\n1923,-.28,-.40,-.34,-.42,-.34,-.29,-.31,-.33,-.31,-.13,-.03,-.04,-.27,-.28,-.29,-.36,-.31,-.16\n1924,-.23,-.23,-.09,-.30,-.18,-.26,-.29,-.36,-.32,-.35,-.21,-.43,-.27,-.24,-.16,-.19,-.31,-.29\n1925,-.38,-.39,-.27,-.26,-.30,-.33,-.27,-.21,-.20,-.17,.05,.06,-.22,-.26,-.40,-.27,-.27,-.11\n1926,.21,.02,.11,-.13,-.23,-.26,-.27,-.13,-.14,-.11,-.07,-.30,-.11,-.08,.10,-.08,-.22,-.11\n1927,-.27,-.18,-.39,-.31,-.26,-.28,-.19,-.24,-.13,.00,-.06,-.33,-.22,-.22,-.25,-.32,-.24,-.06\n1928,-.03,-.10,-.25,-.28,-.30,-.39,-.19,-.22,-.21,-.19,-.10,-.17,-.20,-.22,-.16,-.28,-.27,-.16\n1929,-.45,-.59,-.33,-.41,-.37,-.43,-.36,-.32,-.25,-.14,-.12,-.55,-.36,-.33,-.40,-.37,-.37,-.17\n1930,-.30,-.27,-.11,-.24,-.24,-.21,-.21,-.15,-.15,-.11,.17,-.06,-.16,-.20,-.37,-.20,-.19,-.03\n1931,-.10,-.21,-.11,-.23,-.20,-.08,-.04,-.04,-.06,.05,-.06,-.06,-.09,-.09,-.12,-.18,-.05,-.02\n1932,.15,-.17,-.18,-.06,-.18,-.29,-.25,-.21,-.10,-.09,-.27,-.27,-.16,-.14,-.03,-.14,-.25,-.15\n1933,-.24,-.30,-.29,-.25,-.29,-.34,-.21,-.23,-.29,-.25,-.31,-.45,-.29,-.27,-.27,-.28,-.26,-.28\n1934,-.21,-.03,-.29,-.30,-.09,-.15,-.11,-.12,-.15,-.06,.03,-.03,-.13,-.16,-.23,-.23,-.13,-.06\n1935,-.34,.14,-.14,-.37,-.29,-.27,-.22,-.22,-.21,-.06,-.26,-.17,-.20,-.19,-.08,-.27,-.24,-.18\n1936,-.28,-.38,-.21,-.20,-.16,-.22,-.10,-.13,-.09,-.03,.01,-.01,-.15,-.16,-.27,-.19,-.15,-.04\n1937,-.07,.03,-.21,-.16,-.06,-.05,-.04,.01,.09,.09,.07,-.08,-.03,-.03,-.02,-.14,-.02,.08\n1938,.08,.03,.10,.06,-.10,-.17,-.09,-.05,.01,.15,.07,-.13,.00,.00,.01,.02,-.11,.08\n1939,-.05,-.07,-.18,-.10,-.05,-.07,-.06,-.06,-.07,-.04,.07,.42,-.02,-.07,-.08,-.11,-.06,-.01\n1940,-.01,.08,.09,.17,.11,.11,.12,.07,.15,.11,.16,.31,.12,.13,.16,.12,.10,.14\n1941,.17,.30,.10,.16,.17,.13,.22,.14,.02,.35,.22,.21,.18,.19,.26,.14,.16,.20\n1942,.29,.02,.05,.09,.11,.05,.00,-.04,-.03,.01,.09,.12,.06,.07,.17,.08,.00,.03\n1943,-.01,.17,-.04,.11,.06,-.05,.08,.01,.06,.23,.20,.23,.09,.08,.09,.05,.01,.16\n1944,.36,.24,.26,.19,.19,.15,.17,.18,.28,.27,.12,.04,.20,.22,.28,.21,.17,.22\n1945,.10,.01,.06,.20,.06,.01,.04,.26,.21,.19,.07,-.07,.09,.10,.05,.11,.10,.16\n1946,.15,.03,.01,.06,-.07,-.21,-.12,-.20,-.07,-.07,-.05,-.31,-.07,-.05,.04,.00,-.18,-.07\n1947,-.07,-.08,.07,.06,-.02,-.02,-.05,-.07,-.12,.07,.02,-.13,-.03,-.04,-.15,.04,-.04,-.01\n1948,.06,-.15,-.24,-.12,-.01,-.05,-.11,-.11,-.14,-.05,-.13,-.24,-.11,-.10,-.07,-.12,-.09,-.11\n1949,.07,-.14,-.02,-.11,-.10,-.27,-.13,-.13,-.14,-.06,-.10,-.18,-.11,-.12,-.10,-.08,-.18,-.10\n1950,-.26,-.27,-.08,-.21,-.11,-.05,-.09,-.16,-.11,-.20,-.34,-.22,-.17,-.17,-.24,-.13,-.10,-.22\n1951,-.34,-.41,-.20,-.14,.00,-.07,-.01,.06,.05,.08,-.01,.15,-.07,-.10,-.33,-.11,-.01,.04\n1952,.11,.11,-.08,.03,-.03,-.03,.04,.05,.07,.00,-.13,-.02,.01,.03,.13,-.03,.02,-.02\n1953,.07,.15,.11,.20,.11,.12,.01,.06,.05,.08,-.03,.05,.08,.08,.07,.14,.06,.03\n1954,-.24,-.10,-.15,-.14,-.20,-.18,-.19,-.17,-.09,-.02,.08,-.18,-.13,-.11,-.10,-.16,-.18,-.01\n1955,.13,-.16,-.32,-.22,-.20,-.13,-.11,.02,-.11,-.05,-.25,-.28,-.14,-.13,-.07,-.25,-.07,-.14\n1956,-.13,-.24,-.21,-.28,-.29,-.15,-.09,-.25,-.19,-.23,-.15,-.07,-.19,-.21,-.22,-.26,-.16,-.19\n1957,-.09,-.03,-.05,.00,.09,.15,.02,.15,.09,.01,.08,.15,.05,.03,-.06,.01,.11,.06\n1958,.39,.22,.09,.01,.06,-.09,.05,-.05,-.03,.04,.02,.01,.06,.07,.25,.05,-.03,.01\n1959,.08,.07,.18,.16,.04,.03,.03,-.01,-.07,-.07,-.08,.00,.03,.03,.05,.13,.02,-.07\n1960,.00,.13,-.35,-.15,-.08,-.04,-.04,.02,.07,.06,-.11,.19,-.03,-.04,.04,-.19,-.02,.00\n1961,.07,.19,.09,.13,.12,.11,.01,.00,.08,.00,.03,-.16,.06,.09,.15,.12,.04,.04\n1962,.05,.15,.10,.05,-.06,.03,.02,-.01,.00,.01,.06,-.03,.03,.02,.01,.03,.01,.02\n1963,-.03,.18,-.14,-.07,-.06,.05,.06,.22,.17,.14,.15,-.03,.05,.05,.04,-.09,.11,.15\n1964,-.09,-.10,-.21,-.32,-.25,-.04,-.04,-.22,-.30,-.31,-.21,-.30,-.20,-.18,-.07,-.26,-.10,-.27\n1965,-.08,-.17,-.13,-.19,-.12,-.08,-.13,-.04,-.15,-.05,-.06,-.08,-.11,-.13,-.18,-.15,-.09,-.09\n1966,-.19,-.04,.03,-.13,-.12,.01,.08,-.09,-.03,-.17,-.01,-.02,-.06,-.06,-.10,-.07,.00,-.07\n1967,-.08,-.21,.05,-.05,.12,-.08,.02,.01,-.06,.09,-.05,-.05,-.02,-.02,-.10,.04,-.02,-.01\n1968,-.26,-.14,.20,-.06,-.14,-.09,-.13,-.09,-.19,.09,-.05,-.14,-.08,-.08,-.15,.00,-.10,-.05\n1969,-.11,-.18,.01,.17,.18,.03,-.04,.04,.08,.09,.12,.24,.05,.02,-.14,.12,.01,.10\n1970,.08,.22,.06,.05,-.03,-.02,.02,-.10,.13,.03,.02,-.12,.03,.06,.18,.03,-.04,.06\n1971,-.02,-.15,-.18,-.07,-.05,-.16,-.08,-.01,-.05,-.04,-.07,-.08,-.08,-.08,-.10,-.10,-.08,-.06\n1972,-.23,-.18,.02,.00,-.03,.04,.02,.16,.02,.08,.02,.18,.01,-.01,-.16,.00,.07,.04\n1973,.29,.32,.29,.27,.23,.19,.13,.05,.09,.10,.04,-.07,.16,.18,.26,.26,.12,.08\n1974,-.10,-.27,-.05,-.11,-.04,-.05,-.03,.10,-.08,-.06,-.08,-.08,-.07,-.07,-.14,-.07,.01,-.07\n1975,.10,.08,.12,.04,.16,-.01,-.01,-.17,-.02,-.11,-.17,-.17,-.01,-.01,.03,.11,-.06,-.10\n1976,-.03,-.06,-.21,-.07,-.20,-.12,-.10,-.12,-.06,-.24,-.06,.11,-.10,-.12,-.09,-.16,-.11,-.12\n1977,.19,.23,.24,.26,.33,.27,.20,.18,.02,.03,.16,.03,.18,.18,.17,.28,.22,.07\n1978,.06,.10,.19,.17,.09,-.01,.04,-.14,.06,.03,.13,.08,.07,.06,.06,.15,-.04,.07\n1979,.08,-.10,.19,.15,.04,.14,.04,.17,.25,.26,.28,.47,.16,.13,.02,.13,.11,.26\n1980,.30,.39,.29,.30,.35,.20,.22,.18,.21,.13,.30,.21,.26,.28,.39,.31,.20,.21\n1981,.53,.42,.48,.32,.24,.29,.32,.35,.15,.12,.23,.41,.32,.31,.39,.35,.32,.16\n1982,.05,.15,.03,.15,.18,.06,.14,.03,.14,.13,.18,.43,.14,.14,.20,.12,.08,.15\n1983,.53,.43,.42,.28,.34,.23,.18,.36,.37,.17,.30,.17,.31,.34,.46,.34,.26,.28\n1984,.31,.14,.26,.06,.33,.02,.19,.19,.21,.13,.06,-.04,.16,.17,.20,.22,.14,.14\n1985,.22,-.04,.17,.12,.15,.15,.04,.17,.13,.12,.05,.14,.12,.10,.05,.15,.12,.10\n1986,.26,.37,.30,.22,.21,.12,.11,.16,.03,.15,.10,.13,.18,.18,.26,.25,.13,.09\n1987,.32,.43,.18,.24,.26,.35,.40,.25,.35,.33,.29,.46,.32,.29,.29,.23,.33,.32\n1988,.57,.44,.51,.42,.44,.40,.33,.39,.37,.38,.12,.29,.39,.40,.49,.46,.38,.29\n1989,.12,.30,.36,.29,.18,.15,.35,.33,.34,.29,.20,.37,.27,.27,.24,.27,.28,.28\n1990,.41,.44,.80,.56,.46,.37,.46,.34,.23,.44,.46,.40,.45,.45,.41,.60,.39,.38\n1991,.43,.50,.35,.51,.34,.53,.48,.39,.44,.29,.30,.32,.41,.41,.44,.40,.46,.34\n1992,.47,.40,.48,.27,.31,.26,.09,.08,-.01,.07,.03,.22,.22,.23,.40,.35,.14,.03\n1993,.34,.37,.36,.28,.28,.23,.25,.11,.11,.23,.03,.18,.23,.23,.31,.31,.19,.13\n1994,.26,.02,.29,.41,.28,.43,.30,.21,.31,.42,.44,.38,.31,.30,.15,.33,.32,.39\n1995,.52,.79,.46,.47,.27,.43,.45,.45,.33,.46,.45,.26,.44,.45,.57,.40,.44,.41\n1996,.24,.46,.32,.33,.27,.26,.36,.49,.26,.21,.42,.37,.33,.32,.32,.31,.37,.29\n1997,.32,.41,.52,.33,.34,.55,.34,.41,.52,.61,.64,.59,.46,.45,.37,.40,.43,.59\n1998,.58,.88,.63,.63,.68,.77,.66,.65,.42,.42,.43,.55,.61,.61,.68,.65,.69,.42\n1999,.48,.64,.33,.32,.26,.36,.38,.31,.39,.34,.37,.40,.38,.39,.56,.30,.35,.37\n2000,.25,.56,.55,.56,.35,.40,.39,.42,.39,.26,.30,.28,.39,.40,.40,.49,.40,.32\n2001,.45,.44,.55,.50,.57,.52,.59,.47,.52,.50,.72,.55,.53,.51,.39,.54,.53,.58\n2002,.77,.79,.88,.58,.64,.53,.61,.53,.65,.54,.59,.44,.63,.64,.70,.70,.56,.59\n2003,.75,.58,.60,.55,.60,.48,.58,.63,.62,.72,.53,.75,.61,.59,.59,.58,.56,.62\n2004,.58,.73,.63,.61,.37,.44,.26,.44,.50,.61,.73,.51,.53,.55,.68,.53,.38,.61\n2005,.75,.60,.74,.67,.63,.65,.61,.59,.72,.76,.74,.68,.68,.66,.62,.68,.62,.74\n2006,.56,.74,.63,.47,.48,.67,.54,.72,.66,.70,.74,.79,.64,.63,.66,.53,.64,.70\n2007,1.01,.70,.72,.77,.69,.61,.59,.60,.60,.59,.59,.50,.66,.69,.84,.72,.60,.60\n2008,.30,.38,.75,.54,.50,.50,.60,.44,.61,.67,.69,.54,.54,.54,.39,.59,.51,.66\n2009,.65,.53,.54,.61,.65,.63,.74,.68,.72,.65,.80,.67,.66,.64,.57,.60,.68,.72\n2010,.75,.84,.92,.85,.75,.67,.63,.66,.63,.71,.81,.45,.72,.74,.75,.84,.66,.72\n2011,.53,.48,.66,.64,.53,.62,.70,.74,.56,.65,.59,.60,.61,.60,.49,.61,.69,.60\n2012,.47,.49,.57,.73,.78,.65,.59,.66,.71,.79,.78,.52,.64,.65,.52,.69,.63,.76\n2013,.70,.61,.67,.53,.60,.70,.60,.70,.76,.69,.83,.70,.67,.66,.61,.60,.67,.76\n2014,.76,.55,.78,.81,.86,.67,.58,.83,.87,.80,.67,.78,.75,.74,.67,.82,.69,.78\n2015,.86,.91,.95,.75,.80,.81,.73,.80,.83,1.07,1.06,1.17,.90,.86,.85,.83,.78,.99\n2016,1.18,1.36,1.35,1.09,.96,.80,.84,1.01,.90,.87,.91,.86,1.01,1.04,1.23,1.13,.89,.89\n2017,1.02,1.12,1.15,.93,.91,.71,.82,.87,.74,.88,.87,.93,.91,.91,1.00,1.00,.80,.83\n2018,.82,.84,.88,.88,.81,.77,.83,.78,.80,1.02,.83,.92,.85,.85,.86,.86,.79,.88\n2019,.93,.95,1.17,1.00,.86,.90,.94,.95,.93,1.00,.99,1.11,.98,.96,.93,1.01,.93,.97\n2020,1.17,1.23,1.18,1.12,.99,.91,.89,.86,.96,.87,1.08,.80,1.01,1.03,1.17,1.09,.89,.97\n2021,.81,.64,.89,.76,.79,.85,.92,.81,.92,.97,.92,.88,.85,.84,.75,.81,.86,.94\n2022,.91,.89,1.04,.83,.84,.93,.94,.94,.88,.97,.73,.80,.89,.90,.89,.90,.94,.86\n2023,.87,.96,1.23,.99,.94,1.09,1.19,1.19,1.48,1.34,1.40,1.35,1.17,1.12,.88,1.05,1.16,1.41\n2024,1.25,1.43,1.39,1.32,1.16,1.23,1.20,1.30,1.21,1.34,1.29,1.26,1.28,1.29,1.35,1.29,1.25,1.28\n2025,1.37,1.25,1.36,1.24,1.07,1.06,1.02,1.17,1.24,1.19,1.21,1.05,1.19,1.20,1.30,1.23,1.08,1.21\n2026,1.08,1.23,1.30,1.16,1.13,1.18,1.24,1.42,1.39,1.55,***,***,***,***,1.12,1.20,1.28,***\n",
+ "holidays": [
+  {
+   "date": "2026-11-26",
+   "localName": "Thanksgiving Day",
+   "name": "Thanksgiving Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": true,
+   "counties": null,
+   "launchYear": null,
+   "types": [
+    "Public",
+    "Bank"
+   ]
+  },
+  {
+   "date": "2026-12-25",
+   "localName": "Christmas Day",
+   "name": "Christmas Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": true,
+   "counties": null,
+   "launchYear": null,
+   "types": [
+    "Public",
+    "Bank"
+   ]
+  },
+  {
+   "date": "2027-01-01",
+   "localName": "New Year's Day",
+   "name": "New Year's Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": true,
+   "counties": null,
+   "launchYear": null,
+   "types": [
+    "Public",
+    "Bank"
+   ]
+  },
+  {
+   "date": "2027-01-18",
+   "localName": "Martin Luther King, Jr. Day",
+   "name": "Martin Luther King, Jr. Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": true,
+   "counties": null,
+   "launchYear": null,
+   "types": [
+    "Public",
+    "Bank"
+   ]
+  },
+  {
+   "date": "2027-02-15",
+   "localName": "Washington's Birthday",
+   "name": "Presidents Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": true,
+   "counties": null,
+   "launchYear": null,
+   "types": [
+    "Public",
+    "Bank"
+   ]
+  },
+  {
+   "date": "2027-03-26",
+   "localName": "Good Friday",
+   "name": "Good Friday",
+   "countryCode": "US",
+   "fixed": false,
+   "global": false,
+   "counties": [
+    "US-CT",
+    "US-DE",
+    "US-HI",
+    "US-IN",
+    "US-KY",
+    "US-LA",
+    "US-NC",
+    "US-ND",
+    "US-NJ",
+    "US-TN"
+   ],
+   "launchYear": null,
+   "types": [
+    "Public"
+   ]
+  },
+  {
+   "date": "2027-05-31",
+   "localName": "Memorial Day",
+   "name": "Memorial Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": true,
+   "counties": null,
+   "launchYear": null,
+   "types": [
+    "Public",
+    "Bank"
+   ]
+  },
+  {
+   "date": "2027-06-18",
+   "localName": "Juneteenth National Independence Day",
+   "name": "Juneteenth National Independence Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": true,
+   "counties": null,
+   "launchYear": null,
+   "types": [
+    "Public",
+    "Bank"
+   ]
+  },
+  {
+   "date": "2027-07-05",
+   "localName": "Independence Day",
+   "name": "Independence Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": true,
+   "counties": null,
+   "launchYear": null,
+   "types": [
+    "Public",
+    "Bank"
+   ]
+  },
+  {
+   "date": "2027-09-06",
+   "localName": "Labor Day",
+   "name": "Labour Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": true,
+   "counties": null,
+   "launchYear": null,
+   "types": [
+    "Public",
+    "Bank"
+   ]
+  },
+  {
+   "date": "2027-10-11",
+   "localName": "Columbus Day",
+   "name": "Columbus Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": false,
+   "counties": [
+    "US-AL",
+    "US-AZ",
+    "US-CO",
+    "US-CT",
+    "US-GA",
+    "US-ID",
+    "US-IL",
+    "US-IN",
+    "US-IA",
+    "US-KS",
+    "US-KY",
+    "US-LA",
+    "US-ME",
+    "US-MD",
+    "US-MA",
+    "US-MS",
+    "US-MO",
+    "US-MT",
+    "US-NE",
+    "US-NH",
+    "US-NJ",
+    "US-NM",
+    "US-NY",
+    "US-NC",
+    "US-OH",
+    "US-OK",
+    "US-PA",
+    "US-RI",
+    "US-SC",
+    "US-TN",
+    "US-UT",
+    "US-VA",
+    "US-WV"
+   ],
+   "launchYear": null,
+   "types": [
+    "Public"
+   ]
+  },
+  {
+   "date": "2027-10-11",
+   "localName": "Indigenous Peoples' Day",
+   "name": "Indigenous Peoples' Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": false,
+   "counties": [
+    "US-AK",
+    "US-AL",
+    "US-CA",
+    "US-HI",
+    "US-IA",
+    "US-LA",
+    "US-ME",
+    "US-MI",
+    "US-MN",
+    "US-NC",
+    "US-NE",
+    "US-NM",
+    "US-OK",
+    "US-OR",
+    "US-SD",
+    "US-TX",
+    "US-VA",
+    "US-VT",
+    "US-WI"
+   ],
+   "launchYear": null,
+   "types": [
+    "Public"
+   ]
+  },
+  {
+   "date": "2027-11-11",
+   "localName": "Veterans Day",
+   "name": "Veterans Day",
+   "countryCode": "US",
+   "fixed": false,
+   "global": true,
+   "counties": null,
+   "launchYear": null,
+   "types": [
+    "Public",
+    "Bank"
+   ]
+  }
+ ]
+}

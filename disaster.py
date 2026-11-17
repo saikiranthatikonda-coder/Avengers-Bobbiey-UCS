@@ -21,9 +21,11 @@ feed never affects the others. Read-only: the module only GETs public JSON.
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import re
 import time
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
@@ -31,6 +33,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 import source_links as sl
+from atomicio import atomic_write_text
+
+STORE = Path(__file__).resolve().parent / ".update" / "disaster.json"   # operator settings only
+NEAR_KM_MIN, NEAR_KM_MAX = 25, 5000
+MAX_MUTED = 300
 
 POLL_EVERY = 300            # loop wake-up; each source also has its own TTL below
 FIRST_POLL_DELAY = 8
@@ -559,7 +566,7 @@ PREPAREDNESS_SOURCE = "Summarised from NDMA (ndma.gov.in) public guidelines and 
 
 class Disaster:
     def __init__(self, state: dict | None = None, fetch: Fetcher | None = None,
-                 sources: list | None = None) -> None:
+                 sources: list | None = None, store: Path | None = None) -> None:
         self.state = state if state is not None else {}
         self.sources = sources if sources is not None else SOURCES
         self._fetch = fetch
@@ -571,6 +578,82 @@ class Disaster:
         self._seeded = False
         self._last_refresh = 0.0
         self._lock = asyncio.Lock()
+        # operator settings (home location, "near me" radius, muted events), persisted
+        self.store = store
+        self.near_km = NEAR_KM
+        self.home: dict | None = None
+        self.muted: dict[str, dict] = {}
+        self._load_settings()
+
+    # -- settings
+    def _load_settings(self) -> None:
+        if not self.store:
+            return
+        try:
+            d = json.loads(Path(self.store).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        if not isinstance(d, dict):
+            return
+        km = _num(d.get("near_km"))
+        if km is not None and NEAR_KM_MIN <= km <= NEAR_KM_MAX:
+            self.near_km = int(km)
+        h = d.get("home")
+        if isinstance(h, dict) and _valid_ll(h.get("lat"), h.get("lon")):
+            self.home = {"lat": float(h["lat"]), "lon": float(h["lon"]), "label": _txt(h.get("label"), 60) or "home"}
+        m = d.get("muted")
+        if isinstance(m, dict):
+            self.muted = {str(k)[:200]: {"title": _txt(v.get("title"), 160), "at": _num(v.get("at")) or 0}
+                          for k, v in list(m.items())[:MAX_MUTED] if isinstance(v, dict)}
+
+    def _save_settings(self) -> None:
+        if not self.store:
+            return
+        path = Path(self.store)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(path, json.dumps({"near_km": self.near_km, "home": self.home, "muted": self.muted}, indent=1))
+
+    def settings(self) -> dict:
+        return {"near_km": self.near_km, "near_km_min": NEAR_KM_MIN, "near_km_max": NEAR_KM_MAX,
+                "home": self.home,
+                "muted": [{"id": k, **v} for k, v in sorted(self.muted.items(), key=lambda kv: -kv[1].get("at", 0))]}
+
+    def update_settings(self, body: dict) -> str | None:
+        """Validate + apply {near_km?, home?: {lat, lon, label?} | null}. Returns an error or None."""
+        near, home = self.near_km, self.home
+        if "near_km" in body:
+            km = _num(body.get("near_km"))
+            if km is None or not NEAR_KM_MIN <= km <= NEAR_KM_MAX:
+                return f"near_km must be {NEAR_KM_MIN}-{NEAR_KM_MAX}"
+            near = int(km)
+        if "home" in body:
+            h = body.get("home")
+            if h is None:
+                home = None
+            elif isinstance(h, dict) and _valid_ll(_num(h.get("lat")), _num(h.get("lon"))):
+                home = {"lat": round(float(h["lat"]), 4), "lon": round(float(h["lon"]), 4),
+                        "label": _txt(h.get("label"), 60) or "home"}
+            else:
+                return "home needs a valid lat (-90..90) and lon (-180..180), or null to clear"
+        self.near_km, self.home = near, home
+        self._save_settings()
+        return None
+
+    def set_muted(self, eid, muted: bool) -> str | None:
+        eid = str(eid or "")[:200]
+        if not eid:
+            return "id required"
+        if muted:
+            it = next((i for c in self.cache.values() for i in c["items"] if i.get("id") == eid), None)
+            if it is None:
+                return "unknown event"
+            if eid not in self.muted and len(self.muted) >= MAX_MUTED:          # drop the oldest
+                self.muted.pop(min(self.muted, key=lambda k: self.muted[k].get("at", 0)))
+            self.muted[eid] = {"title": _txt(it.get("title"), 160), "at": time.time()}
+        elif self.muted.pop(eid, None) is None:
+            return "not muted"
+        self._save_settings()
+        return None
 
     # -- network
     async def _client_get(self, url: str):
@@ -612,6 +695,8 @@ class Disaster:
 
     # -- location
     def location(self, lat=None, lon=None) -> dict | None:
+        if self.home:           # the operator's saved home wins over every guess
+            return {**self.home, "source": "saved home"}
         ll = _valid_ll(lat, lon)
         if ll:
             return {"lat": ll[0], "lon": ll[1], "label": "browser location", "source": "dashboard"}
@@ -631,10 +716,11 @@ class Disaster:
             for it in c["items"]:
                 it = dict(it)
                 it["stale"] = c["status"] == "stale"
+                it["muted"] = it.get("id") in self.muted
                 if loc and it.get("lat") is not None:
                     d = haversine_km(loc["lat"], loc["lon"], it["lat"], it["lon"])
                     it["distance_km"] = round(d)
-                    it["near"] = d <= NEAR_KM
+                    it["near"] = d <= self.near_km
                 else:
                     it["distance_km"], it["near"] = None, False
                 out.append(it)
@@ -651,11 +737,13 @@ class Disaster:
         services = (self.cache.get("status") or {}).get("services") or []
         types_present = {i["type"] for i in items if i["severity"] >= 1}
         return {
-            "generated": time.time(), "poll_s": POLL_EVERY, "near_km": NEAR_KM, "location": loc,
+            "generated": time.time(), "poll_s": POLL_EVERY, "near_km": self.near_km, "location": loc,
+            "settings": self.settings(),
             "items": items,
             "counts": {"total": len(items), "physical": sum(i["category"] == "physical" for i in items),
                        "digital": sum(i["category"] == "digital" for i in items),
-                       "near": sum(bool(i["near"]) for i in items), "by_type": by_type, "by_severity": by_sev},
+                       "near": sum(bool(i["near"]) for i in items),
+                       "muted": sum(bool(i["muted"]) for i in items), "by_type": by_type, "by_severity": by_sev},
             "sources": [{k: c[k] for k in ("key", "label", "category", "status", "fetched_at", "last_ok",
                                            "error", "home", "meta")} | {"count": len(c["items"])}
                         for c in self.cache.values()],
@@ -669,7 +757,7 @@ class Disaster:
     async def _alert(self) -> None:
         loc = self.location()
         items = self.items(loc)
-        fresh = [i for i in items if i["id"] not in self._seen and not i["stale"]]
+        fresh = [i for i in items if i["id"] not in self._seen and not i["stale"] and not i["muted"]]
         self._seen.update(i["id"] for i in items)
         hub = self.state.get("hub")
         if not hub:
@@ -677,12 +765,12 @@ class Disaster:
             return
         if not self._seeded:          # first poll: one summary line, not a flood of toasts
             self._seeded = True
-            hi = [i for i in items if i["severity"] >= 3]
-            near = [i for i in items if i["near"] and i["severity"] >= 2]
+            hi = [i for i in items if i["severity"] >= 3 and not i["muted"]]
+            near = [i for i in items if i["near"] and i["severity"] >= 2 and not i["muted"]]
             if hi or near:
                 await hub.broadcast({"type": "log", "level": "warn",
                                      "msg": f"[disaster] {len(hi)} high-severity events worldwide"
-                                            + (f", {len(near)} within {NEAR_KM} km of you" if near else "")})
+                                            + (f", {len(near)} within {self.near_km} km of you" if near else "")})
             return
         pick = [i for i in fresh if i["severity"] >= 3 or (i["near"] and i["severity"] >= 2)]
         for i in pick[:MAX_ALERTS_PER_CYCLE]:
@@ -714,7 +802,7 @@ class Disaster:
 def _engine(ctx) -> Disaster:
     st = ctx["state"]
     if "disaster" not in st:
-        st["disaster"] = Disaster(st)
+        st["disaster"] = Disaster(st, store=STORE)
     return st["disaster"]
 
 
@@ -741,5 +829,53 @@ def build_router(ctx) -> APIRouter:
         except Exception:
             pass
         return eng.snapshot(lat, lon)
+
+    async def _changed(action: str, detail: str) -> None:
+        try:
+            await ctx["audit"](action, detail)
+        except Exception:
+            pass
+        hub = ctx["state"].get("hub")
+        if hub:
+            try:
+                await hub.broadcast({"type": "sync", "topic": "disaster"})
+            except Exception:
+                pass
+
+    async def _body(request: Request) -> dict:
+        try:
+            b = await request.json()
+        except Exception:
+            b = None
+        return b if isinstance(b, dict) else {}
+
+    def _locked():
+        return JSONResponse({"ok": False, "error": "OBSERVER role: switch to COMMANDER to change disaster settings."},
+                            status_code=403)
+
+    @r.post("/api/disaster/settings")
+    async def disaster_settings(request: Request, lat: float | None = None, lon: float | None = None):
+        if not ctx["commander"]():
+            return _locked()
+        eng = _engine(ctx)
+        err = eng.update_settings(await _body(request))
+        if err:
+            return JSONResponse({"ok": False, "error": err}, status_code=400)
+        await _changed("disaster.settings", f"near radius {eng.near_km} km; home "
+                       + ("set" if eng.home else "not set (automatic location)"))
+        return {"ok": True, **eng.snapshot(lat, lon)}
+
+    @r.post("/api/disaster/mute")
+    async def disaster_mute(request: Request, lat: float | None = None, lon: float | None = None):
+        if not ctx["commander"]():
+            return _locked()
+        eng = _engine(ctx)
+        b = await _body(request)
+        muted = bool(b.get("muted", True))
+        err = eng.set_muted(b.get("id"), muted)
+        if err:
+            return JSONResponse({"ok": False, "error": err}, status_code=400)
+        await _changed("disaster.mute" if muted else "disaster.unmute", _txt(b.get("id"), 120))
+        return {"ok": True, **eng.snapshot(lat, lon)}
 
     return r

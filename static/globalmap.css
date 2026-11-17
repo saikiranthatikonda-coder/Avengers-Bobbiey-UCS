@@ -154,3 +154,16 @@
 .gm-card .gm-nosrc { color: var(--text-dim); font-size: 0.6rem; letter-spacing: 0.06em; margin: 0.35rem 0 0; }
 .gm-card .gm-srcs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem; }
 .gm-card .gm-al a { display: inline; padding: 0; border: 0; font: inherit; letter-spacing: normal; }
+
+/* saved places card */
+.gm-places { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.4rem 0; }
+.gm-place { display: flex; align-items: center; gap: 0.25rem; min-width: 0; }
+.gm-pl-go { flex: 1 1 auto; min-width: 0; text-align: left; background: rgba(0,0,0,0.25); border: 1px solid var(--panel-edge); border-radius: 3px;
+  padding: 0.25rem 0.4rem; color: var(--text); cursor: pointer; font: inherit; }
+.gm-pl-go:hover { border-color: var(--accent); }
+.gm-pl-go b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-pl-go small { display: block; font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-pl-in { flex: 1 1 auto; min-width: 0; background: rgba(0,0,0,0.3); border: 1px solid var(--panel-edge); border-radius: 3px;
+  color: var(--text); font: inherit; padding: 0.25rem 0.4rem; }
+.gm-pl-in:focus { outline: none; border-color: var(--accent); }
+.gm-pl-new { margin-top: 0.3rem; }

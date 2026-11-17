@@ -230,8 +230,12 @@ class Engine:
                 cmd.reply = "Standing down." if n else "Nothing to stop, sir."
                 return await self._finish(cmd, "done")
 
+            # custom team members (customagents.py): "<name>, …" addresses one from any source,
+            # and a request addressed to one is answered by that agent under its own limits
+            # (allowed sections / tools), never by the operator fast path
+            member = self._custom_member(cmd)
             t = time.perf_counter()
-            res = await intents.match(self.state, cmd.text)
+            res = None if member is not None else await intents.match(self.state, cmd.text)
             cmd.marks["route_ms"] = round((time.perf_counter() - t) * 1000, 2)
             if res:
                 await self._fast(cmd, res, speak)
@@ -325,7 +329,9 @@ class Engine:
         try:
             import dashboard_context
             facts = await dashboard_context.context_for(
-                self.state, cmd.text, meta={"cmd_id": cmd.id, "agent": target, "source": cmd.source})
+                self.state, cmd.text, meta={"cmd_id": cmd.id, "agent": target, "source": cmd.source},
+                allow=(agent.sections_allowed                      # custom agents: their sections only
+                       if isinstance(getattr(agent, "sections_allowed", None), frozenset) else None))
             if facts:
                 await self._emit(cmd, "grounding", sources="dashboard",
                                  sections=dashboard_context.LAST.get("sections", []))
@@ -360,6 +366,21 @@ class Engine:
         self.totals["llm"] += 1
 
     # ── helpers ───────────────────────────────────────────────────
+    def _custom_member(self, cmd: Command):
+        """The custom team member this command is for, or None. Resolves "<name>, …" through
+        state["agent_resolver"] (set by customagents.py) when no agent was targeted."""
+        team = self.state.get("team") or {}
+        if not cmd.agent:
+            resolve = self.state.get("agent_resolver")
+            try:
+                hit = resolve(cmd.text) if resolve else None
+            except Exception:
+                hit = None
+            if hit and hit[0] in team and hit[1]:
+                cmd.agent, cmd.text = hit[0], hit[1]
+        agent = team.get(cmd.agent) if cmd.agent else None
+        return agent if getattr(agent, "custom", False) is True else None
+
     def conversation_mode(self) -> bool:
         tts = self.state.get("tts")
         return bool(getattr(tts, "conversation_mode", False))
@@ -379,9 +400,12 @@ class Engine:
         text = speakable(text)
         if not text:
             return
+        # a custom agent may have its own installed system voice (customagents.py)
+        voice = getattr((self.state.get("team") or {}).get(cmd.handled_by), "voice", None)
+        kw = {"voice": voice} if isinstance(voice, str) and voice else {}
         try:   # first_speech_ms = the moment playback really starts (TTS worker)
             asyncio.create_task(tts.say(text, on_start=lambda: cmd.mark("first_speech_ms"),
-                                        channel="conversation"))
+                                        channel="conversation", **kw))
         except TypeError:                                      # older TTS without channels
             asyncio.create_task(tts.say(text))
 

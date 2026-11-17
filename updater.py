@@ -44,6 +44,7 @@ PRESERVE = {
     "commander_memory.md", "operator_memory.json", "token.json", "credentials.json", "auth.json",
     "fleet_token.txt", "pair_code.txt", "node_id.txt", "governance.json", "audio_pref.json",
     "audit.log", "model_pref.json", "billing.json", "productivity.json", "team_memory.json",
+    "dashboard_store.json", "notes.json", "operators.json", "decisions.json",
 }
 SKIP_DIRS = (".venv/", ".git/", ".update/", "__pycache__/", ".pydeps/", ".pycache/")   # + desktop overlay/caches
 

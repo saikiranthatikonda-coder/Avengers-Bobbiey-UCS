@@ -51,3 +51,5 @@ tools/guide/chrome-profile/
 .update/
 commerce_test.db*
 commerce_live.db*
+dashboard_store.json
+dashboard_store.json.tmp

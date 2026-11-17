@@ -101,8 +101,17 @@ def merge(batches: list[list[dict]], limit: int = 20) -> list[dict]:
     return out[:limit]
 
 
-async def fetch_open_news(limit: int = 20) -> tuple[list[dict], list[str]]:
-    """Returns (articles, failed_source_names). Never raises."""
+def source_names() -> list[str]:
+    """Built-in sources the operator can switch on/off (WORLD FEED → sources)."""
+    return [f[0] for f in RSS_FEEDS] + ["Hacker News"]
+
+
+async def fetch_open_news(limit: int = 20, disabled=(), custom=()) -> tuple[list[dict], list[str]]:
+    """Returns (articles, failed_source_names). Never raises.
+    disabled: source names the operator switched off; custom: [{name, url}] extra RSS/Atom feeds."""
+    off = set(disabled or ())
+    feeds = [f for f in RSS_FEEDS if f[0] not in off]
+    feeds += [(c["name"], c["url"], "custom") for c in (custom or ()) if c.get("name") not in off]
     failed: list[str] = []
     async with httpx.AsyncClient(timeout=12, trust_env=False, headers=UA,
                                  follow_redirects=True) as c:
@@ -114,11 +123,13 @@ async def fetch_open_news(limit: int = 20) -> tuple[list[dict], list[str]]:
                 failed.append(name); return []
 
         async def hn():
+            if "Hacker News" in off:
+                return []
             try:
                 r = await c.get(HN_URL); r.raise_for_status()
                 return parse_hn(r.json())
             except Exception:
                 failed.append("Hacker News"); return []
 
-        batches = await asyncio.gather(*(rss(*f) for f in RSS_FEEDS), hn())
+        batches = await asyncio.gather(*(rss(*f) for f in feeds), hn())
     return merge(list(batches), limit), failed

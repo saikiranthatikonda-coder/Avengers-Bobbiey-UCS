@@ -52,15 +52,19 @@ class DecisionEngine:
         self.executed_total = 0
         self.auto_executed_total = 0
         self._dismissed: dict[str, float] = {}   # key → ts (2h cooldown)
+        self._dismissed_titles: dict[str, str] = {}
+        self.auto_off: set[str] = set()          # whitelisted kinds the operator switched off
         try:
             saved = json.loads(FILE.read_text(encoding="utf-8"))
             self.autonomy = bool(saved.get("autonomy"))
+            self.auto_off = {k for k in (saved.get("auto_off") or []) if k in AUTONOMY_WHITELIST}
         except Exception:
             pass
 
     def _save(self) -> None:
         try:
-            atomic_write_text(FILE, json.dumps({"autonomy": self.autonomy}),
+            atomic_write_text(FILE, json.dumps({"autonomy": self.autonomy,
+                                               "auto_off": sorted(self.auto_off)}),
                             encoding="utf-8")
         except Exception:
             pass
@@ -230,7 +234,8 @@ class DecisionEngine:
         if self.autonomy:
             for key in list(self.proposals.keys()):
                 p = self.proposals.get(key)
-                if p and p["risk"] == "low" and key in AUTONOMY_WHITELIST:
+                if (p and p["risk"] == "low" and key in AUTONOMY_WHITELIST
+                        and key not in self.auto_off):
                     await self.execute(p["id"], approved_by="autonomy")
 
     async def execute(self, pid: str, approved_by: str = "operator") -> dict:
@@ -324,8 +329,31 @@ class DecisionEngine:
             return {"ok": False, "error": "unknown proposal"}
         self.proposals.pop(p["key"], None)
         self._dismissed[p["key"]] = time.time()
+        self._dismissed_titles[p["key"]] = p["title"][:120]
         if self.audit is not None:
             await self.audit.log("decision.dismiss", p["title"][:80])
+        return {"ok": True}
+
+    async def set_whitelist(self, key: str, on: bool) -> dict:
+        """The operator may NARROW what autonomy auto-executes (switch a whitelisted kind
+        off, or back on). Kinds outside AUTONOMY_WHITELIST can never be added."""
+        if key not in AUTONOMY_WHITELIST:
+            return {"ok": False, "error": "only whitelisted low-risk actions can be toggled"}
+        (self.auto_off.discard if on else self.auto_off.add)(key)
+        self._save()
+        if self.audit is not None:
+            await self.audit.log("decision.whitelist", f"{key} auto-execute {'ON' if on else 'OFF'}")
+        return {"ok": True, "whitelist": sorted(AUTONOMY_WHITELIST - self.auto_off)}
+
+    async def restore(self, key: str) -> dict:
+        """Undo a dismissal: the proposal comes back at once if its condition still holds
+        (nothing is fabricated when it no longer does)."""
+        if key not in self._dismissed:
+            return {"ok": False, "error": "nothing dismissed under that key"}
+        title = self._dismissed_titles.pop(key, key)
+        del self._dismissed[key]
+        if self.audit is not None:
+            await self.audit.log("decision.restore", title[:80])
         return {"ok": True}
 
     async def set_autonomy(self, on: bool) -> dict:
@@ -344,7 +372,11 @@ class DecisionEngine:
     def snapshot(self) -> dict:
         return {
             "autonomy": self.autonomy,
-            "whitelist": sorted(AUTONOMY_WHITELIST),
+            "whitelist": sorted(AUTONOMY_WHITELIST - self.auto_off),
+            "whitelist_all": sorted(AUTONOMY_WHITELIST),
+            "dismissed": [{"key": k, "ts": ts, "title": self._dismissed_titles.get(k, k)}
+                          for k, ts in sorted(self._dismissed.items(), key=lambda x: -x[1])
+                          if time.time() - ts < 7200],
             "proposals": [{k: v for k, v in p.items() if not k.startswith("_")}
                           for p in sorted(self.proposals.values(),
                                           key=lambda x: x["ts"], reverse=True)],

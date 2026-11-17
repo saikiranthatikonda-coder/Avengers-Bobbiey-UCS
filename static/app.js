@@ -946,7 +946,7 @@ async function _refreshWeather(force = false) {
     const hg = $("#hw-glyph"); if (hg) hg.textContent = d.glyph || "◐";        // header readout removed (v8); guarded
     const ht = $("#hw-temp"); if (ht) ht.textContent = d.temp_c != null ? `${Math.round(d.temp_c)}°` : "--°";
     if (d.city) {
-      $("#weather-city").textContent = `${(weatherCity || d.city || "").toUpperCase()} · WEATHER`;
+      $("#weather-city").textContent = `${((d.location_mode === "override" ? d.city : weatherCity) || d.city || "").toUpperCase()} · WEATHER`;
     }
   } catch (e) {
     setWeatherState("error", e.name === "AbortError" ? "timeout" : "fetch failed");
@@ -1106,11 +1106,12 @@ function renderAgenda(events, source) {
   if (!events.length) {
     host.innerHTML = source === "google"
       ? '<div class="agenda-empty">calendar clear — no upcoming events</div>'
-      : '<div class="agenda-empty">no data — connect Google Calendar via the <b>G</b> button</div>';
+      : '<div class="agenda-empty">no upcoming events — add one with <b>+</b>, or connect Google Calendar via the <b>G</b> button</div>';
     return;
   }
   for (const e of events) {
     const div = document.createElement("div");
+    if (e.editable && e.id) { div.dataset.eid = e.id; div.title = "local event: click to edit"; }
     div.className = "agenda-item" + (e.priority === "high" ? " high" : "") + (e.minutes_until <= 10 && e.minutes_until > 0 ? " imminent" : "")
       + (e.response === "declined" ? " declined" : "");
     const who = e.attendee_count > 0
@@ -1141,13 +1142,14 @@ function renderTasks(tasks) {
   head.className = "agenda-tasks-head";
   head.textContent = `TASKS · ${tasks.length} OPEN`;
   host.appendChild(head);
-  for (const t of tasks.slice(0, 5)) {
+  for (const t of tasks.slice(0, 8)) {
     const div = document.createElement("div");
     const overdue = t.due && t.due < today;
-    div.className = "agenda-task" + (overdue ? " overdue" : "");
+    div.className = "agenda-task" + (overdue ? " overdue" : "") + (t.editable ? " local prio-" + (t.priority || "normal") : "");
+    if (t.editable && t.id) { div.dataset.tid = t.id; div.title = "local task: click to edit, click the box to complete"; }
     div.innerHTML = `<span class="agenda-task-box" aria-hidden="true"></span>
       <span class="agenda-task-title">${safeHttpUrl(t.url) ? `<a class="src-link" href="${escapeHTML(t.url)}" target="_blank" rel="noopener noreferrer" title="open in Google Tasks">${escapeHTML(t.title)} ↗</a>` : escapeHTML(t.title)}</span>
-      <span class="agenda-task-due">${t.due ? (overdue ? "OVERDUE " : "DUE ") + escapeHTML(t.due.slice(5)) : escapeHTML(t.list || "")}</span>`;
+      <span class="agenda-task-due">${t.status === "doing" ? "IN PROGRESS · " : ""}${t.due ? (overdue ? "OVERDUE " : "DUE ") + escapeHTML(t.due.slice(5)) : escapeHTML(t.list || (t.editable ? "LOCAL" : ""))}</span>`;
     host.appendChild(div);
   }
 }
@@ -1183,6 +1185,9 @@ async function refreshAgenda() {
       if (d.source === "google") {
         const b = $("#agenda-badge");
         if (b) b.textContent = `${(d.events || []).length} · GOOGLE`;
+      } else if (d.local_events) {
+        const b = $("#agenda-badge");
+        if (b) b.textContent = `${(d.events || []).length} · LOCAL`;
       }
       lastAgenda = d; updateLiveOps();
     } catch (e) {}
@@ -2554,7 +2559,7 @@ function renderCalIntel(d) {
   if (intel.conflicts) bits.push(`⚠ ${intel.conflicts} conflict${intel.conflicts > 1 ? "s" : ""}`);
   if (intel.readiness != null) bits.push(`readiness ${intel.readiness}%`);
   el.innerHTML = bits.join(" · ") +
-    `<span class="cal-src${d.source === "google" ? " ok" : ""}">${(d.source || "mock").toUpperCase()}</span>`;
+    `<span class="cal-src${d.source === "google" ? " ok" : ""}">${(d.source === "google" ? "google" : d.local_events ? "local" : d.source || "disconnected").toUpperCase()}</span>`;
   el.classList.toggle("warn", !!intel.conflicts);
 
   // current meeting banner (live)
@@ -3320,10 +3325,10 @@ async function refreshNotes() {
     const host = $("#notes-list"); if (!host) return;
     const notes = d.notes || [];
     host.innerHTML = notes.length ? notes.map(n => `
-      <div class="note" data-id="${n.id}">
-        <div class="note-text">${escapeHTML(n.text)}
-          <span class="note-del" title="delete">×</span></div>
-        <div class="note-ts">${new Date(n.ts * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
+      <div class="note${n.pinned ? " pinned" : ""}" data-id="${escapeHTML(n.id)}">
+        <div class="note-text"><span class="note-body" title="click to edit">${escapeHTML(n.text)}</span>
+          <span class="note-del" title="delete" role="button" tabindex="0">×</span><span class="note-edit" title="edit" role="button" tabindex="0">✎</span><span class="note-pin" title="${n.pinned ? "unpin" : "pin to top"}" role="button" tabindex="0">${n.pinned ? "★" : "☆"}</span></div>
+        <div class="note-ts">${new Date(n.ts * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}${n.edited ? " · edited" : ""}</div>
       </div>`).join("")
       : '<div class="tf-empty">no notes yet — add one below</div>';
   } catch (e) {}
@@ -3394,7 +3399,7 @@ function initExtraInteractions() {
   // Weather card → detail modal
   const wc = $("#weather-card");
   makeInteractive(wc, async () => {
-    openCustomModal("HYDERABAD WEATHER", "OPEN-METEO · LIVE", null,
+    openCustomModal(($("#weather-city")?.textContent || "WEATHER").replace(" · WEATHER", "") + " WEATHER", "OPEN-METEO · LIVE", null,
       '<div style="color:var(--text-dim);font-style:italic">fetching…</div>');
     try {
       const d = await (await fetch("/api/weather" + (userLat != null ? `?lat=${userLat}&lon=${userLon}` : ""))).json();
@@ -3438,7 +3443,7 @@ function initExtraInteractions() {
     "svc-ollama": ["OLLAMA · LOCAL AI", "On-device models for fully offline replies. Run `ollama serve` + `ollama pull`, then pick a model in the AI MODEL MANAGER."],
     "svc-gcal": ["GOOGLE CALENDAR + GMAIL", "Real events & mail (readonly). Click the G button by AGENDA to connect via OAuth."],
     "svc-news": ["NEWS FEED", "Live headlines from open feeds (BBC World, The Hindu, Al Jazeera, The Hacker News, Hacker News) every 10 min, no key needed. Optional NEWSAPI_KEY in .env switches to NewsAPI."],
-    "svc-weather": ["WEATHER", "Live Hyderabad weather via Open-Meteo (no key needed)."],
+    "svc-weather": ["WEATHER", "Live weather for your location via Open-Meteo (no key needed). Use the ⌖ button on the weather card to fix a location."],
   };
   Object.entries(svcInfo).forEach(([id, [t, desc]]) => {
     const row = $("#" + id);
@@ -5691,12 +5696,16 @@ async function openIncident(id) {
     </div><div class="mb-list">
       ${ev.detail ? _row(escapeHTML(ev.detail), "DETAIL") : ""}
       ${_row(escapeHTML(stageNote), "LIFECYCLE")}
+      ${ev.note ? _row(escapeHTML(ev.note), `OPERATOR NOTE${ev.updated_by ? " · " + escapeHTML(ev.updated_by) : ""}`) : ""}
+      <div class="ce-form"><input class="ce-in ce-grow" id="inc-note" maxlength="240" placeholder="add a note (saved with resolve / re-open, or on its own)" aria-label="incident note"/><button class="cmd-btn" type="button" data-inc-act="note" data-inc-id="${escapeHTML(ev.id)}">SAVE NOTE</button></div>
       ${ON_HOST.has(ev.category) ? _row("Measured on this machine" + (g && g.city ? ` (${escapeHTML(g.city)}, IP-geolocated)` : ""), "WHERE") : ""}
       ${_row(safeHttpUrl(ev.url) ? srcLink(ev.url, ev.source || "original article") : srcLocal(ev.source || "this machine (threats.py, live telemetry)"), "SOURCE")}
     </div>
     <div class="mb-actions">
       ${safeHttpUrl(ev.url) ? `<a class="cmd-btn" href="${escapeHTML(safeHttpUrl(ev.url))}" target="_blank" rel="noopener noreferrer">OPEN SOURCE ↗</a>` : ""}
       ${["active", "resolved"].includes(ev.stage) ? `<button class="cmd-btn" type="button" data-ack="${escapeHTML(ev.id)}">ACKNOWLEDGE</button>` : ""}
+      ${ev.stage === "active" ? `<button class="cmd-btn" type="button" data-inc-act="resolve" data-inc-id="${escapeHTML(ev.id)}">RESOLVE</button>` : ""}
+      ${ev.stage !== "active" ? `<button class="cmd-btn" type="button" data-inc-act="reopen" data-inc-id="${escapeHTML(ev.id)}">RE-OPEN</button>` : ""}
       ${mappable ? `<button class="cmd-btn" type="button" data-map-lat="${g.lat}" data-map-lon="${g.lon}" data-map-id="${escapeHTML(ev.id)}" data-map-layer="threats" data-map-label="${escapeHTML(ev.title)}">SHOW ON MAP</button>` : ""}
       <button class="cmd-btn" type="button" data-jump="#tic-analytics">RESPONSE QUEUE</button>
     </div>

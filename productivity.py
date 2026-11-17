@@ -35,6 +35,7 @@ class Productivity:
             "sessions_today": 0,
             "switches_today": 0,
             "tasks_done_today": 0,
+            "focus_target_min": FOCUS_TARGET_MIN,     # operator-editable daily goal
         }
         self._load()
 
@@ -95,6 +96,27 @@ class Productivity:
                                           "msg": f"operator task completed: {done}"})
         return self.snapshot()
 
+    def _target(self) -> int:
+        try:
+            return max(15, min(720, int(self.state.get("focus_target_min") or FOCUS_TARGET_MIN)))
+        except (TypeError, ValueError):
+            return FOCUS_TARGET_MIN
+
+    async def set_goal(self, minutes) -> dict:
+        """Daily deep-work target (15-720 min) the score is measured against."""
+        try:
+            m = int(minutes)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "goal must be a number of minutes"}
+        if not 15 <= m <= 720:
+            return {"ok": False, "error": "goal must be 15 to 720 minutes"}
+        self.state["focus_target_min"] = m
+        self._save()
+        if self.hub:
+            await self.hub.broadcast({"type": "log", "level": "info",
+                                      "msg": f"daily deep-work goal set to {m} min"})
+        return self.snapshot()
+
     async def focus_start(self) -> dict:
         self._rollover()
         if not self.state["focus_active"]:
@@ -127,7 +149,7 @@ class Productivity:
         focus_min = self.state["focus_seconds_today"] / 60
         if self.state["focus_active"]:
             focus_min += (time.time() - self.state["focus_started"]) / 60
-        focus_pts = min(45, focus_min / FOCUS_TARGET_MIN * 45)       # ≤45
+        focus_pts = min(45, focus_min / self._target() * 45)       # ≤45
         switch_pen = min(20, self.state["switches_today"] * 2.5)     # −≤20
         presence_min = 0
         if self.memory is not None:
@@ -144,7 +166,7 @@ class Productivity:
         return {
             "score": total,
             "focus_min_today": round(focus_min),
-            "focus_target_min": FOCUS_TARGET_MIN,
+            "focus_target_min": self._target(),
             "presence_min_today": presence_min,
             "breakdown": {
                 "focus": round(focus_pts), "presence": round(presence_pts),

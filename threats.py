@@ -268,6 +268,8 @@ class ThreatEngine:
             return "acknowledged"
         if ev.get("resolved_ts"):
             return "resolved"
+        if ev.get("reopened_ts") and time.time() - ev["reopened_ts"] <= 1800:
+            return "active"            # operator re-opened it: stays active (no auto-clear) for 30 min
         cond = ev.get("cond")
         if cond and self.sysmon is not None:
             cur = (self.sysmon.latest or {}).get(cond.get("metric"))
@@ -276,7 +278,7 @@ class ThreatEngine:
                 ev["resolved_note"] = (f"{cond['metric']} back to {cur:.0f}% "
                                        f"(threshold {cond['above']}%)")
                 return "resolved"
-        if time.time() - ev["ts"] > 1800:
+        if time.time() - max(ev["ts"], ev.get("reopened_ts") or 0) > 1800:
             return "expired"
         return "active"
 
@@ -325,6 +327,35 @@ class ThreatEngine:
             self._acked.add(event_id)
             return True
         return False
+
+    def set_state(self, event_id: str, action: str, note: str = "", by: str = "operator") -> dict:
+        """Operator lifecycle edit: ack | resolve | reopen | note. The note and who made the
+        change are kept on the incident (in memory, like the incident itself)."""
+        ev = next((e for e in self.events if e["id"] == event_id), None)
+        if ev is None:
+            return {"ok": False, "error": "incident has rolled off the board"}
+        if action not in ("ack", "resolve", "reopen", "note"):
+            return {"ok": False, "error": "action must be ack, resolve, reopen or note"}
+        note = " ".join(str(note or "").split())[:240]
+        if action == "note" and not note:
+            return {"ok": False, "error": "empty note"}
+        now = time.time()
+        if action == "ack":
+            self._acked.add(event_id)
+        elif action == "resolve":
+            self._acked.discard(event_id)
+            ev.pop("reopened_ts", None)
+            ev["resolved_ts"] = now
+            ev["resolved_note"] = f"resolved by {by}" + (f": {note}" if note else "")
+        elif action == "reopen":
+            self._acked.discard(event_id)
+            ev.pop("resolved_ts", None)
+            ev.pop("resolved_note", None)
+            ev["reopened_ts"] = now
+        if note:
+            ev["note"] = note
+        ev["updated_by"], ev["updated_ts"] = by, now
+        return {"ok": True, "stage": self._stage(ev), "note": ev.get("note", "")}
 
     def summary_text(self) -> str:
         s = self.snapshot()

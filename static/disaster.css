@@ -133,3 +133,14 @@ button.dis-digi-row:hover { color: var(--text); }
 .dis-card.is-error .ft-kicker { color: var(--error); }
 .dis-card.is-degraded .ft-kicker { color: var(--warn); }
 @media (max-width: 900px) { .dis-main { grid-template-columns: minmax(0, 1fr); } }
+
+/* settings tab: near-me radius, saved home, muted events */
+.dis-set { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px 10px; align-items: end; }
+.dis-set label { display: flex; flex-direction: column; gap: 3px; font-size: 9px; letter-spacing: 1px; color: var(--muted, #7d93a8); min-width: 0; }
+.dis-set input { min-width: 0; width: 100%; box-sizing: border-box; background: rgba(0, 217, 255, 0.05); border: 1px solid rgba(0, 217, 255, 0.25);
+  color: inherit; font: inherit; font-size: 12px; padding: 5px 7px; border-radius: 3px; }
+.dis-set-act { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.dis-muted { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.dis-muted-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; min-width: 0; }
+.dis-muted-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dis-ev.muted { opacity: 0.55; }

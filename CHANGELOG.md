@@ -5,6 +5,48 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-22 — v8.3.0 · Custom agents, Open Intelligence, edit everything
+- **feat: CUSTOM AGENTS.** Build your own team members:
+  - Set name, 3-letter tag, role, persona, wake phrases, colour and icon, voice, and model (the active brain by default).
+  - Choose which dashboard sections each agent may read and which AI Core tools it may use. The tier policy still applies, so destructive tools always need approval per call.
+  - Start from templates, use the "test this agent" box, and duplicate, disable, export or import agents.
+  - Custom agents join the Avengers roster (marked CUSTOM), answer by name in the command bar or by wake phrase, and receive only the dashboard facts they are allowed.
+  - Built-in agents can't be deleted, but their persona can be overridden and reset.
+- **feat: OPEN INTELLIGENCE.** A new live deck fed only by free, keyless, openly licensed public data, with every item linked to its source:
+  - Air quality at your location with a 24 h forecast (Open-Meteo/CAMS).
+  - WHO disease outbreak news.
+  - Upcoming rocket launches (Launch Library 2).
+  - Near-earth asteroid approaches (NASA/JPL).
+  - Live ISS position.
+  - Exchange rates (Frankfurter/ECB).
+  - New arXiv papers by category.
+  - The Hacker News front page.
+  - Mauna Loa CO₂ (NOAA GML).
+  - Public holidays (Nager.Date).
+  - Sun and moon, computed locally.
+
+  How it behaves:
+  - Each source has its own cache, rate-limit-safe refresh, status and as-of time.
+  - Your location is rounded to 0.1° before it is sent anywhere.
+  - Real-data sparklines and a "what changed since you last looked" highlight.
+  - Customisable: show, hide and reorder panels, arXiv categories, FX base currency and watch-list, holiday countries, refresh interval.
+  - JARVIS answers from it: "what's the air quality?", "any launches this week?", "USD to INR?", "top arXiv papers?".
+- **feat: edit the core dashboard.** Everything saves on the server, syncs across tabs and is commander-gated:
+  - World clocks: add, remove, reorder.
+  - Quick-access buttons: choose which ones appear.
+  - Weather location: search and override.
+  - World-feed sources.
+  - Notes: edit in place, pin, reorder.
+  - Local agenda events and tasks: create, edit, complete, delete, reorder.
+  - Threat incidents: acknowledge, resolve, re-open, add notes.
+  - Decisions: autonomy whitelist, restore dismissed proposals.
+  - Operators: rename, change role, remove.
+  - Daily deep-work goal.
+- **feat: feature sections.**
+  - Disaster response: near-me radius setting and mute an event.
+  - Global map: saved places.
+  - Feed parsers re-verified.
+
 ## 2026-11-06 — v8.2.1 · Desktop build fix
 - **ci:** the Apple Silicon installer now builds on GitHub's `macos-15` image (the `macos-14` image was retired, so v8.2.0's installers could not be built). The app still targets macOS 11+. No app changes beyond v8.2.0.
 

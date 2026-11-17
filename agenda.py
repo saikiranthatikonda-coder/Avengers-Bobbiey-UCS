@@ -30,6 +30,8 @@ class CalendarEvent:
     response: str = ""                  # accepted | declined | tentative | needsAction
     attendee_count: int = 0
     url: str = ""                       # Google Calendar htmlLink (the event's source page)
+    id: str = ""                        # set for local events (corestore.py); Google ones are read-only
+    origin: str = "google"              # "google" | "local"
     notified_10: bool = False
     notified_1: bool = False
 
@@ -56,6 +58,7 @@ class Agenda:
         self.events: list[CalendarEvent] = []
         self.emails: list[Email] = []
         self.tasks: list[dict] = []    # open Google Tasks (same sign-in)
+        self.local_tasks: list[dict] = []   # the operator's own tasks (corestore.py), editable
         self.source = "disconnected"   # "disconnected" | "google"
 
     # ── real-calendar ingestion (Google sync) ────────────────────
@@ -84,8 +87,26 @@ class Agenda:
             if flags:
                 ev.notified_10, ev.notified_1 = flags
             new_events.append(ev)
-        self.events = new_events
+        self.events = new_events + [e for e in self.events if e.origin == "local"]
         self.source = "google"
+
+    def set_local_events(self, raw: list[dict]) -> None:
+        """Replace the operator's own events (created on the dashboard, stored by
+        corestore.py). Google events are untouched; reminder flags survive edits that
+        keep the start time."""
+        old = {e.id: e for e in self.events if e.origin == "local"}
+        local: list[CalendarEvent] = []
+        for r in raw:
+            ev = CalendarEvent(title=r["title"], start=datetime.fromtimestamp(r["start_ts"]),
+                               duration_min=r.get("duration_min", 30),
+                               location=r.get("location") or "",
+                               priority=r.get("priority", "normal"),
+                               calendar="Local", id=r["id"], origin="local")
+            prev = old.get(ev.id)
+            if prev is not None and prev.start == ev.start:
+                ev.notified_10, ev.notified_1 = prev.notified_10, prev.notified_1
+            local.append(ev)
+        self.events = [e for e in self.events if e.origin != "local"] + local
 
     # ── calendar intelligence ─────────────────────────────────────
     def intelligence(self) -> dict:
@@ -213,7 +234,9 @@ class Agenda:
                 "response": e.response,
                 "attendee_count": e.attendee_count,
                 "url": e.url,
-                "source": "Google Calendar",
+                "id": e.id,
+                "editable": e.origin == "local",
+                "source": "Local (this dashboard)" if e.origin == "local" else "Google Calendar",
             })
         events.sort(key=lambda x: x["start_ts"])
         emails = sorted(self.emails, key=lambda m: m.received, reverse=True)
@@ -235,7 +258,10 @@ class Agenda:
                 and e.start > now
             ),
             "source": self.source,
-            "tasks": self.tasks[:8],
+            "tasks": ([{**t, "source": "local", "editable": True}
+                       for t in self.local_tasks if t.get("status") != "done"]
+                      + [{**t, "source": "google"} for t in self.tasks])[:12],
+            "local_events": sum(1 for e in self.events if e.origin == "local"),
             "intel": self.intelligence(),
         }
 

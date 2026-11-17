@@ -693,6 +693,11 @@ async def r_roadmap(state, q, cmd):
                         "in_development", "upcoming", "failing_tests"))}
 
 
+async def r_openintel(state, q, cmd):
+    import openintel
+    return await openintel.agent_facts(state, q or "")
+
+
 # section key → (title, reader, routing regex)
 SECTIONS: dict[str, tuple[str, object, str]] = {
     "system": ("System metrics & processes", r_system,
@@ -740,6 +745,11 @@ SECTIONS: dict[str, tuple[str, object, str]] = {
     "brain": ("Active brain / model", r_brain,
               r"\b(brain|which (model|llm|ai)|what model|active model|llm|ollama|claude|local model|conversation mode)\b"),
     "roadmap": ("Roadmap", r_roadmap, r"\b(roadmap|product evolution|which phase|version progress)\b"),
+    "openintel": ("Open intelligence (open data)", r_openintel,
+                  r"\b(air quality|aqi|pm2\.?5|pollution|launch(es)?|rockets?|spacex|asteroids?|near[- ]earth|neos?|iss|"
+                  r"space station|exchange rates?|fx|forex|currenc(y|ies)|usd|inr|eur|arxiv|papers?|"
+                  r"hacker news|co2|carbon dioxide|mauna loa|outbreaks?|disease|holidays?|"
+                  r"sunrise|sunset|moon( phase)?)\b"),
 }
 _COMPILED = {k: re.compile(v[2], re.I) for k, v in SECTIONS.items()}
 _OVERVIEW = re.compile(r"\b(dashboard|overview|status report|sitrep|situation report|everything|all sections|"
@@ -858,14 +868,17 @@ def render_block(entries: list[dict], limit: int = BLOCK_CHARS) -> str:
 
 
 async def context_for(state: dict | None, question: str, commander: bool | None = None,
-                      meta: dict | None = None) -> str:
+                      meta: dict | None = None, allow=None) -> str:
     """The bounded [DASHBOARD FACTS …] block for a question, or "" when it isn't about the dashboard.
-    Never raises, never waits past TOTAL_BUDGET_S."""
+    Never raises, never waits past TOTAL_BUDGET_S. allow: the sections this agent may read
+    (custom agents, customagents.py); None = every section."""
     try:
         state = state if state is not None else _STATE
         if not state:
             return ""
         secs = route(question)
+        if allow is not None:
+            secs = [s for s in secs if s in allow]
         if not secs:
             return ""
         cmd = _role(state) if commander is None else bool(commander)

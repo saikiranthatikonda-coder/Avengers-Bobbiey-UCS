@@ -26,7 +26,7 @@
   {
     const f = pref("filter");
     if (f && typeof f.k === "string" && ["all", "cat", "near", "sev", "type"].includes(f.k)) filter = { k: f.k, v: f.v };
-    const t = pref("tab"); if (["services", "prep", "sources"].includes(t)) tab = t;
+    const t = pref("tab"); if (["services", "prep", "sources", "settings"].includes(t)) tab = t;
     const p = pref("prep"); if (typeof p === "string") prepSel = p;
   }
 
@@ -101,6 +101,7 @@
       <button type="button" role="tab" data-tab="services" class="on">SERVICE STATUS</button>
       <button type="button" role="tab" data-tab="prep">PREPAREDNESS</button>
       <button type="button" role="tab" data-tab="sources">FEEDS <span id="dis-feeds-n"></span></button>
+      <button type="button" role="tab" data-tab="settings">SETTINGS <span id="dis-muted-n"></span></button>
     </div>
     <div class="ft-pane" data-pane="services">
       <div class="dis-svcs" id="dis-svcs"><div class="tf-empty">—</div></div>
@@ -113,6 +114,22 @@
     </div>
     <div class="ft-pane" data-pane="sources" hidden>
       <div class="dis-sources" id="dis-sources"></div>
+    </div>
+    <div class="ft-pane" data-pane="settings" hidden>
+      <form class="dis-set" id="dis-set" autocomplete="off">
+        <label>NEAR-ME RADIUS (KM)<input type="number" id="dis-set-km" min="25" max="5000" step="5" required></label>
+        <label>HOME LABEL<input type="text" id="dis-set-label" maxlength="60" placeholder="e.g. Home"></label>
+        <label>HOME LATITUDE<input type="number" id="dis-set-lat" min="-90" max="90" step="any" placeholder="not set"></label>
+        <label>HOME LONGITUDE<input type="number" id="dis-set-lon" min="-180" max="180" step="any" placeholder="not set"></label>
+        <div class="dis-set-act">
+          <button class="cmd-btn" type="submit" id="dis-set-save">SAVE</button>
+          <button class="cmd-btn" type="button" id="dis-set-here" title="Fill the home fields from the location in use now">USE CURRENT LOCATION</button>
+          <button class="cmd-btn" type="button" id="dis-set-clear" title="Forget the saved home and go back to automatic location">CLEAR HOME</button>
+        </div>
+      </form>
+      <div class="ft-note" id="dis-set-msg"></div>
+      <div class="dis-tl-lab" style="margin-top:10px">MUTED EVENTS</div>
+      <div class="dis-muted" id="dis-muted"></div>
     </div>
   </div>`;
 
@@ -228,11 +245,11 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
     }
     host.innerHTML = items.slice(0, 80).map(i => {
       const dist = i.distance_km != null ? `<span class="dis-dist${i.near ? " near" : ""}">${i.near ? "NEAR · " : ""}${i.distance_km.toLocaleString()} km</span>` : "";
-      return `<button type="button" class="dis-ev sev-${SEV_CLASS[i.severity]}${i.near ? " near" : ""}${i.stale ? " stale" : ""}" data-id="${esc(i.id)}" title="Open event detail">
+      return `<button type="button" class="dis-ev sev-${SEV_CLASS[i.severity]}${i.near ? " near" : ""}${i.stale ? " stale" : ""}${i.muted ? " muted" : ""}" data-id="${esc(i.id)}" title="Open event detail">
         <span class="dis-ab" title="${esc(i.type)}">${esc(ABBR[i.type] || "··")}</span>
         <span class="dis-ev-body">
           <span class="dis-ev-t"><span class="dis-sev">${esc(i.sev_label)}</span>${esc(fix(i.title))}</span>
-          <span class="dis-ev-m">${esc(i.source)}${safeUrl(i.link) ? " ↗" : ""} · ${esc(ago(i.time))}${i.stale ? " · STALE" : ""} ${dist}</span>
+          <span class="dis-ev-m">${esc(i.source)}${safeUrl(i.link) ? " ↗" : ""} · ${esc(ago(i.time))}${i.stale ? " · STALE" : ""}${i.muted ? " · MUTED" : ""} ${dist}</span>
         </span>
         <span class="dis-go" aria-hidden="true">›</span></button>`;
     }).join("") + (items.length > 80 ? `<div class="tf-empty">+${items.length - 80} more (lower severity) · narrow with a filter</div>` : "");
@@ -281,6 +298,44 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
         <span class="dis-src-m">${esc(String(s.status).toUpperCase())} · ${s.count} items · ${esc(when)}${s.error ? " · " + esc(s.error) : ""}</span></a>`;
     }).join("");
   }
+  let setDirty = false;
+  function setMsg(t, bad) {
+    const m = document.getElementById("dis-set-msg"); if (!m) return;
+    m.textContent = t || ""; m.style.color = bad ? "var(--warn)" : "";
+  }
+  function renderSettings() {
+    const st = data.settings || {}, home = st.home, muted = st.muted || [];
+    document.getElementById("dis-muted-n").textContent = muted.length ? String(muted.length) : "";
+    if (!setDirty && !mount.querySelector("#dis-set :focus")) {
+      document.getElementById("dis-set-km").value = st.near_km != null ? st.near_km : data.near_km;
+      document.getElementById("dis-set-label").value = home ? home.label || "" : "";
+      document.getElementById("dis-set-lat").value = home ? home.lat : "";
+      document.getElementById("dis-set-lon").value = home ? home.lon : "";
+      const loc = data.location;
+      setMsg(home ? `Saved home in use: ${home.label} (${(+home.lat).toFixed(2)}, ${(+home.lon).toFixed(2)}).`
+        : loc ? `No saved home: using ${loc.label} (${loc.source}).` : "No saved home and no location available: distances are not shown.");
+    }
+    document.getElementById("dis-set-clear").disabled = !home;
+    document.getElementById("dis-muted").innerHTML = muted.length ? muted.map(m =>
+      `<div class="dis-muted-row"><span>${esc(fix(m.title || m.id))}</span>
+        <button class="cmd-btn" type="button" data-unmute="${esc(m.id)}">UNMUTE</button></div>`).join("")
+      : `<div class="tf-empty">no muted events · open an event and press MUTE to silence its alerts</div>`;
+  }
+  async function post(path, body) {
+    const r = await fetch(path + locQuery(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    let j = null; try { j = await r.json(); } catch (e) {}
+    if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || "HTTP " + r.status);
+    data = j; setDirty = false; renderAll();
+    return j;
+  }
+  async function saveSettings(body, okMsg) {
+    try { await post("/api/disaster/settings", body); setMsg(okMsg); }
+    catch (e) { setMsg("Not saved: " + (e && e.message || "error"), true); }
+  }
+  async function setMuted(id, muted) {
+    try { await post("/api/disaster/mute", { id, muted }); }
+    catch (e) { try { logEvent(`<span class="tag">[disaster]</span> ${muted ? "mute" : "unmute"} failed: ${esc(e && e.message || "error")}`, "warn"); } catch (e2) {} }
+  }
   function renderAll() {
     if (!data) return;
     const c = data.counts, loc = data.location;
@@ -294,7 +349,7 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
       : "No events reported by the reachable feeds right now.";
     document.getElementById("dis-nearkm").textContent = data.near_km;
     document.getElementById("dis-loc").textContent = loc ? `YOU · ${loc.label}` : "LOCATION UNKNOWN";
-    renderCounts(); renderList(); renderServices(); renderPrep(); renderSources(); renderMap();
+    renderCounts(); renderList(); renderServices(); renderPrep(); renderSources(); renderSettings(); renderMap();
   }
 
   // ── detail view ───────────────────────────────────────
@@ -320,6 +375,7 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
         ${u ? `<a class="cmd-btn" href="${esc(u)}" target="_blank" rel="noopener noreferrer">OPEN SOURCE · ${esc(i.source)} ↗</a>` : ""}
         ${all[i.type] ? `<button class="cmd-btn" type="button" data-dis-prep="${esc(i.type)}">WHAT TO DO</button>` : ""}
         <button class="cmd-btn" type="button" data-dis-type="${esc(i.type)}">SIMILAR EVENTS</button>
+        <button class="cmd-btn" type="button" data-dis-mute="${esc(i.id)}" data-on="${i.muted ? "0" : "1"}" title="${i.muted ? "Alert about this event again" : "Stop alerts for this event (it stays in the list, marked MUTED)"}">${i.muted ? "UNMUTE" : "MUTE"}</button>
       </div>
       <div class="si-src"><span class="lbl">DATA SOURCE</span> ${u ? `<a class="src-link" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(i.source)} ↗</a>` : `${esc(i.source)} (no public page for this item)`} · fetched ${esc(clock(i.fetched_at))} (${esc(ago(i.fetched_at))}) <code>/api/disaster</code></div>`;
     if (typeof openCustomModal === "function") openCustomModal(fix(i.title), `DISASTER RESPONSE · ${String(i.category).toUpperCase()}`, null, html);
@@ -382,6 +438,8 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
     if (ev) { openEvent(ev.dataset.id); return; }
     const tb = e.target.closest("[data-tab]");
     if (tb) { showTab(tb.dataset.tab); return; }
+    const um = e.target.closest("[data-unmute]");
+    if (um) { um.disabled = true; setMuted(um.dataset.unmute, false); return; }
     const pk = e.target.closest("#dis-prep-tabs button[data-k]");
     if (pk) { prepSel = pk.dataset.k; pref("prep", prepSel); renderPrep(); }
   });
@@ -398,11 +456,36 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
   document.addEventListener("click", (e) => {
     const p = e.target.closest("#tool-modal [data-dis-prep]");
     const t = e.target.closest("#tool-modal [data-dis-type]");
+    const mu = e.target.closest("#tool-modal [data-dis-mute]");
+    if (mu) { try { closeToolModal(); } catch (e2) {} setMuted(mu.dataset.disMute, mu.dataset.on === "1"); return; }
     if (!p && !t) return;
     try { closeToolModal(); } catch (e2) {}
     if (p) { prepSel = p.dataset.disPrep; pref("prep", prepSel); showTab("prep"); renderPrep(); document.getElementById("dis-tabs").scrollIntoView({ behavior: "smooth", block: "center" }); }
     if (t) { setFilter({ k: "type", v: t.dataset.disType }); document.getElementById("dis-list").scrollIntoView({ behavior: "smooth", block: "center" }); }
   });
+
+  document.getElementById("dis-set").addEventListener("input", () => { setDirty = true; });
+  document.getElementById("dis-set").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const km = Number(document.getElementById("dis-set-km").value);
+    const lat = document.getElementById("dis-set-lat").value.trim(), lon = document.getElementById("dis-set-lon").value.trim();
+    const body = { near_km: km };
+    if (lat === "" && lon === "") body.home = null;
+    else if (lat === "" || lon === "") { setMsg("Enter both latitude and longitude, or leave both empty.", true); return; }
+    else body.home = { lat: Number(lat), lon: Number(lon), label: document.getElementById("dis-set-label").value.trim() };
+    saveSettings(body, "Saved.");
+  });
+  document.getElementById("dis-set-here").addEventListener("click", () => {
+    const loc = data && data.location;
+    if (!loc) { setMsg("No location available to copy: enter latitude and longitude by hand.", true); return; }
+    document.getElementById("dis-set-lat").value = (+loc.lat).toFixed(4);
+    document.getElementById("dis-set-lon").value = (+loc.lon).toFixed(4);
+    if (!document.getElementById("dis-set-label").value) document.getElementById("dis-set-label").value = loc.label || "";
+    setDirty = true; setMsg("Filled from " + loc.label + " (" + loc.source + "). Press SAVE to keep it.");
+  });
+  document.getElementById("dis-set-clear").addEventListener("click", () => saveSettings({ home: null }, "Saved home cleared."));
+  // another tab (or voice) changed the settings: main broadcasts {"type":"sync","topic":"disaster"}
+  window.addEventListener("bucs:sync", (e) => { if (e && e.detail && e.detail.topic === "disaster") load(); });
 
   showTab(tab);                                      // restore the remembered tab
   load();

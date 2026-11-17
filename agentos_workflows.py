@@ -32,6 +32,7 @@ STEP_TYPES = ("agent", "tool", "condition", "approval", "notify")
 OPS = ("contains", "not_contains", "equals", "gt", "lt", "exists", "empty")
 MAX_STEPS_EXEC = 60
 _ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
+_KEEP = object()          # upsert_agent(team=_KEEP): keep the stored team profile
 
 
 def _slug(s: str) -> str:
@@ -212,13 +213,27 @@ class Studio:
             atomic_write_text(self._p("schedule.json"), json.dumps(self.last_fire), encoding="utf-8")
 
     # ── CRUD ───────────────────────────────────────────────────
-    def upsert_agent(self, d: dict) -> dict:
+    def upsert_agent(self, d: dict, team=_KEEP) -> dict:
+        """team: the agent's team-member profile, written ONLY by customagents.py (which validates
+        it). The payload can never set it: an edit from the AI CORE form keeps the stored profile."""
         a, err = validate_agent(d, self.tool_names(), self.policies)
         if err:
             return {"ok": False, "error": err}
+        profile = (self.agents.get(a["id"]) or {}).get("team") if team is _KEEP else team
+        if isinstance(profile, dict) and profile:
+            a["team"] = profile
         self.agents[a["id"]] = a
         self._save("agents")
+        self._agents_changed()
         return {"ok": True, "agent": a}
+
+    def _agents_changed(self) -> None:
+        fn = getattr(self, "on_agents_change", None)      # customagents.py re-syncs the live roster
+        if fn:
+            try:
+                fn()
+            except Exception:
+                pass
 
     def delete_agent(self, aid: str) -> dict:
         used = [w["name"] for w in self.workflows.values() if any(s.get("agent") == aid for s in w["steps"])]
@@ -226,6 +241,7 @@ class Studio:
             return {"ok": False, "error": "used by workflow(s): " + ", ".join(used)}
         ok = self.agents.pop(aid, None) is not None
         self._save("agents")
+        self._agents_changed()
         return {"ok": ok}
 
     def upsert_workflow(self, d: dict) -> dict:

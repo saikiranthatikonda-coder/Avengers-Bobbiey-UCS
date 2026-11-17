@@ -204,18 +204,45 @@ class TTSPlayer:
                 "  if ($v.VoiceInfo.Name -like \"*$vname*\") { $s.SelectVoice($v.VoiceInfo.Name); break } "
                 "} } catch {}; "
             )
-        # protocol: one line per utterance "<volume>|<rate>|<base64 utf-8 text>",
-        # answered by DONE once playback finishes
+        # protocol: one line per utterance "<volume>|<rate>|<base64 utf-8 text>[|<base64 voice name>]",
+        # answered by DONE once playback finishes. The optional 4th field is an installed voice
+        # for this utterance only (a custom agent's voice); without it the default voice speaks.
         return (
             "Add-Type -AssemblyName System.Speech; "
             "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
             + voice_part +
+            "$def = $s.Voice.Name; "
             "[Console]::Out.WriteLine('READY'); [Console]::Out.Flush(); "
             "while (($l = [Console]::In.ReadLine()) -ne $null) { "
             "  $p = $l.Split('|'); $s.Volume = [int]$p[0]; $s.Rate = [int]$p[1]; "
+            "  $want = $def; "
+            "  if ($p.Length -gt 3 -and $p[3]) { $want = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p[3])) }; "
+            "  if ($s.Voice.Name -ne $want) { try { $s.SelectVoice($want) } catch { try { $s.SelectVoice($def) } catch {} } }; "
             "  $s.Speak([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p[2]))); "
             "  [Console]::Out.WriteLine('DONE'); [Console]::Out.Flush() }"
         )
+
+    def list_voices(self) -> list[str]:
+        """Names of the voices installed for the active engine (Windows System.Speech only; the
+        macOS / Linux backends speak with one configured voice). Blocking (~1 s the first time):
+        call it off the event loop. Cached."""
+        cached = getattr(self, "_voices", None)
+        if cached is not None:
+            return cached
+        names: list[str] = []
+        if OS == "Windows" and getattr(self, "engine", None) == "windows":
+            try:
+                r = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     "Add-Type -AssemblyName System.Speech; "
+                     "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                     "$s.GetInstalledVoices() | Where-Object { $_.Enabled } | ForEach-Object { $_.VoiceInfo.Name }"],
+                    capture_output=True, text=True, timeout=20, creationflags=self._creation_flags())
+                names = [ln.strip()[:80] for ln in (r.stdout or "").splitlines() if ln.strip()][:40]
+            except Exception:
+                names = []
+        self._voices = names
+        return names
 
     def _ensure_ps(self) -> subprocess.Popen | None:
         with self._ps_lock:
@@ -238,11 +265,13 @@ class TTSPlayer:
         if OS == "Windows" and getattr(self, "engine", None) == "windows" and self._persistent_ok:
             threading.Thread(target=self._ensure_ps, daemon=True).start()
 
-    def _speak_persistent(self, text: str) -> bool:
+    def _speak_persistent(self, text: str, voice: str | None = None) -> bool:
         ps = self._ensure_ps()
         if ps is None:
             return False
         b64 = base64.b64encode(text.encode("utf-8")).decode("ascii")
+        if voice:                                  # optional 4th protocol field (see _ps_script)
+            b64 += "|" + base64.b64encode(voice.encode("utf-8")).decode("ascii")
         try:
             self._cur = ps
             ps.stdin.write(f"{self.volume}|{self.rate}|{b64}\n")
@@ -294,10 +323,12 @@ class TTSPlayer:
         finally:
             self._cur = None
 
-    def _speak_blocking(self, text: str) -> None:
+    def _speak_blocking(self, text: str, voice: str | None = None) -> None:
         eng = getattr(self, "engine", None)
         if eng == "windows" and OS == "Windows":
-            if self._persistent_ok and self._speak_persistent(text):
+            # a per-agent voice exists only on the persistent Windows speaker; every other
+            # path speaks with the default voice
+            if self._persistent_ok and self._speak_persistent(text, voice):
                 return
             proc = subprocess.Popen(["powershell", "-NoProfile", "-Command", self._build_ps_command(text)],
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -337,12 +368,13 @@ class TTSPlayer:
             text, fut = item[0], item[1]
             on_start = item[2] if len(item) > 2 else None
             self.speaking_channel = item[3] if len(item) > 3 else "ambient"
+            voice = item[4] if len(item) > 4 else None
             self.speaking = True
             if on_start and self.loop:            # real playback start (latency metric)
                 self.loop.call_soon_threadsafe(on_start)
             self._emit("speak", text=text[:200])
             try:
-                self._speak_blocking(text)
+                self._speak_blocking(text, voice) if voice else self._speak_blocking(text)
             except Exception as e:
                 print(f"tts play error: {e}")
             finally:
@@ -352,7 +384,7 @@ class TTSPlayer:
                 if self.loop and fut and not fut.done():
                     self.loop.call_soon_threadsafe(fut.set_result, True)
 
-    async def say(self, text: str, on_start=None, channel: str = "ambient") -> None:
+    async def say(self, text: str, on_start=None, channel: str = "ambient", voice: str | None = None) -> None:
         """channel: "conversation" for replies to the operator (always voiced
         unless muted); "ambient" (default, every legacy caller) for background
         speech, which Conversation Mode keeps silent."""
@@ -368,7 +400,7 @@ class TTSPlayer:
         if self.q.qsize() >= self.max_queue:
             return  # backpressure
         fut = self.loop.create_future()
-        self.q.put((text, fut, on_start, channel))
+        self.q.put((text, fut, on_start, channel, voice))
         try:
             await fut
         except Exception:

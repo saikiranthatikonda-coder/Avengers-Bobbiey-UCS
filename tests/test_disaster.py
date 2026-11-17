@@ -275,6 +275,122 @@ class Engine(unittest.TestCase):
         self.assertEqual(len(calls) - n, 1)
 
 
+class Settings(unittest.TestCase):
+    """Operator settings: saved home, near-me radius, muted events. Persisted, gated, audited, broadcast."""
+
+    def setUp(self):
+        import tempfile
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        self.tmp = tempfile.TemporaryDirectory()
+        self.store = Path(self.tmp.name) / ".update" / "disaster.json"
+        self.payloads = {"gdacs": GDACS, "kev": KEV, "kev2": KEV}
+
+        async def fetch(url):
+            return self.payloads[url]
+
+        self.fetch = fetch
+        self.hub = Hub()
+        self.role = {"commander": True}
+        self.audits = []
+
+        async def audit(action, detail=""):
+            self.audits.append((action, detail))
+
+        self.state = {"hub": self.hub}
+        self.d = disaster.Disaster(self.state, fetch=fetch, sources=_fake_sources(), store=self.store)
+        self.state["disaster"] = self.d
+        asyncio.run(self.d.poll(force=True))
+        app = FastAPI()
+        app.include_router(disaster.build_router({"state": self.state, "audit": audit,
+                                                  "commander": lambda: self.role["commander"],
+                                                  "host_only": lambda request: True}))
+        self.c = TestClient(app)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _reload(self):
+        return disaster.Disaster({}, fetch=self.fetch, sources=_fake_sources(), store=self.store)
+
+    def test_defaults_are_honest(self):
+        snap = self.c.get("/api/disaster").json()
+        self.assertEqual(snap["near_km"], disaster.NEAR_KM)
+        self.assertIsNone(snap["settings"]["home"])            # no invented home
+        self.assertIsNone(snap["location"])                    # nothing to measure distance from
+        self.assertEqual(snap["settings"]["muted"], [])
+
+    def test_home_and_radius_persist_and_drive_near(self):
+        r = self.c.post("/api/disaster/settings", json={"near_km": 120, "home": {"lat": 15.0, "lon": 80.5, "label": "Base"}})
+        self.assertEqual(r.status_code, 200, r.text)
+        j = r.json()
+        self.assertEqual(j["near_km"], 120)
+        self.assertEqual(j["location"]["source"], "saved home")
+        cyc = next(i for i in j["items"] if "MURASU" in i["title"])
+        self.assertTrue(cyc["near"])
+        self.assertEqual(cyc["distance_km"], 0)
+        self.assertIn(("disaster.settings", "near radius 120 km; home set"), self.audits)
+        self.assertNotIn("15.0", " ".join(d for _a, d in self.audits))     # coordinates stay out of the audit log
+        self.assertIn({"type": "sync", "topic": "disaster"}, self.hub.msgs)
+        # browser-supplied coordinates no longer override the saved home
+        self.assertEqual(self.c.get("/api/disaster?lat=1&lon=1").json()["location"]["label"], "Base")
+        # survives a restart
+        d2 = self._reload()
+        self.assertEqual((d2.near_km, d2.home["label"], d2.home["lat"]), (120, "Base", 15.0))
+        # clear home -> back to automatic (none here)
+        j = self.c.post("/api/disaster/settings", json={"home": None}).json()
+        self.assertIsNone(j["location"])
+        self.assertEqual(j["near_km"], 120)
+        self.assertIsNone(self._reload().home)
+
+    def test_validation(self):
+        for body in ({"near_km": 5}, {"near_km": 99999}, {"near_km": "x"}, {"home": {"lat": 95, "lon": 0}},
+                     {"home": {"lat": 1}}, {"home": "here"}):
+            r = self.c.post("/api/disaster/settings", json=body)
+            self.assertEqual(r.status_code, 400, body)
+        self.assertEqual(self.d.near_km, disaster.NEAR_KM)
+        self.assertFalse(self.store.exists())                  # nothing written on a rejected edit
+
+    def test_observer_cannot_edit(self):
+        self.role["commander"] = False
+        self.assertEqual(self.c.post("/api/disaster/settings", json={"near_km": 100}).status_code, 403)
+        eid = self.d.items()[0]["id"]
+        self.assertEqual(self.c.post("/api/disaster/mute", json={"id": eid}).status_code, 403)
+        self.assertEqual((self.d.near_km, self.d.muted, self.audits), (disaster.NEAR_KM, {}, []))
+
+    def test_mute_and_undo(self):
+        eid = next(i for i in self.d.items() if "MURASU" in i["title"])["id"]
+        self.assertEqual(self.c.post("/api/disaster/mute", json={"id": "nope"}).status_code, 400)
+        j = self.c.post("/api/disaster/mute", json={"id": eid}).json()
+        self.assertTrue(next(i for i in j["items"] if i["id"] == eid)["muted"])   # still listed, marked
+        self.assertEqual(j["counts"]["muted"], 1)
+        self.assertEqual(j["settings"]["muted"][0]["id"], eid)
+        self.assertTrue(self._reload().muted)                                    # persisted
+        self.assertEqual(self.audits[-1][0], "disaster.mute")
+        j = self.c.post("/api/disaster/mute", json={"id": eid, "muted": False}).json()
+        self.assertEqual(j["counts"]["muted"], 0)
+        self.assertEqual(self.audits[-1][0], "disaster.unmute")
+        self.assertEqual(self.c.post("/api/disaster/mute", json={"id": eid, "muted": False}).status_code, 400)
+
+    def test_muted_event_does_not_alert(self):
+        d = disaster.Disaster({"hub": self.hub}, fetch=self.fetch, sources=_fake_sources(), store=self.store)
+        self.payloads["gdacs"] = {"features": []}
+        asyncio.run(d.poll(force=True))                         # seed with nothing
+        self.payloads["gdacs"] = GDACS
+        d._load_settings()
+        eid = disaster.parse_gdacs(GDACS)[0]["id"]
+        d.muted[eid] = {"title": "x", "at": 1}
+        self.hub.msgs.clear()
+        asyncio.run(d.poll(force=True))
+        self.assertFalse([m for m in self.hub.msgs if "MURASU" in m.get("msg", "")])
+
+    def test_corrupt_store_is_ignored(self):
+        self.store.parent.mkdir(parents=True, exist_ok=True)
+        self.store.write_text("{not json", encoding="utf-8")
+        d = self._reload()
+        self.assertEqual((d.near_km, d.home, d.muted), (disaster.NEAR_KM, None, {}))
+
+
 class DashboardContract(unittest.TestCase):
     """static/disaster.js: view prefs survive a reload (guarded localStorage), failures are surfaced."""
     JS = (Path(__file__).resolve().parent.parent / "static" / "disaster.js").read_text(encoding="utf-8")
@@ -288,6 +404,12 @@ class DashboardContract(unittest.TestCase):
 
     def test_refresh_failure_is_reported(self):
         self.assertIn("refresh failed: ${esc(j.error", self.JS)               # non-429 errors are not silent
+
+    def test_settings_ui_wired(self):
+        js = self.JS
+        for needle in ('"/api/disaster/settings"', '"/api/disaster/mute"', 'data-tab="settings"',
+                       'e.detail.topic === "disaster"', "data-dis-mute", "data-unmute"):
+            self.assertIn(needle, js)
 
     def test_show_on_map_ids_match_global_map(self):
         """SHOW ON MAP passes the Disaster item id; the global map must carry the same id."""

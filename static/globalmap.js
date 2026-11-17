@@ -100,6 +100,7 @@
       </div>
       <div class="gm-actions">
         <button type="button" class="gm-btn" id="gm-near" title="Focus on your location (${NEAR_KM} km ring)">◎ NEAR ME</button>
+        <button type="button" class="gm-btn" id="gm-places" title="Saved places: jump to, save, rename or delete a map view">★ PLACES</button>
         <button type="button" class="gm-btn" id="gm-reset" title="Reset view">⟲</button>
         <button type="button" class="gm-btn" id="gm-full" title="Full screen" aria-label="Full screen">⤢</button>
       </div>
@@ -842,6 +843,97 @@
     if (S.mode === "2d" && zoomer) d3.select(cv).transition().duration(reduced ? 0 : 700).call(zoomer.transform, d3.zoomIdentity);
     else if (G) G.pointOfView({ lat: 20, lng: S.op ? S.op.lon : 0, altitude: S.mode === "orbit" ? 3.4 : 1.75 }, 900);
   });
+  // ───────── saved places (GET/POST/DELETE /api/globalmap/places · operator bookmarks, server-side)
+  let places = null, placesErr = "", placeEdit = null;
+  function viewNow() {
+    if (S.mode !== "2d") {
+      const pv = G && G.pointOfView ? G.pointOfView() : null;
+      return pv ? { lat: pv.lat, lon: pv.lng, zoom: 4 } : null;
+    }
+    if (!proj || !proj.invert) return null;
+    const ll = proj.invert([(W / 2 - T.x) / T.k, (H / 2 - T.y) / T.k]);
+    return ll && isFinite(ll[0]) && isFinite(ll[1]) ? { lat: ll[1], lon: ll[0], zoom: Math.max(1, Math.min(24, T.k)) } : null;
+  }
+  async function placeCall(method, path, body) {
+    const r = await fetch("/api/globalmap/places" + path, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+    let j = null; try { j = await r.json(); } catch (e) {}
+    if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || "HTTP " + r.status);
+    places = j; placesErr = "";
+    return j;
+  }
+  async function loadPlaces() {
+    try { await placeCall("GET", ""); } catch (e) { placesErr = "saved places unavailable: " + (e && e.message || "error"); }
+    if (S.selected && S.selected.kind === "places") showPlaces();
+  }
+  function showPlaces() {
+    S.selected = { kind: "places" };
+    const list = places ? places.places : null, can = places && places.commander;
+    const rows = !list ? `<p>${placesErr ? esc(placesErr) : "loading saved places…"}</p>`
+      : !list.length ? `<p>No saved places yet. Move the map where you want it, name the view and press SAVE.</p>`
+      : list.map(p => placeEdit === p.id
+        ? `<div class="gm-place"><input type="text" class="gm-pl-in" id="gm-pl-edit" maxlength="60" value="${esc(p.name)}" aria-label="Place name">
+             <button type="button" class="gm-btn" data-pl-ok="${esc(p.id)}">OK</button><button type="button" class="gm-btn" data-pl-cancel="1">✕</button></div>`
+        : `<div class="gm-place"><button type="button" class="gm-pl-go" data-pl-go="${esc(p.id)}" title="Jump to ${esc(p.name)}${p.layers ? " and restore its layers" : ""}">
+             <b>${esc(p.name)}</b><small>${(+p.lat).toFixed(2)}, ${(+p.lon).toFixed(2)} · ×${(+p.zoom).toFixed(1)}${p.layers ? " · layers" : ""}</small></button>
+             ${can ? `<button type="button" class="gm-btn" data-pl-ren="${esc(p.id)}" title="Rename">✎</button>
+             <button type="button" class="gm-btn" data-pl-upd="${esc(p.id)}" title="Replace with the current view and layers">⟳</button>
+             <button type="button" class="gm-btn" data-pl-del="${esc(p.id)}" title="Delete this saved place">🗑</button>` : ""}</div>`).join("");
+    openCard(`<div class="gm-card-h"><em>SAVED PLACES</em><span>${list ? list.length + "/" + places.max : ""}</span></div>
+      <div class="gm-places">${rows}</div>
+      ${places && !can ? `<p class="gm-al">Observer role: switch to COMMANDER to save or edit places.</p>` : ""}
+      ${can ? `<div class="gm-place gm-pl-new"><input type="text" class="gm-pl-in" id="gm-pl-name" maxlength="60" placeholder="name this view" aria-label="Name for the current view">
+        <button type="button" class="gm-btn" id="gm-pl-save" title="Save the current centre, zoom and layer set">SAVE VIEW</button></div>` : ""}
+      <p class="gm-al" id="gm-pl-msg">${placesErr && list ? esc(placesErr) : ""}</p>`);
+  }
+  function placeMsg(t) { const m = $("#gm-pl-msg"); if (m) m.textContent = t; }
+  async function placeAct(fn) {
+    try { await fn(); placeEdit = null; showPlaces(); }
+    catch (e) { placeMsg("not saved: " + (e && e.message || "error")); }
+  }
+  $("#gm-places").addEventListener("click", () => {
+    if (S.selected && S.selected.kind === "places") { closeCard(); return; }
+    placeEdit = null; showPlaces(); loadPlaces();
+  });
+  card.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b || !places) return;
+    const d = b.dataset, find = id => places.places.find(p => p.id === id);
+    if (b.id === "gm-pl-save") {
+      const name = ($("#gm-pl-name").value || "").trim(), v = viewNow();
+      if (!name) { placeMsg("give the view a name first"); return; }
+      if (!v) { placeMsg("the map view is not ready yet"); return; }
+      placeAct(() => placeCall("POST", "", Object.assign({ name, layers: Object.assign({}, S.on) }, v)));
+    } else if (d.plGo) {
+      const p = find(d.plGo); if (!p) return;
+      if (p.layers) {
+        Object.keys(S.on).forEach(k => { if (k in p.layers) S.on[k] = !!p.layers[k]; });
+        store("layers", S.on); renderLayers(); invalidate(true);
+        if (S.on.flights) pollFlights(); if (S.on.satellites) pollSats();
+        if (G) syncGlobe();
+      }
+      zoomTo(+p.lat, +p.lon, +p.zoom || 4);
+    } else if (d.plRen) { placeEdit = d.plRen; showPlaces(); const i = $("#gm-pl-edit"); if (i) { i.focus(); i.select(); } }
+    else if (d.plCancel) { placeEdit = null; showPlaces(); }
+    else if (d.plOk) {
+      const name = ($("#gm-pl-edit").value || "").trim();
+      if (!name) { placeMsg("name cannot be empty"); return; }
+      placeAct(() => placeCall("POST", "/" + encodeURIComponent(d.plOk), { name }));
+    } else if (d.plUpd) {
+      const v = viewNow(); if (!v) { placeMsg("the map view is not ready yet"); return; }
+      placeAct(() => placeCall("POST", "/" + encodeURIComponent(d.plUpd), Object.assign({ layers: Object.assign({}, S.on) }, v)));
+    } else if (d.plDel) {
+      const p = find(d.plDel);
+      if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "SURE?"; placeMsg(`press again to delete "${p ? p.name : ""}"`); return; }
+      placeAct(() => placeCall("DELETE", "/" + encodeURIComponent(d.plDel)));
+    }
+  });
+  card.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    if (e.target.id === "gm-pl-name") { e.preventDefault(); $("#gm-pl-save").click(); }
+    if (e.target.id === "gm-pl-edit") { e.preventDefault(); const ok = card.querySelector("[data-pl-ok]"); if (ok) ok.click(); }
+  });
+  // another tab changed the saved places: main broadcasts {"type":"sync","topic":"globalmap"}
+  window.addEventListener("bucs:sync", e => { if (e && e.detail && e.detail.topic === "globalmap") loadPlaces(); });
+
   $("#gm-full").addEventListener("click", () => {
     const on = document.fullscreenElement === mount || mount.classList.contains("gm-fs");
     if (on) { if (document.fullscreenElement) document.exitFullscreen(); mount.classList.remove("gm-fs"); }

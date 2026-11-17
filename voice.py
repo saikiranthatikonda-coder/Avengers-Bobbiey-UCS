@@ -66,6 +66,27 @@ AGENT_TRIGGERS: list[tuple[str, str]] = [
     ("vision", "vision"),
 ]
 
+# Wake phrases of custom team members (customagents.py keeps this list in sync: enabled agents
+# only, phrases that collide with a built-in are refused there). Whole-word matches only, no
+# fuzzy matching, so an ordinary word can never summon one.
+CUSTOM_TRIGGERS: list[tuple[str, str]] = []
+
+
+def match_custom(text: str) -> tuple[str | None, str | None, int]:
+    """(agent_key, command, position) for the custom wake phrase that occurs first in `text`
+    (longest wins on a tie), or (None, None, -1)."""
+    low = re.sub(r"[^\w\s]", " ", (text or "").lower())
+    low = re.sub(r"\s+", " ", low).strip()
+    best = None
+    for phrase, key in CUSTOM_TRIGGERS:
+        m = re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", low)
+        if m and (best is None or (m.start(), -len(phrase)) < (best[0], -len(best[1]))):
+            best = (m.start(), phrase, key, low[m.end():].strip())
+    if best is None:
+        return None, None, -1
+    return best[2], best[3] or None, best[0]
+
+
 # Used by the fuzzy fallback when exact substring matching misses.
 FUZZY_NAMES: dict[str, str] = {
     "jarvis": "jarvis",
@@ -427,6 +448,18 @@ class VoiceLoop:
             # start; then no wake word is needed while the conversation is
             # live (ENGAGED_S after each reply / summon). Outside that window
             # other people's chatter is ignored instead of answered.
+            # a custom team member addressed by its wake phrase ("Nova, …") is heard in every
+            # mode; in Conversation Mode the operator must name it each time (no follow-up window)
+            ckey, crest, cpos = match_custom(text)
+            if ckey and ckey in self.team and not (cpos > 0 and self._mentions_jarvis(text)[0]):
+                entry["outcome"] = f"→ {ckey} (custom agent)"
+                await self.hub.broadcast({"type": "voice", "event": "routed",
+                                          "agent": ckey, "command": crest or "(no command)"})
+                if crest:
+                    await self.engine.submit(crest, source="voice", agent=ckey)
+                else:
+                    await self.engine.summon(ckey, source="voice")
+                return
             if self._conversation():
                 named, rest = self._mentions_jarvis(text)
                 engaged = time.time() < self.follow_until
@@ -701,12 +734,18 @@ class VoiceLoop:
         low = re.sub(r"[^\w\s]", " ", text.lower()).strip()
         low = re.sub(r"\s+", " ", low)
 
-        # 1) exact substring match, longest phrases first
+        # 1) exact substring match, longest phrases first (a custom agent's wake phrase wins
+        #    when it comes earlier in the sentence than the built-in one)
+        ckey, ccmd, cpos = match_custom(text)
         for trigger, agent_key in AGENT_TRIGGERS:
             if trigger in low:
                 idx = low.find(trigger)
+                if ckey and cpos < idx:
+                    return ckey, ccmd
                 cmd = low[idx + len(trigger):].strip()
                 return agent_key, cmd or None
+        if ckey:
+            return ckey, ccmd
 
         # 2) fuzzy token match — handles "starck", "stork", "thoor", "wido", etc.
         tokens = low.split()

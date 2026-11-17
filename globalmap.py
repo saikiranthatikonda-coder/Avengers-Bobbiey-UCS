@@ -24,13 +24,21 @@ Endpoints
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 import time
+import uuid
+from pathlib import Path
 from typing import Awaitable, Callable
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 import globalmap_sources as gs
+from atomicio import atomic_write_text
+
+STORE = Path(__file__).resolve().parent / ".update" / "globalmap.json"   # operator's saved places only
+MAX_PLACES = 60
 
 HTTP_TIMEOUT = 25.0
 SOURCE_TIMEOUT = 100.0
@@ -273,7 +281,96 @@ class GlobalMap:
         return {**info, "items": self.layer_items(layer)}
 
 
+# ───────────────────────── saved places (operator bookmarks) ─────────────────────────
+
+
+class Places:
+    """Named map views the operator saved: centre, zoom and (optionally) which layers were on.
+    Operator data only: nothing here is a feed, so nothing is invented."""
+
+    def __init__(self, path: Path | None) -> None:
+        self.path = path
+        self.items: list[dict] = []
+        if path:
+            try:
+                d = json.loads(Path(path).read_text(encoding="utf-8"))
+                for raw in (d.get("places") or [])[:MAX_PLACES]:
+                    p, _err = self.clean(raw, known=None)
+                    if p and re.fullmatch(r"[0-9a-f]{8,32}", str(raw.get("id", ""))):
+                        p["id"], p["created"] = raw["id"], float(raw.get("created") or 0)
+                        self.items.append(p)
+            except (OSError, ValueError, AttributeError, TypeError):
+                pass
+
+    @staticmethod
+    def clean(b: dict, known) -> tuple[dict | None, str | None]:
+        if not isinstance(b, dict):
+            return None, "body must be an object"
+        name = gs._txt(b.get("name"), 60)
+        if not name:
+            return None, "name required"
+        try:
+            lat, lon, zoom = float(b.get("lat")), float(b.get("lon")), float(b.get("zoom", 4))
+        except (TypeError, ValueError):
+            return None, "lat, lon and zoom must be numbers"
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180 and 1 <= zoom <= 24):
+            return None, "lat -90..90, lon -180..180, zoom 1..24"
+        out = {"name": name, "lat": round(lat, 4), "lon": round(lon, 4), "zoom": round(zoom, 2)}
+        layers = b.get("layers")
+        if isinstance(layers, dict):
+            out["layers"] = {str(k): bool(v) for k, v in layers.items()
+                             if isinstance(k, str) and (known is None or k in known) and re.fullmatch(r"[a-z_]{1,24}", k)}
+        return out, None
+
+    def save(self) -> None:
+        if self.path:
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_text(Path(self.path), json.dumps({"places": self.items}, indent=1))
+
+    def add(self, b: dict, known) -> tuple[dict | None, str | None]:
+        if len(self.items) >= MAX_PLACES:
+            return None, f"limit of {MAX_PLACES} saved places reached: delete one first"
+        p, err = self.clean(b, known)
+        if err:
+            return None, err
+        p["id"], p["created"] = uuid.uuid4().hex[:12], time.time()
+        self.items.append(p)
+        self.save()
+        return p, None
+
+    def edit(self, pid: str, b: dict, known) -> tuple[dict | None, str | None]:
+        cur = next((p for p in self.items if p["id"] == pid), None)
+        if cur is None:
+            return None, "unknown place"
+        merged = {**cur, **{k: v for k, v in (b if isinstance(b, dict) else {}).items()
+                           if k in ("name", "lat", "lon", "zoom", "layers")}}
+        p, err = self.clean(merged, known)
+        if err:
+            return None, err
+        if "layers" in cur and "layers" not in p:
+            p["layers"] = cur["layers"]
+        cur.clear()
+        cur.update(p, id=pid, created=merged.get("created") or 0)
+        self.save()
+        return cur, None
+
+    def delete(self, pid: str) -> bool:
+        n = len(self.items)
+        self.items = [p for p in self.items if p["id"] != pid]
+        if len(self.items) == n:
+            return False
+        self.save()
+        return True
+
+
 # ───────────────────────── wiring ─────────────────────────
+
+
+def _places(ctx) -> Places:
+    st = ctx["state"]
+    if "globalmap_places" not in st:
+        st["globalmap_places"] = Places(STORE)
+    return st["globalmap_places"]
 
 
 def _engine(ctx) -> GlobalMap:
@@ -314,5 +411,66 @@ def build_router(ctx) -> APIRouter:
         eng.touch(_GROUP.get(key, "core"))
         eng.kick()
         return eng.layer(key)
+
+    # -- saved places: commander-gated, audited, announced to every open dashboard
+    async def _changed(action: str, detail: str) -> None:
+        try:
+            await ctx["audit"](action, detail)
+        except Exception:
+            pass
+        hub = ctx["state"].get("hub")
+        if hub:
+            try:
+                await hub.broadcast({"type": "sync", "topic": "globalmap"})
+            except Exception:
+                pass
+
+    async def _body(request: Request) -> dict:
+        try:
+            b = await request.json()
+        except Exception:
+            b = None
+        return b if isinstance(b, dict) else {}
+
+    def _locked():
+        return JSONResponse({"ok": False, "error": "OBSERVER role: switch to COMMANDER to edit saved places."},
+                            status_code=403)
+
+    def _list() -> dict:
+        return {"ok": True, "places": _places(ctx).items, "max": MAX_PLACES, "commander": bool(ctx["commander"]())}
+
+    @r.get("/api/globalmap/places")
+    async def places_get():
+        return _list()
+
+    @r.post("/api/globalmap/places")
+    async def places_add(request: Request):
+        if not ctx["commander"]():
+            return _locked()
+        p, err = _places(ctx).add(await _body(request), set(LAYERS))
+        if err:
+            return JSONResponse({"ok": False, "error": err}, status_code=400)
+        await _changed("globalmap.place.add", p["name"])
+        return {**_list(), "place": p}
+
+    @r.post("/api/globalmap/places/{pid}")
+    async def places_edit(pid: str, request: Request):
+        if not ctx["commander"]():
+            return _locked()
+        p, err = _places(ctx).edit(pid, await _body(request), set(LAYERS))
+        if err:
+            return JSONResponse({"ok": False, "error": err}, status_code=404 if err == "unknown place" else 400)
+        await _changed("globalmap.place.edit", p["name"])
+        return {**_list(), "place": p}
+
+    @r.delete("/api/globalmap/places/{pid}")
+    async def places_delete(pid: str):
+        if not ctx["commander"]():
+            return _locked()
+        name = next((p["name"] for p in _places(ctx).items if p["id"] == pid), None)
+        if not _places(ctx).delete(pid):
+            return JSONResponse({"ok": False, "error": "unknown place"}, status_code=404)
+        await _changed("globalmap.place.delete", name or pid)
+        return _list()
 
     return r

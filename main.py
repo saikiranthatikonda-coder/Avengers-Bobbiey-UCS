@@ -141,6 +141,13 @@ async def lifespan(app: FastAPI):
 
     weather = WeatherService(hub=hub)
     agenda = Agenda(hub=hub)
+    # operator-edited dashboard state (world clocks, quick access, tasks, local events…)
+    from corestore import CoreStore
+    corestore = CoreStore(ROOT / "dashboard_store.json")
+    state["corestore"] = corestore
+    agenda.set_local_events(corestore.events())
+    agenda.local_tasks = corestore.tasks()
+    news.store = corestore
     gcal = GoogleCalendar(root=ROOT, hub=hub)
     if gcal.credentials_present():
         await hub.broadcast({"type": "log", "level": "info",
@@ -984,8 +991,17 @@ async def refresh_news():
 
 
 @app.get("/api/weather")
-async def weather(lat: float | None = None, lon: float | None = None):
+async def weather(lat: float | None = None, lon: float | None = None, auto: bool = False):
+    # the operator's saved location (WEATHER → LOCATION) wins over the detected one
+    loc = None if auto else (state["corestore"].data.get("weather_location") if state.get("corestore") else None)
+    if loc:
+        data = await state["weather"].get(lat=loc["lat"], lon=loc["lon"])
+        if data and not data.get("error"):
+            data = {**data, "city": loc["name"], "location_mode": "override"}
+        return data or {"error": "unavailable"}
     data = await state["weather"].get(lat=lat, lon=lon)
+    if data and not data.get("error"):
+        data = {**data, "location_mode": "detected" if lat is not None else "default"}
     return data or {"error": "unavailable"}
 
 
@@ -1970,7 +1986,7 @@ def _exit_soon(reason: str) -> None:
 import importlib  # noqa: E402
 
 FEATURE_MODULES = ("disaster", "devices", "secagent", "computeruse", "phone", "evolution", "agentos", "globalmap",
-                   "dashboard_context")
+                   "dashboard_context", "customagents", "openintel")
 _feature_ctx = {"state": state, "audit": lambda action, detail="": _audit(action, detail),
                 "commander": lambda: _commander(), "host_only": lambda request: _host_only(request)}
 for _name in FEATURE_MODULES:
@@ -2583,6 +2599,7 @@ async def productivity_get():
 class ProdReq(BaseModel):
     action: str            # task | task_done | focus_start | focus_stop
     text: str | None = None
+    minutes: int | None = None     # action=goal: daily deep-work target
 
 
 @app.post("/api/productivity")
@@ -2591,10 +2608,12 @@ async def productivity_post(req: ProdReq):
         return _locked()
     p = state["productivity"]
     acts = {"task": lambda: p.set_task(req.text or ""), "task_done": p.complete_task,
-            "focus_start": p.focus_start, "focus_stop": p.focus_stop}
+            "focus_start": p.focus_start, "focus_stop": p.focus_stop,
+            "goal": lambda: p.set_goal(req.minutes)}
     if req.action not in acts:
         return {"error": f"unknown action: {req.action}"}
-    await _audit("productivity." + req.action, (req.text or "")[:60])
+    await _audit("productivity." + req.action,
+                 (req.text or "")[:60] if req.action != "goal" else f"{req.minutes} min/day")
     res = await acts[req.action]()
     await _sync("productivity")
     return res
@@ -2693,6 +2712,12 @@ async def agenda_summary():
     text = text.strip()[:300]
     _agenda_summary_cache.update(ts=now, text=text, sig=sig)
     return {"summary": text}
+
+
+# core dashboard editing (notes, tasks, local events, clocks, quick access, …): coreedit.py
+import sys as _sys
+import coreedit
+app.include_router(coreedit.build_router(_sys.modules[__name__]))
 
 
 @app.websocket("/ws")
