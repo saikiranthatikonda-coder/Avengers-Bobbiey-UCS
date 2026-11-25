@@ -5,6 +5,16 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-25 — v8.3.1 · Remaining edit abilities in the feature sections
+- **Devices:** you can now edit a device after adding it. Change its name, room/group and connection settings from its detail view (✎ EDIT).
+  - A password or token left blank stays as stored; it is only replaced if you type a new one.
+  - Changed addresses are re-checked and must still be on your local network.
+  - Every edit is audited. Credentials are never shown.
+- **Cyber Analyst:** the scan schedule can now be changed (✎ SCHEDULE). Set how often the full scan (1–48 h) and the light check (10–240 min) run, or pause automatic scans. The change applies immediately and survives a restart.
+- **Computer Use:** you can save tasks as templates, load a template back into the task box, and delete templates. Clicking a past task re-uses it. Running a task still goes through RUN TASK and every safety gate.
+- Already editable before this release: phone contacts (including consent and do-not-call), AI Core memory entries, and accept-risk with undo.
+- **Tests:** a new test file covers device editing, the scan schedule and templates, including restarts and observer refusals. One flaky snapshot test was made stable.
+
 ## 2026-11-22 — v8.3.0 · Custom agents, Open Intelligence, edit everything
 - **feat: CUSTOM AGENTS.** Build your own team members:
   - Set name, 3-letter tag, role, persona, wake phrases, colour and icon, voice, and model (the active brain by default).

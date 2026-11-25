@@ -19,6 +19,7 @@ Safety (CLAUDE.md §6g spirit, non-negotiable):
 
 from __future__ import annotations
 
+import secrets
 import asyncio
 import json
 import os
@@ -38,6 +39,7 @@ import computeruse_models as models
 
 ROOT = Path(__file__).parent
 DATA = ROOT / ".update" / "computeruse"
+MAX_TEMPLATES = 30          # saved task templates (DATA/templates.json)
 FRAMES = DATA / "frames"
 FRAME_TTL = 600                    # seconds a finished task's screenshots are kept for review
 APPROVAL_TIMEOUT = 300
@@ -160,6 +162,7 @@ class Engine:
         self.frames = self.data / "frames"
         self.settings, _ = sanitize_settings(self._load("settings.json", {}))
         self.history: list[dict] = self._load("history.json", [])[:30]
+        self.templates: list[dict] = [t for t in self._load("templates.json", []) if isinstance(t, dict)][:MAX_TEMPLATES]
         self.task: dict | None = None
         self.ctl: core.TaskControl | None = None
         self.runner: asyncio.Task | None = None
@@ -260,6 +263,7 @@ class Engine:
         return {"status": self.status(), "task": cur, "pending": pending,
                 "paused_reason": self.ctl.paused_reason if self.ctl else "",
                 "settings": self.settings, "history": self.history[:20], "events": self.events[:15],
+                "templates": self.templates,
                 "candidates": self.candidates, "chosen": models.pick(self.candidates, self.settings["adapter"]),
                 "no_model": bool(self.candidates) and not avail, "howto": models.HOWTO_NONE,
                 "permissions": {k: perm.get(k) for k in ("platform", "ok", "screen", "input", "problems", "howto", "dpi")},
@@ -946,6 +950,52 @@ def build_router(ctx) -> APIRouter:
         if (g := gate(request)):
             return g
         return eng.reply(req.text)
+
+    # ── saved task templates: text only; running one still goes through /task and every gate ──
+    @r.post("/api/computeruse/templates")
+    async def cu_template_save(body: dict, request: Request):
+        if (g := gate(request, need_host=False)):
+            return g
+        name = " ".join(str(body.get("name") or "").split())[:60]
+        task = str(body.get("task") or "").strip()[:1000]
+        if not name or not task:
+            return {"ok": False, "error": "a template needs a name and a task"}
+        tid = str(body.get("id") or "")[:16]
+        t = next((x for x in eng.templates if x.get("id") == tid), None) if tid else None
+        if t is None and any(x.get("name", "").lower() == name.lower() for x in eng.templates):
+            t = next(x for x in eng.templates if x.get("name", "").lower() == name.lower())
+        if t is None:
+            if len(eng.templates) >= MAX_TEMPLATES:
+                return {"ok": False, "error": f"template limit reached ({MAX_TEMPLATES})"}
+            t = {"id": secrets.token_hex(4), "created": time.time()}
+            eng.templates.insert(0, t)
+        t.update(name=name, task=task, updated=time.time())
+        eng._save("templates.json", eng.templates)
+        await eng._audit("computeruse.template.save", name)
+        await _tpl_sync()
+        return {"ok": True, "template": t, "templates": eng.templates}
+
+    @r.post("/api/computeruse/templates/{tid}/delete")
+    async def cu_template_delete(tid: str, request: Request):
+        if (g := gate(request, need_host=False)):
+            return g
+        before = len(eng.templates)
+        gone = [x for x in eng.templates if x.get("id") == tid]
+        eng.templates = [x for x in eng.templates if x.get("id") != tid]
+        if len(eng.templates) == before:
+            return {"ok": False, "error": "unknown template"}
+        eng._save("templates.json", eng.templates)
+        await eng._audit("computeruse.template.delete", gone[0].get("name", tid))
+        await _tpl_sync()
+        return {"ok": True, "templates": eng.templates}
+
+    async def _tpl_sync():
+        hub = ctx["state"].get("hub")
+        if hub is not None:
+            try:
+                await hub.broadcast({"type": "sync", "topic": "computeruse"})
+            except Exception:
+                pass
 
     @r.post("/api/computeruse/settings")
     async def cu_settings(body: dict, request: Request):

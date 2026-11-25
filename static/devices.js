@@ -98,7 +98,9 @@
       </div>
       <div class="mb-list">${st.detail ? `<div class="mb-row">${esc(st.detail)}</div>` : ""}
         <div class="mb-row">Controls for this device are on its row in MY DEVICES. Removing it only forgets it in BUCS; the device itself is not changed.</div></div>
-      <div class="mb-actions"><button class="cmd-btn" type="button" data-dv-remove="${esc(d.id)}">REMOVE FROM BUCS</button></div>
+      <div class="mb-actions"><button class="cmd-btn" type="button" data-dv-edit="${esc(d.id)}">✎ EDIT</button>
+        <button class="cmd-btn" type="button" data-dv-remove="${esc(d.id)}">REMOVE FROM BUCS</button></div>
+      <form class="dv-edit" id="dv-edit-form" data-id="${esc(d.id)}" hidden></form>
       <div class="si-src"><span class="lbl">DATA SOURCE</span> devices.py adapter status check <code>/api/devices</code> · read ${new Date().toLocaleTimeString()}</div>`;
     if (typeof openCustomModal === "function") openCustomModal(d.name, "DEVICE · " + String(d.label || d.kind).toUpperCase(), null, html);
   }
@@ -321,6 +323,50 @@
     if (o) { const d = data.devices.find(x => x.id === o.dataset.dvOpen); if (d) openDevice(d); return; }
     if (ev.target.closest("[data-act-scan]")) { showTab("disc"); document.getElementById("dv-scan").click(); }
   });
+  // ── edit a device in place (name, room, connection; secrets kept unless re-entered) ──
+  document.addEventListener("click", (ev) => {
+    const e = ev.target.closest("#tool-modal [data-dv-edit]");
+    if (!e) return;
+    const dev = data.devices.find(x => x.id === e.dataset.dvEdit); if (!dev) return;
+    const a = data.adapters[dev.kind] || { fields: [] };
+    const form = document.getElementById("dv-edit-form"); if (!form) return;
+    const dis = data.commander ? "" : " disabled";
+    form.innerHTML = `<label class="dv-lbl">Name<input class="dv-in" name="name" maxlength="60" value="${esc(dev.name || "")}" required${dis}/></label>
+      <label class="dv-lbl">Room / group<input class="dv-in" name="room" maxlength="40" value="${esc(dev.room || "")}" placeholder="e.g. Living room"${dis}/></label>` +
+      a.fields.map(f => {
+        const secret = f.secret || f.type === "password";
+        const val = secret ? "" : (dev[f.key] == null ? "" : dev[f.key]);
+        const ph = secret ? (dev["has_" + f.key] ? "unchanged (type to replace)" : f.label) : f.label + (f.required ? " *" : "");
+        return `<label class="dv-lbl">${esc(f.label)}<input class="dv-in" name="${esc(f.key)}" type="${secret ? "password" : f.type === "number" ? "number" : "text"}"
+          value="${esc(val)}" placeholder="${esc(ph)}" maxlength="2000" autocomplete="off"${dis}/></label>`;
+      }).join("") +
+      `<div class="mb-actions"><button class="cmd-btn" type="submit"${dis}>SAVE CHANGES</button>
+        <button class="cmd-btn" type="button" data-dv-edit-cancel>CANCEL</button><span class="dv-edit-msg" role="status"></span></div>
+      ${data.commander ? "" : '<div class="mb-row">OBSERVER role: switch to COMMANDER to edit devices.</div>'}`;
+    form.hidden = false;
+    const first = form.querySelector("input"); if (first) first.focus();
+  });
+  document.addEventListener("click", (ev) => {
+    if (!ev.target.closest("#tool-modal [data-dv-edit-cancel]")) return;
+    const form = document.getElementById("dv-edit-form"); if (form) { form.hidden = true; form.innerHTML = ""; }
+  });
+  document.addEventListener("submit", async (ev) => {
+    const form = ev.target.closest("#dv-edit-form");
+    if (!form) return;
+    ev.preventDefault();
+    const body = {};
+    form.querySelectorAll("input[name]").forEach(i => { body[i.name] = i.type === "number" && i.value !== "" ? +i.value : i.value; });
+    const btn = form.querySelector("button[type=submit]"), msg = form.querySelector(".dv-edit-msg");
+    btn.disabled = true; btn.textContent = "SAVING…"; msg.textContent = "";
+    const res = await api(`/api/devices/${encodeURIComponent(form.dataset.id)}`, body);
+    btn.disabled = false; btn.textContent = "SAVE CHANGES";
+    if (!res.ok) { msg.textContent = res.error || "not saved"; return; }
+    log(`Device updated: ${res.device.name}`, "info");
+    try { closeToolModal(); } catch (e) {}
+    await load();
+    const d = data.devices.find(x => x.id === res.device.id); if (d) openDevice(d);
+  });
+
   document.addEventListener("click", async (ev) => {
     const r = ev.target.closest("#tool-modal [data-dv-remove]");
     if (!r) return;

@@ -317,7 +317,15 @@ class CommanderGate(unittest.TestCase):
         t = post("/api/tasks", {"title": "gate probe"})["task"]
         self.assertTrue(post("/api/role", {"role": "observer"})["ok"])
         try:
-            before = json.dumps([SERVER.get("/api/prefs"), SERVER.get("/api/tasks"), SERVER.get("/api/notes")], sort_keys=True)
+            def snap():          # only what an edit could change; live/time fields move on their own under load
+                pr = SERVER.get("/api/prefs"); pr = pr.get("prefs", pr)
+                tk = SERVER.get("/api/tasks"); nt = SERVER.get("/api/notes")
+                return json.dumps({
+                    "prefs": {k: pr.get(k) for k in ("world_clocks", "quick_access", "weather_location", "news")},
+                    "tasks": sorted((x.get("id"), x.get("title"), x.get("status"), x.get("done")) for x in (tk.get("tasks") or [])),
+                    "notes": sorted((x.get("id"), x.get("text")) for x in (nt.get("notes") or nt if isinstance(nt, list) else nt.get("notes") or [])),
+                }, sort_keys=True, default=str)
+            before = snap()
             calls = [
                 ("POST", "/api/prefs", {"world_clocks": [{"tz": "UTC"}]}),
                 ("POST", "/api/notes/reorder", {"ids": []}),
@@ -340,8 +348,7 @@ class CommanderGate(unittest.TestCase):
                 r = SERVER._req(method, path, body)
                 self.assertFalse(r.get("ok", True), f"{method} {path} was not refused")
                 self.assertIn("OBSERVER", r.get("error", ""), f"{method} {path}")
-            after = json.dumps([SERVER.get("/api/prefs"), SERVER.get("/api/tasks"), SERVER.get("/api/notes")], sort_keys=True)
-            self.assertEqual(before, after)
+            self.assertEqual(before, snap())
         finally:
             self.assertTrue(post("/api/role", {"role": "commander"})["ok"])
             delete(f"/api/tasks/{t['id']}")

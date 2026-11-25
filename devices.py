@@ -828,6 +828,48 @@ def build_router(ctx) -> APIRouter:
             await refresh(did)
         return {**res, "device": public(d)}
 
+    @router.post("/api/devices/{did}")
+    async def device_edit(did: str, request: Request):
+        """Edit a device in place: name, room and its connection fields. A secret left blank or
+        sent back as its mask keeps the stored value; the address is re-vetted (LAN only)."""
+        if not commander():
+            return _locked()
+        if not host_only(request):
+            return _hostonly()
+        old = _devices.get(did)
+        if not old:
+            return _bad("unknown device", 404)
+        b = await _body(request)
+        merged = {k: v for k, v in old.items() if k not in ("id", "added", "kind", "room")}
+        for f in ADAPTERS[old["kind"]]["fields"]:
+            if f["key"] in b:
+                v = b[f["key"]]
+                if f.get("secret") or f["key"] in SECRET_KEYS:
+                    if v in (None, "") or (isinstance(v, str) and v.startswith("••")):
+                        continue                         # keep the stored secret
+                merged[f["key"]] = v
+        if "name" in b:
+            merged["name"] = b.get("name")
+        try:
+            d = _clean(old["kind"], merged)
+            await target(d)
+        except Refused as e:
+            return _bad(str(e), 403)
+        except (ValueError, TypeError) as e:
+            return _bad(str(e))
+        room = str(b.get("room", old.get("room", "")) or "").strip()[:40]
+        d.update(id=did, added=old.get("added", time.time()), updated=time.time())
+        if room:
+            d["room"] = room
+        _devices[did] = d
+        save()
+        changed = sorted(k for k in set(d) | set(old)
+                         if k not in ("updated",) and k not in SECRET_KEYS and d.get(k) != old.get(k))
+        await audit("devices.edit", f"{d['kind']} '{d['name']}' · changed: {', '.join(changed) or 'nothing'}"
+                    + (" · credential replaced" if any(d.get(k) != old.get(k) for k in SECRET_KEYS) else ""))
+        await refresh(did)
+        return {"ok": True, "device": public(d)}
+
     @router.post("/api/devices/{did}/remove")
     async def device_remove(did: str, request: Request):
         if not commander():

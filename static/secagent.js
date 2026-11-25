@@ -163,7 +163,10 @@
     $s("sa-intel").innerHTML = `
       <div><span><a class="src-link" href="https://osv.dev/" target="_blank" rel="noopener noreferrer">OSV.dev ↗</a></span><b>${esc(ago(i.osv_updated))}</b><em>${esc(i.osv_cached || 0)} advisories cached</em></div>
       <div><span><a class="src-link" href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener noreferrer">CISA KEV ↗</a></span><b>${esc(ago(i.kev_updated))}</b><em>${i.kev_version ? "catalog " + esc(i.kev_version) + " · " + esc(i.kev_count) + " entries" : "not loaded"}</em></div>
-      <div><span>NEXT FULL</span><b>${d.next_full ? esc(new Date(d.next_full * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })) : "—"}</b><em>light checks every 30 min</em></div>`;
+      <div><span>NEXT FULL</span><b>${(d.schedule || {}).paused ? "PAUSED" : d.next_full ? esc(new Date(d.next_full * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })) : "—"}</b>
+        <em>full every ${esc((d.schedule || {}).full_h ?? 6)} h · light every ${esc((d.schedule || {}).light_min ?? 30)} min ·
+        <button type="button" class="ft-link" id="sa-sched-btn">✎ SCHEDULE</button></em></div>`;
+    renderSchedule(d.schedule || {});
     const ch = Object.entries(d.checks || {});
     if (ch.length) $s("sa-checks").innerHTML = ch.map(([k, v]) => `
       <div class="sa-chk ${esc(v.status)}" data-chk="${esc(k)}" role="button" tabindex="0" title="${esc(v.detail)} · click for detail"><span class="hc-dot"></span>
@@ -212,6 +215,38 @@
     btn.textContent = lab; btn.disabled = false;
     setTimeout(refresh, 800);
   }
+  // ── scan schedule (commander-gated, saved on the server, applied immediately) ──
+  let schedOpen = false;
+  function renderSchedule(s) {
+    let box = document.getElementById("sa-sched");
+    if (!box) {
+      box = document.createElement("form"); box.id = "sa-sched"; box.className = "sa-sched"; box.hidden = true;
+      const intel = $s("sa-intel"); intel.parentNode.insertBefore(box, intel.nextSibling);
+    }
+    if (schedOpen && box.contains(document.activeElement)) return;          // don't clobber typing
+    const fr = s.full_range_h || [1, 48], lr = s.light_range_min || [10, 240];
+    box.innerHTML = `<label>Full scan every <input type="number" name="full_h" min="${fr[0]}" max="${fr[1]}" value="${esc(s.full_h ?? 6)}"/> h</label>
+      <label>Light check every <input type="number" name="light_min" min="${lr[0]}" max="${lr[1]}" value="${esc(s.light_min ?? 30)}"/> min</label>
+      <label class="sa-sched-p"><input type="checkbox" name="paused"${s.paused ? " checked" : ""}/> Pause automatic scans</label>
+      <button class="cmd-btn" type="submit">SAVE</button><span class="sa-sched-msg" role="status"></span>`;
+    box.hidden = !schedOpen;
+  }
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#sa-sched-btn")) return;
+    schedOpen = !schedOpen; const box = document.getElementById("sa-sched"); if (box) box.hidden = !schedOpen;
+  });
+  document.addEventListener("submit", async (e) => {
+    const f = e.target.closest("#sa-sched"); if (!f) return;
+    e.preventDefault();
+    const btn = f.querySelector("button"), msg = f.querySelector(".sa-sched-msg");
+    btn.disabled = true; btn.textContent = "SAVING…";
+    const r = await post("/api/secagent/schedule", { full_h: +f.full_h.value, light_min: +f.light_min.value, paused: f.paused.checked });
+    btn.disabled = false; btn.textContent = "SAVE";
+    msg.textContent = r.ok ? "saved" : (r.error || "not saved");
+    if (r.ok) { log(`scan schedule updated: full ${r.schedule.full_h} h · light ${r.schedule.light_min} min${r.schedule.paused ? " · paused" : ""}`); refresh(); }
+  });
+  window.addEventListener("bucs:sync", (e) => { if (e.detail && e.detail.topic === "secagent") refresh(); });
+
   $s("sa-scan").addEventListener("click", (e) => scan(true, e.currentTarget));
   $s("sa-light").addEventListener("click", (e) => scan(false, e.currentTarget));
   $s("sa-brief-btn").addEventListener("click", async (e) => {

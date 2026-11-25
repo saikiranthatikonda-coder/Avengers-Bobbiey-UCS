@@ -77,3 +77,10 @@ button.dv-name:hover { color: var(--accent); text-decoration: underline; }
 .dv-form { max-width: 640px; }
 .dv-disc { max-height: 280px; }
 .dv-card.is-error .ft-kicker { color: var(--error); }
+
+/* device edit form (detail modal) */
+.dv-edit { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 0.5rem; margin-top: 0.6rem; }
+.dv-edit[hidden] { display: none; }
+.dv-edit .mb-actions, .dv-edit .mb-row { grid-column: 1 / -1; }
+.dv-lbl { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.68rem; color: var(--text-dim); }
+.dv-edit-msg { font-size: 0.72rem; color: var(--error); margin-left: 0.4rem; }

@@ -97,3 +97,9 @@ textarea.cu-input { width: 100%; resize: vertical; line-height: 1.4; }
 
 /* the [hidden] attribute must win over display:flex/grid on these blocks */
 #computeruse-mount [hidden] { display: none !important; }
+
+/* saved task templates */
+.cu-tpl { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.7rem; margin: 0.4rem 0 0.2rem; }
+.cu-tpl .cu-select { flex: 1 1 160px; min-width: 0; }
+#cu-hist .cu-h[data-task] { cursor: pointer; }
+#cu-hist .cu-h[data-task]:hover, #cu-hist .cu-h[data-task]:focus-visible { outline: none; background: color-mix(in srgb, var(--accent) 8%, transparent); }

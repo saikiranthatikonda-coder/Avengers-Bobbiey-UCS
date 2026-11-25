@@ -51,6 +51,20 @@ OS = platform.system()
 
 FULL_EVERY = 6 * 3600          # deps + secrets + KEV + everything
 LIGHT_EVERY = 30 * 60          # exposure + config
+# operator-adjustable schedule (persisted; clamped so a bad value can never spin the loop)
+SCHEDULE_DEFAULT = {"full_h": FULL_EVERY // 3600, "light_min": LIGHT_EVERY // 60, "paused": False}
+FULL_H_RANGE, LIGHT_MIN_RANGE = (1, 48), (10, 240)
+
+
+def clean_schedule(patch: dict, base: dict | None = None) -> dict:
+    s = dict(base or SCHEDULE_DEFAULT)
+    if "full_h" in patch:
+        s["full_h"] = max(FULL_H_RANGE[0], min(FULL_H_RANGE[1], int(patch["full_h"])))
+    if "light_min" in patch:
+        s["light_min"] = max(LIGHT_MIN_RANGE[0], min(LIGHT_MIN_RANGE[1], int(patch["light_min"])))
+    if "paused" in patch:
+        s["paused"] = bool(patch["paused"])
+    return s
 KEV_EVERY = 24 * 3600
 OSV_DETAIL_TTL = 7 * 24 * 3600
 SCAN_COOLDOWN = 120            # manual scans: one per 2 min
@@ -741,6 +755,8 @@ class SecAgent:
         self.findings: dict[str, list[dict]] = {c: [] for c in CATEGORIES}
         self.checks: dict[str, dict] = {}
         self.accepted: dict[str, dict] = {}         # finding id OR "rule:<rule>" → {ts, note, by}
+        self.schedule: dict = dict(SCHEDULE_DEFAULT)
+        self._wake = asyncio.Event()
         self.history: list[dict] = []
         self.log: list[dict] = []
         self.intel: dict = {"ruleset": RULESET_VERSION, "osv_updated": None, "kev_updated": None, "osv": {},
@@ -771,6 +787,10 @@ class SecAgent:
         self.last_full, self.last_light = d.get("last_full") or 0.0, d.get("last_light") or 0.0
         self.brief = d.get("brief")
         self.proposals = (d.get("proposals") or [])[-20:]
+        try:
+            self.schedule = clean_schedule(d.get("schedule") or {})
+        except (TypeError, ValueError):
+            self.schedule = dict(SCHEDULE_DEFAULT)
 
     def _save(self) -> None:
         try:
@@ -780,7 +800,8 @@ class SecAgent:
                 "ruleset": RULESET_VERSION, "intel": self.intel, "accepted": self.accepted,
                 "history": self.history[-120:], "log": self.log[:60], "findings": self.findings,
                 "checks": self.checks, "last_full": self.last_full, "last_light": self.last_light,
-                "brief": self.brief, "proposals": self.proposals[-20:]}, indent=1))
+                "brief": self.brief, "proposals": self.proposals[-20:],
+                "schedule": getattr(self, "schedule", SCHEDULE_DEFAULT)}, indent=1))
         except Exception:
             pass
 
@@ -828,8 +849,34 @@ class SecAgent:
                       "kev_updated": self.intel.get("kev_updated"), "kev_version": kev.get("version"),
                       "kev_count": kev.get("count"), "osv_cached": len(self.intel.get("osv") or {})},
             "log": self.log[:25], "brief": self.brief, "proposals": self.proposals[-5:],
-            "next_full": (self.last_full + FULL_EVERY) if self.last_full else None,
+            "next_full": ((self.last_full + self.full_every()) if self.last_full else None)
+                         if not self.schedule.get("paused") else None,
+            "schedule": {**self.schedule, "full_range_h": list(FULL_H_RANGE), "light_range_min": list(LIGHT_MIN_RANGE)},
         }
+
+    def full_every(self) -> int:
+        return int(self.schedule.get("full_h", SCHEDULE_DEFAULT["full_h"])) * 3600
+
+    def light_every(self) -> int:
+        return int(self.schedule.get("light_min", SCHEDULE_DEFAULT["light_min"])) * 60
+
+    async def set_schedule(self, patch: dict, by: str = "commander") -> dict:
+        try:
+            new = clean_schedule(patch, self.schedule)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "full_h and light_min must be whole numbers"}
+        old, self.schedule = self.schedule, new
+        self._save()
+        self._wake.set()                              # the loop re-reads the schedule now
+        await self._note(f"scan schedule: full every {new['full_h']} h, light every {new['light_min']} min"
+                         + (" · PAUSED" if new["paused"] else ""), audit="secagent.schedule")
+        hub = self.state.get("hub")
+        if hub is not None:
+            try:
+                await hub.broadcast({"type": "sync", "topic": "secagent"})
+            except Exception:
+                pass
+        return {"ok": True, "schedule": new, "previous": old}
 
     def _check(self, name: str, status: str, detail: str) -> None:
         self.checks[name] = {"status": status, "detail": detail, "ts": _now()}
@@ -1215,9 +1262,9 @@ class SecAgent:
         await asyncio.sleep(90)                       # let boot settle
         while True:
             lic = self.state.get("licensing")
-            if lic is None or getattr(lic, "paid", True):
+            if (lic is None or getattr(lic, "paid", True)) and not self.schedule.get("paused"):
                 try:
-                    full = _now() - (self.last_full or 0) >= FULL_EVERY
+                    full = _now() - (self.last_full or 0) >= self.full_every()
                     await self.scan(full=full, reason="auto")
                 except asyncio.CancelledError:
                     raise
@@ -1226,7 +1273,11 @@ class SecAgent:
                         await self._note(f"scan loop error: {type(e).__name__}", "error")
                     except Exception:
                         pass
-            await asyncio.sleep(LIGHT_EVERY)
+            self._wake.clear()
+            try:
+                await asyncio.wait_for(self._wake.wait(), timeout=self.light_every())
+            except asyncio.TimeoutError:
+                pass
 
 
 # ═══ wiring (main.py FEATURE_MODULES) ════════════════════════════════════════
@@ -1242,6 +1293,12 @@ def _agent(ctx) -> SecAgent:
 
 class ScanReq(BaseModel):
     full: bool = True
+
+
+class ScheduleReq(BaseModel):
+    full_h: int | None = None
+    light_min: int | None = None
+    paused: bool | None = None
 
 
 class AcceptReq(BaseModel):
@@ -1287,6 +1344,12 @@ def build_router(ctx) -> APIRouter:
         if not ctx["commander"]():
             return _LOCKED
         return await agent.accept(req.id[:300], req.note, "rule" if req.scope == "rule" else "finding", req.undo)
+
+    @r.post("/api/secagent/schedule")
+    async def secagent_schedule(req: ScheduleReq):
+        if not ctx["commander"]():
+            return _LOCKED
+        return await agent.set_schedule({k: v for k, v in req.model_dump().items() if v is not None})
 
     @r.post("/api/secagent/propose")
     async def secagent_propose(req: ProposeReq, request: Request):

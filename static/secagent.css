@@ -113,3 +113,12 @@ button.sa-gauge-wrap:hover { border-color: var(--panel-edge); }
   button.sa-gauge-wrap { max-width: 180px; margin: 0 auto; }
   .sa-top-r .ft-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* scan schedule editor */
+.sa-sched { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; margin: 0.5rem 0; padding: 0.55rem 0.7rem;
+  border: 1px solid var(--panel-edge); border-radius: 8px; font-size: 0.72rem; color: var(--text-dim); }
+.sa-sched[hidden] { display: none; }
+.sa-sched input[type=number] { width: 4.2rem; min-height: 28px; padding: 0.2rem 0.35rem; font: inherit; color: var(--text);
+  background: rgba(2, 8, 16, 0.6); border: 1px solid var(--panel-edge); border-radius: 5px; }
+.sa-sched-p { display: inline-flex; align-items: center; gap: 0.3rem; }
+.sa-sched-msg { font-size: 0.7rem; }

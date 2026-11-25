@@ -26,6 +26,11 @@
       <div class="cu-left">
         <div class="intel-divider">TASK</div>
         <textarea id="cu-task" class="cu-input" rows="3" maxlength="1000" placeholder="e.g. Open Notepad and type: hello from BUCS"></textarea>
+        <div class="cu-tpl" id="cu-tpl">
+          <select id="cu-tpl-sel" class="cu-select" title="Saved task templates" aria-label="Saved task templates"><option value="">TEMPLATES…</option></select>
+          <button class="ft-link" id="cu-tpl-save" type="button" title="Save the task text above as a template">＋ SAVE AS TEMPLATE</button>
+          <button class="ft-link" id="cu-tpl-del" type="button" title="Delete the selected template" disabled>✕ DELETE</button>
+        </div>
         <div class="cu-row">
           <select id="cu-adapter" class="cu-select" title="Vision model"></select>
           <button class="cmd-btn cu-go" id="cu-start" type="button">RUN TASK</button>
@@ -155,10 +160,54 @@
     if (atBottom) list.scrollTop = list.scrollHeight;
   }
 
+  // ── saved templates (load into the task box; RUN TASK still goes through every gate) ──
+  let templates = [];
+  function renderTemplates(d) {
+    templates = d.templates || [];
+    const sel = $c("cu-tpl-sel"), cur = sel.value;
+    const html = `<option value="">${templates.length ? "TEMPLATES · " + templates.length : "no templates yet"}</option>` +
+      templates.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
+    if (sel.dataset.h !== html) { sel.innerHTML = html; sel.dataset.h = html; if (templates.some((t) => t.id === cur)) sel.value = cur; }
+    $c("cu-tpl-del").disabled = !sel.value;
+  }
+  $c("cu-tpl-sel").addEventListener("change", (e) => {
+    const t = templates.find((x) => x.id === e.target.value);
+    $c("cu-tpl-del").disabled = !t;
+    if (t) { $c("cu-task").value = t.task; $c("cu-task").focus(); }
+  });
+  $c("cu-tpl-save").addEventListener("click", async (e) => {
+    const task = $c("cu-task").value.trim();
+    if (!task) { log("Type a task first, then save it as a template.", "warn"); return; }
+    const sel = templates.find((x) => x.id === $c("cu-tpl-sel").value);
+    const name = prompt("Template name:", sel ? sel.name : task.slice(0, 40));
+    if (!name) return;
+    const b = e.currentTarget; b.disabled = true;
+    const r = await fetch("/api/computeruse/templates", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, task, id: sel && sel.name === name ? sel.id : undefined }) }).then((x) => x.json()).catch((er) => ({ ok: false, error: er.message }));
+    b.disabled = false;
+    if (!r.ok) { log(esc(r.error || "template not saved"), "warn"); return; }
+    renderTemplates(r); $c("cu-tpl-sel").value = r.template.id; $c("cu-tpl-del").disabled = false;
+    log(`template saved: ${esc(r.template.name)}`);
+  });
+  $c("cu-tpl-del").addEventListener("click", async () => {
+    const t = templates.find((x) => x.id === $c("cu-tpl-sel").value); if (!t) return;
+    if (!confirm(`Delete the template "${t.name}"?`)) return;
+    const r = await fetch(`/api/computeruse/templates/${encodeURIComponent(t.id)}/delete`, { method: "POST" }).then((x) => x.json()).catch((er) => ({ ok: false, error: er.message }));
+    if (!r.ok) { log(esc(r.error || "not deleted"), "warn"); return; }
+    $c("cu-tpl-sel").value = ""; renderTemplates(r); log(`template deleted: ${esc(t.name)}`);
+  });
+  // a past task can be re-used: click its row to load it into the task box
+  document.addEventListener("click", (e) => {
+    const row = e.target.closest("#cu-hist .cu-h[data-task]"); if (!row) return;
+    $c("cu-task").value = row.dataset.task; $c("cu-task").focus();
+  });
+  window.addEventListener("bucs:sync", (e) => { if (e.detail && e.detail.topic === "computeruse" && typeof refresh === "function") refresh(); });
+
   function renderHistory(d) {
+    renderTemplates(d);
     const h = d.history || [];
     $c("cu-hist").innerHTML = h.length ? h.slice(0, 10).map((x) => `
-      <div class="cu-h ${esc(x.status)}" title="${esc(x.summary || x.error)}"><span class="cu-h-s">${esc(String(x.status).toUpperCase())}</span>
+      <div class="cu-h ${esc(x.status)}" data-task="${esc(x.task)}" role="button" tabindex="0" title="${esc(x.summary || x.error)} · click to re-use this task"><span class="cu-h-s">${esc(String(x.status).toUpperCase())}</span>
         <span class="cu-h-t">${esc(x.task)}</span><span class="cu-h-m">${x.steps} steps · ${esc(new Date(x.started * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }))}</span>
         <span class="cu-h-r">${esc(x.summary || x.error)}</span></div>`).join("") : `<div class="tf-empty">none</div>`;
   }
