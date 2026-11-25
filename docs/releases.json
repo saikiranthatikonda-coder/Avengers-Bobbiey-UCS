@@ -1,13 +1,13 @@
 {
   "kind": "bucs-release",
-  "version": "8.3.0",
-  "date": "2026-11-17",
-  "commit": "7c59a9a",
+  "version": "8.3.1",
+  "date": "2026-11-25",
+  "commit": "38ca4ee",
   "notes": [
-    "v8.3.0: create your own custom agents; new OPEN INTELLIGENCE deck with live keyless open data (air quality, launches, asteroids, ISS, exchange rates, arXiv, Hacker News, CO2, WHO outbreaks, holidays); edit world clocks, quick access, weather location, news sources, notes, events, tasks, incidents, decisions, operators and goals; disaster radius and saved map places."
+    "v8.3.1: edit devices after adding them (name, room, connection; credentials kept unless re-entered); change the Cyber Analyst scan schedule or pause it; save Computer Use tasks as templates and re-use past tasks."
   ],
-  "url": "releases/bucs-8.3.0.zip",
-  "sha256": "b20a17812941968649be7359446c8654707ee55ab7be98d0dc05458568fc5af1",
-  "size": 912999,
-  "sig": "wnx6e2XKKtEseke742j7_hoGSjLwWv9HDkHYSbPok-a4MfpMKhqX5UCdeJI9Ta6luieRx-KaTJMv1X9I7i9cBg"
+  "url": "releases/bucs-8.3.1.zip",
+  "sha256": "3379b44588bbb7e2885d3edf1951dc44f44bdc6b71bed4be239d831d2d5a993b",
+  "size": 918030,
+  "sig": "lgho5Z3c_vipVGHaeGLesJJIwEnOGoUpMSJjLLSJy7usu_nbg504ZIUdnm6AyYvw_bOmT_NNw0uIusEDfQdIAg"
 }
