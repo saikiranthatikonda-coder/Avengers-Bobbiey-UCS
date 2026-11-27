@@ -30,7 +30,6 @@
   input.parentNode.insertBefore(field, input); field.appendChild(input);
   field.insertAdjacentHTML("beforeend", `
     <button type="button" class="dict-mic" id="dict-mic" aria-label="Dictate: speak instead of typing (Alt+M)" title="Dictate: speak instead of typing (Alt+M)" aria-pressed="false">${MIC_SVG}</button>
-    <button type="button" class="dict-opt" id="dict-opt" aria-label="Dictation settings" aria-haspopup="dialog" aria-expanded="false" title="Dictation language and engine">▾</button>
     <div class="dict-rec" id="dict-rec" hidden role="status" aria-live="polite">
       <span class="dict-dot" aria-hidden="true"></span>
       <canvas class="dict-wave" id="dict-wave" aria-hidden="true"></canvas>
@@ -39,11 +38,20 @@
       <button type="button" class="dict-x" id="dict-cancel" aria-label="Cancel dictation (Esc)" title="Cancel (Esc)">✕</button>
       <button type="button" class="dict-ok" id="dict-done" aria-label="Finish and insert text (Enter)" title="Done (Enter)">✓</button>
     </div>`);
-  const sel = document.createElement("select");
-  sel.id = "ask-agent"; sel.className = "ask-agent"; sel.setAttribute("aria-label", "Send to agent");
-  sel.title = "Which agent receives this. AUTO lets the team route it; @name in the text also works.";
-  sel.innerHTML = `<option value="">AUTO</option>`;
-  form.insertBefore(sel, field);
+  // second row: who receives it + dictation settings (keeps the input row uncluttered)
+  const meta = document.createElement("div"); meta.className = "ask-meta";
+  meta.innerHTML = `<label class="ask-to"><span>TO</span><select id="ask-agent" class="ask-agent" aria-label="Send to agent"
+      title="Which agent receives this. AUTO lets the team route it; @name in the text also works."><option value="">AUTO · TEAM</option></select></label>
+    <button type="button" class="dict-opt" id="dict-opt" aria-label="Dictation settings" aria-haspopup="dialog" aria-expanded="false" title="Dictation language and engine">🎙 VOICE ▾</button>`;
+  form.appendChild(meta);
+  const sel = meta.querySelector("#ask-agent");
+  // the box grows with dictated / typed text (up to ~5 lines); Enter sends, Shift+Enter = new line
+  const grow = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight + 2, 140) + "px"; };
+  input.addEventListener("input", grow);
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !S) { e.preventDefault(); form.requestSubmit(); }
+  });
+  form.addEventListener("submit", () => setTimeout(grow, 0));
   const pop = document.createElement("div");
   pop.className = "dict-pop"; pop.id = "dict-pop"; pop.hidden = true; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Dictation settings");
   form.parentNode.insertBefore(pop, form.nextSibling);
@@ -62,7 +70,7 @@
     const have = [...sel.options].slice(1).map(o => o.value).join();
     if (have === want.map(w => w[0]).join()) return;
     const cur = sel.value;
-    sel.innerHTML = `<option value="">AUTO</option>` + want.map(([k, n]) => `<option value="${esc(k)}">${esc(String(n).toUpperCase())}</option>`).join("");
+    sel.innerHTML = `<option value="">AUTO · TEAM</option>` + want.map(([k, n]) => `<option value="${esc(k)}">${esc(String(n).toUpperCase())}</option>`).join("");
     sel.value = want.some(w => w[0] === cur) ? cur : "";
   }
   const list = $("#avengers-list");

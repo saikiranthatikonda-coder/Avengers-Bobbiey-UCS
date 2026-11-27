@@ -3004,3 +3004,9 @@ body { grid-template-columns: minmax(0, 1fr); }
 .agent-card[data-agent="doom"] { background: linear-gradient(120deg, rgba(43,212,111,0.10), rgba(12,20,16,0.55) 60%); border-color: rgba(43,212,111,0.45); }
 .agent-card[data-agent="doom"] .agent-icon { color: #2bd46f; border-color: #2bd46f; box-shadow: 0 0 12px rgba(43,212,111,0.35) inset; }
 .doom-eta { display: block; font-size: 0.56rem; letter-spacing: 0.16em; color: #2bd46f; opacity: 0.85; margin-top: 2px; }
+
+/* v8.5.1 · Orbitron digits have different widths ("1" is much narrower than "0"), so the ticking
+   clock grew/shrank every second and nudged every header item beside it. Reserve the widest
+   time ("00:00:00" ≈ 6.6em) so the header never moves. */
+.time-mod .clock { display: inline-block; min-width: 6.7em; text-align: right; font-variant-numeric: tabular-nums; }
+.time-mod .clock-date { display: inline-block; min-width: 9.6em; text-align: right; font-variant-numeric: tabular-nums; }

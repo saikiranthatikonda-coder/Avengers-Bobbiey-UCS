@@ -435,7 +435,17 @@ footer{padding:2.2rem max(16px,4vw)}
 .skip:focus{left:12px}
 h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 65%,#7ff7ff);-webkit-background-clip:text;background-clip:text;color:transparent}
 
-/* hero visual: a quiet dotted globe (Global Activity Map) */
+/* hero visual: the command core (you + nine agents) — flat, so it never competes with the background globe */
+.hero-core{position:relative;width:100%;max-width:500px;aspect-ratio:1/1;margin:0 auto}
+.hero-core-canvas{position:absolute;inset:0;display:block;opacity:0;transition:opacity 1s ease}
+.hero-core.ready .hero-core-canvas{opacity:1}
+.hero-core-tip{position:absolute;transform:translate(-50%,-100%);pointer-events:none;background:rgba(3,10,18,.92);border:1px solid var(--edge2);
+  border-radius:8px;padding:.35rem .6rem;font-family:var(--mono);font-size:.72rem;color:var(--dim);white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:.1rem}
+.hero-core-tip b{font-family:var(--disp);font-size:.6rem;letter-spacing:.16em}
+.hero-core-tip[hidden]{display:none}
+.hero-legend-ag{max-width:460px}
+@media(max-width:980px){.hero-core{max-width:420px}}
+@media(max-width:560px){.hero-core{max-width:320px}}
 .hero{overflow:hidden}
 .hero-grid{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)}
 @media(max-width:980px){.hero-grid{grid-template-columns:minmax(0,1fr);gap:2.6rem}}
@@ -692,17 +702,7 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
 <div id="imm-map" aria-hidden="true"></div>
 <div id="imm-scrim" aria-hidden="true"></div>
 <div id="doom-tint" aria-hidden="true"></div>
-<aside class="imm-hud" id="imm-hud" aria-label="Background map">
-  <div class="imm-row">
-    <button type="button" class="imm-chip" data-imm-locate>📍 Fly to my location</button>
-    <button type="button" class="imm-chip mini" id="imm-tilt" hidden>↻ Enable tilt</button>
-    <button type="button" class="imm-min" id="imm-min" aria-expanded="true" aria-controls="imm-hud" title="Collapse">–</button>
-  </div>
-  <div class="imm-where imm-hide" data-imm-where>Showing: <b>demo location</b></div>
-  <div class="imm-hide"><span class="imm-msg" data-imm-msg></span></div>
-  <div class="imm-hide">Camera altitude <span class="imm-alt" id="imm-alt">≈</span> · satellite imagery (not a live feed)</div>
-  <div class="imm-attr">Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community · Terrain: Mapzen/AWS Open Data · MapLibre</div>
-</aside>
+<div class="imm-credit" id="imm-credit">Background: satellite imagery (not a live feed) · <span data-imm-where>demo location</span> · Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community · Terrain: Mapzen/AWS Open Data · MapLibre</div>
 
 <nav id="nav">
   <a class="logo" href="#top" title="Stark Industries × Bobbiey"><span class="lg-terms"><span class="lg-stark">STARK INDUSTRIES</span> × <span class="lg-bob">BOBBIEY</span></span></a>
@@ -721,7 +721,7 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
 <section class="hero" id="top">
   <div class="wrap hero-grid">
     <div>
-      <div class="hero-tag"><span class="dot"></span>NOW AVAILABLE · BUILT IN HYDERABAD</div><a class="doom-pill" href="#launch">DOOMSDAY PROTOCOL · <b id="doom-pill-cd">DEC 18, 2026</b></a>
+      <div class="hero-tag"><span class="dot"></span>NOW AVAILABLE · BUILT IN HYDERABAD</div>
       <h1>The Interface Between <span class="grad">AI And Humans</span></h1>
       <p class="hero-sub">Nine specialist AI agents, now led on cyber defense by DOOM, in one command center on your own Windows PC, Mac or Linux machine. They operate your apps, take phone calls, watch the world live and improve themselves, and they act only with your approval.</p>
       <div class="cta-row">
@@ -737,12 +737,8 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
     </div>
 
     <figure class="hero-vis">
-      <div class="hero3d" id="hero3d" role="img" aria-label="Illustration of the BUCS Global Activity Map: a dotted globe with pulsing activity markers, flight arcs and a satellite orbit">
-        <div class="hero3d-fallback" aria-hidden="true"></div>
-      </div>
-      <figcaption class="hero-legend">
-        <span><b style="--c:#ff6b6b"></b>Earthquakes</span><span><b style="--c:#00d9ff"></b>Flights</span><span><b style="--c:#8b7cf8"></b>Satellites</span><span><b style="--c:#ffb35c"></b>Space weather</span><span><b style="--c:#e879f9"></b>Outages</span>
-      </figcaption>
+      <div class="hero-core" id="hero-core" role="img" aria-label="Illustration: you at the centre with the nine BUCS agents around you; commands pulse out to an agent, answers pulse back, and agents hand work to each other"></div>
+      <figcaption class="hero-legend hero-legend-ag"><span><b style="--c:#00d9ff"></b>JARVIS</span><span><b style="--c:#3b82f6"></b>CAPTAIN</span><span><b style="--c:#ff6b00"></b>STARK</span><span><b style="--c:#c74545"></b>WIDOW</span><span><b style="--c:#a78bfa"></b>HAWKEYE</span><span><b style="--c:#22c55e"></b>HULK</span><span><b style="--c:#facc15"></b>THOR</span><span><b style="--c:#e879f9"></b>VISION</span><span><b style="--c:#2bd46f"></b>DOOM</span></figcaption>
     </figure>
   </div>
 </section>
@@ -754,15 +750,10 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
       <div>
         <div class="launch-k">— DOOMSDAY PROTOCOL</div>
         <h2>BUCS × <span>the Doomsday era</span></h2>
-        <p>Launching on Product Hunt as the countdown to <b>Avengers: Doomsday</b> runs out. New in this release: DOOM, a sovereign cyber-defense agent, hands-free conversation with the whole team, and the satellite edition of the Global Activity Map.</p>
+        <p>Launching on Product Hunt in the <b>Avengers: Doomsday</b> era. New in this release: DOOM, a sovereign cyber-defense agent, hands-free conversation with the whole team, and the satellite edition of the Global Activity Map.</p>
         <div class="ph-line2">Keep scrolling: the background flies from orbit down to street level.</div>
       </div>
-      <div>
-        <div class="cd" id="doom-cd" role="timer" aria-label="Countdown to December 18, 2026, in your local time">
-          <div><b>–</b><span>DAYS</span></div><div><b>–</b><span>HOURS</span></div><div><b>–</b><span>MIN</span></div><div><b>–</b><span>SEC</span></div>
-        </div>
-        <div class="cd-note">to December 18, 2026 · 00:00 your local time · theatrical release</div>
-      </div>
+      
     </div>
   </div>
 </section>
@@ -1264,11 +1255,7 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
           <dt>SUN</dt><dd id="orb-sun">–</dd>
           <dt>WEATHER NOW</dt><dd id="orb-wx">loads when you get here <small>source: Open-Meteo.com</small></dd>
         </dl>
-        <div class="orb-actions">
-          <button type="button" class="imm-chip" data-imm-locate>📍 Fly to my location</button>
-          <span class="orb-msg" data-imm-msg></span>
-        </div>
-        <p class="orb-privacy">Privacy: we never ask for your location on load. If you click the button, your coordinates stay in this browser tab: they are not sent to us, not put in the URL and not stored. Map tiles load from Esri (imagery and labels) and AWS (terrain), so those hosts see which tiles are viewed. Current weather is fetched from Open-Meteo for the location shown: the demo location, or yours (rounded to about 1 km) only after you click.</p>
+        <p class="orb-privacy">Privacy: when the page opens, your browser asks whether to share your location. Allow it and the background flies to where you are; decline and it shows a demo location. Your coordinates stay in this browser tab: they are not sent to us, not put in the URL and not stored. Map tiles load from Esri (imagery and labels) and AWS (terrain), so those hosts see which tiles are viewed. Current weather is fetched from Open-Meteo for the location shown (yours is rounded to about 1 km).</p>
       </div>
     </div>
   </div>

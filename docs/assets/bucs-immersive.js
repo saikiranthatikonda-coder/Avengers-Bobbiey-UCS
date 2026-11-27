@@ -3,10 +3,11 @@
       street level as the page scrolls (mouse / device tilt add a gentle parallax). Lazy: loaded
       after first paint, never with prefers-reduced-motion, without WebGL or if the CDN fails —
       the page then keeps its existing static background.
-   2. Location: the default target is a demo landmark. navigator.geolocation is only called when
-      the visitor clicks "Fly to my location"; coordinates stay in memory (never stored, never in
-      the URL, never sent to our servers). Weather comes from Open-Meteo for the shown target.
-   3. Doomsday countdown, DOOM emblem, hands-free / map blocks and small, harmless easter eggs.
+   2. Location: the browser's own permission prompt is shown when the page opens. Allowed → the
+      background flies to the visitor's exact position; declined / unavailable → a demo landmark.
+      Coordinates stay in memory (never stored, never in the URL, never sent to our servers).
+      Weather comes from Open-Meteo for the shown target.
+   3. DOOM emblem, hands-free / map blocks and small, harmless easter eggs.
    Honesty rule: imagery is archival ("not a live feed"); every live reading names its source and
    shows "unavailable" when its source cannot be reached. Nothing is simulated. */
 (() => {
@@ -38,7 +39,6 @@
     },
   };
   const DEMO = { name: "Midtown Manhattan, New York", lat: 40.7484, lon: -73.9857, tz: "America/New_York" };
-  const LAUNCH = new Date(2026, 11, 18, 0, 0, 0); // Dec 18 2026 00:00, visitor's local time
 
   const $ = (s, r = document) => r.querySelector(s);
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -67,33 +67,6 @@
   const listeners = [];
   const onTarget = (fn) => listeners.push(fn);
   function setTarget(t) { Object.assign(target, t); listeners.forEach((fn) => fn(target)); }
-
-  /* ───────── Doomsday countdown ───────── */
-  (() => {
-    const box = $("#doom-cd"), pill = $("#doom-pill-cd");
-    if (!box && !pill) return;
-    const pad = (n) => String(n).padStart(2, "0");
-    let arrived = false;
-    const tick = () => {
-      const ms = LAUNCH - Date.now();
-      if (ms <= 0) {
-        if (!arrived) {
-          arrived = true;
-          if (box) box.innerHTML = `<div class="cd-arrived">THE DAY HAS ARRIVED · DECEMBER 18, 2026</div>`;
-          if (pill) pill.textContent = "THE DAY HAS ARRIVED";
-        }
-        return;
-      }
-      const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60, sec = s % 60;
-      if (box) {
-        const b = box.querySelectorAll("b");
-        if (b.length === 4) { b[0].textContent = d; b[1].textContent = pad(h); b[2].textContent = pad(m); b[3].textContent = pad(sec); }
-      }
-      if (pill) pill.textContent = `T−${d}D ${pad(h)}H ${pad(m)}M`;
-    };
-    tick();
-    setInterval(() => { if (!document.hidden && !arrived) tick(); }, 1000);
-  })();
 
   /* ───────── close-up readouts: local time, sun, weather ───────── */
   // Solar elevation (degrees) from a standard low-precision solar position model.
@@ -127,7 +100,7 @@
     const paint = () => {
       R.where.innerHTML = target.mine
         ? `Your location <small>${target.lat.toFixed(3)}, ${target.lon.toFixed(3)} · stays in your browser</small>`
-        : `${DEMO.name} <small>demo location · click “Fly to my location” to use yours</small>`;
+        : `${DEMO.name} <small>demo location · location not shared</small>`;
       R.time.innerHTML = `${fmtTime()} <small>computed in your browser</small>`;
       const el = sunElevation(target.lat, target.lon, new Date());
       const state = el > -0.833 ? ["up", "Sun up"] : el > -6 ? ["down", "Twilight"] : ["down", "Sun down"];
@@ -167,35 +140,19 @@
     onTarget(() => { paint(); if (started) weather(); });
   })();
 
-  /* ───────── location chip (geolocation only on click) ───────── */
-  const chips = [];
-  function chipLabel(state) {
-    chips.forEach((b) => {
-      b.disabled = state === "busy";
-      b.textContent = state === "busy" ? "📍 Locating…" : state === "mine" ? "📍 Back to demo location" : state === "retry" ? "📍 Try my location again" : "📍 Fly to my location";
-    });
-  }
-  function setMsg(text) { document.querySelectorAll("[data-imm-msg]").forEach((m) => (m.textContent = text)); }
-  function locate() {
-    if (target.mine) { // toggle back
-      setTarget({ name: DEMO.name, lat: DEMO.lat, lon: DEMO.lon, tz: DEMO.tz, mine: false });
-      chipLabel("idle"); setMsg("Back to the demo location."); return;
-    }
-    if (!("geolocation" in navigator)) { setMsg("Location isn't available in this browser. Showing the demo location."); chipLabel("retry"); return; }
-    chipLabel("busy"); setMsg("Asking your browser for your location…");
+  /* ───────── location: asked once when the page opens (browser permission prompt) ───────── */
+  function locateOnLoad() {
+    if (!("geolocation" in navigator) || !window.isSecureContext) return;      // demo location stays
     navigator.geolocation.getCurrentPosition((p) => {
       let tz;
       try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { tz = undefined; }
       setTarget({ name: "Your location", lat: p.coords.latitude, lon: p.coords.longitude, tz, mine: true });
-      chipLabel("mine"); setMsg("Your location · stays in your browser. Scroll to fly down to it.");
-    }, (err) => {
-      chipLabel("retry");
-      setMsg(err && err.code === 1 ? "Location permission was not given. Still showing the demo location." : "Couldn't get your location. Still showing the demo location.");
-    }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 });
+    }, () => { /* declined or unavailable: keep the demo location */ },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 300000 });
   }
-  document.querySelectorAll("[data-imm-locate]").forEach((b) => { chips.push(b); b.addEventListener("click", locate); });
+  locateOnLoad();
   const whereLines = () => document.querySelectorAll("[data-imm-where]").forEach((w) => {
-    w.innerHTML = target.mine ? `Showing: <b class="you">Your location · stays in your browser</b>` : `Showing: <b>demo location</b> · ${DEMO.name}`;
+    w.innerHTML = target.mine ? `<b class="you">your location · stays in your browser</b>` : `demo location · ${DEMO.name}`;
   });
   whereLines(); onTarget(whereLines);
 
@@ -224,7 +181,7 @@
   }
 
   function buildMap(ml) {
-    const host = $("#imm-map"), root = document.documentElement, hud = $("#imm-hud"), alt = $("#imm-alt");
+    const host = $("#imm-map"), root = document.documentElement, alt = $("#imm-alt");
     const orbitSec = $("#orbit");
     let W = innerWidth, H = innerHeight;
     const z0 = () => clamp(Math.log2(Math.min(W, H) / 512) + 1.05, 0.2, 2.6); // whole globe in view
@@ -377,23 +334,12 @@
     const coarse = matchMedia("(pointer: coarse)").matches;
     if (coarse && "DeviceOrientationEvent" in window) {
       if (typeof DeviceOrientationEvent.requestPermission === "function") {
-        const tb = $("#imm-tilt");
-        if (tb) {
-          tb.hidden = false;
-          tb.addEventListener("click", () => {
-            DeviceOrientationEvent.requestPermission().then((r) => {
-              if (r === "granted") { addEventListener("deviceorientation", onTilt, { passive: true }); tb.hidden = true; }
-              else tb.textContent = "Tilt not allowed";
-            }).catch(() => { tb.textContent = "Tilt unavailable"; });
-          });
-        }
+        addEventListener("touchend", () => {
+          DeviceOrientationEvent.requestPermission().then((r) => {
+            if (r === "granted") addEventListener("deviceorientation", onTilt, { passive: true });
+          }).catch(() => { /* tilt unavailable: mouse/scroll still drive the globe */ });
+        }, { once: true, passive: true });
       } else addEventListener("deviceorientation", onTilt, { passive: true });
-    }
-    if (hud) {
-      const min = $("#imm-min");
-      const collapse = (c) => { hud.classList.toggle("collapsed", c); if (min) { min.setAttribute("aria-expanded", String(!c)); min.textContent = c ? "+" : "–"; } };
-      if (min) min.addEventListener("click", () => collapse(!hud.classList.contains("collapsed")));
-      if (matchMedia("(max-width: 560px)").matches) collapse(true); // phones: keep the content clear
     }
   }
 

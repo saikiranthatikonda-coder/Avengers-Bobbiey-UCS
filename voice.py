@@ -518,10 +518,20 @@ class VoiceLoop:
                 await self._handsfree(text, entry)
                 return
 
+        # CONVERSATION OFF (strict, v8.5.1): only a sentence that STARTS with a wake phrase
+        # ("Hey Jarvis …", "OK Doom …") reaches an agent. No name-anywhere matching and no
+        # follow-up window, so talking with colleagues in the room is never taken as a task.
         agent_key, command = self._match_agent(text)
+        if time.time() < getattr(self, "summon_until", 0.0) and not (agent_key and self._wake_lead(text)):
+            agent_key, command = self.follow_agent, text.strip()     # the operator just summoned this agent
+            self.summon_until = 0.0                                     # one sentence only
+        elif agent_key and not self._wake_lead(text):
+            entry["outcome"] = "ignored (conversation off — no wake phrase at the start)"
+            await self.hub.broadcast({"type": "voice", "event": "unrouted", "text": text,
+                                      "hint": "conversation is off: start with \"Hey Jarvis\", \"Hey Doom\"…"})
+            await self.hub.broadcast({"type": "voice", "event": "idle"})
+            return
         entry["outcome"] = f"→ {agent_key}" if agent_key else "no wake word"
-        if not agent_key and self.follow_agent and time.time() < self.follow_until:
-            agent_key, command = self.follow_agent, text.strip()   # conversation mode
         if not agent_key:
             await self.hub.broadcast({
                 "type": "log", "level": "info",
@@ -551,7 +561,7 @@ class VoiceLoop:
         if self.engine is not None:
             if not command:                                    # bare "Hey Jarvis"
                 await self.engine.summon(agent_key, source="voice")
-                self._open_followup(agent_key, 15.0)
+                self._open_followup(agent_key, 15.0, summon=True)
                 return
             # JARVIS is the coordinator: "Hey Jarvis …" lets the engine delegate
             # to the right specialist; "Hey Stark …" addresses Stark directly
@@ -787,6 +797,17 @@ class VoiceLoop:
             pass
 
 
+    _WAKE_LEAD = r"^(?:hey|ok|okay|hi|hello)\s+"
+
+    @classmethod
+    def _wake_lead(cls, text: str) -> bool:
+        """True when the utterance OPENS with a wake phrase: hey/ok/hi + an agent name."""
+        low = cls._norm(text)
+        names = {(t[4:] if t.startswith("hey ") else t) for t, _k in AGENT_TRIGGERS}
+        names |= {"jarvis", "jervis", "javis", "jarvas", "travis"}
+        names |= {(t[4:] if t.startswith("hey ") else t) for t, _k in CUSTOM_TRIGGERS}
+        return any(re.match(cls._WAKE_LEAD + re.escape(n) + r"(?:'s)?(?!\w)", low) for n in names if n)
+
     @staticmethod
     def _mentions_jarvis(text: str) -> tuple[bool, str]:
         """("Jarvis" said anywhere, the request without the name). Tolerant of
@@ -809,9 +830,12 @@ class VoiceLoop:
                 "conversation_mode": self._conversation(), "status": self.status,
                 "utterances": list(self.diag)[::-1]}
 
-    def _open_followup(self, agent_key: str, seconds: float = 12.0) -> None:
+    def _open_followup(self, agent_key: str, seconds: float = 12.0, summon: bool = False) -> None:
         self.follow_agent = agent_key
         self.follow_until = time.time() + seconds
+        # only an explicit summon (double clap / a bare "Hey Jarvis") lets the NEXT sentence through
+        # without a wake phrase when conversation is off; a finished reply never does
+        self.summon_until = self.follow_until if summon else 0.0
         try:   # the dashboard orb glows while BUCS is waiting for the operator
             asyncio.get_running_loop().create_task(self.hub.broadcast(
                 {"type": "voice", "event": "engaged", "agent": agent_key, "seconds": seconds}))
@@ -822,7 +846,7 @@ class VoiceLoop:
         """Double clap → JARVIS pops up on the dashboard and answers."""
         await self.hub.broadcast({"type": "voice", "event": "summon", "agent": "jarvis",
                                   "peak": round(self.clap.last_peak) if self.clap else None})
-        self._open_followup("jarvis", 15.0)
+        self._open_followup("jarvis", 15.0, summon=True)
         if self.engine is not None:
             await self.engine.summon("jarvis", source="clap")
             return

@@ -504,15 +504,15 @@ var ConversationMode = {
     this.on = !!on;
     b.setAttribute("aria-pressed", on ? "true" : "false");
     const who = String(this.hf.agent || "jarvis").toUpperCase();
-    const st = on ? (this.hf.asleep ? "PAUSED" : who) : "OFF";
-    b.innerHTML = `<span class="cv-full">HANDS-FREE · ${escapeHTML(st)}</span><span class="cv-short">HF · ${escapeHTML(st)}</span>`;
+    const st = on ? (this.hf.asleep ? "PAUSED" : "ON") : "OFF";
+    b.innerHTML = `<span class="cv-full">CONVERSATION · ${escapeHTML(st)}</span><span class="cv-short">CONV · ${escapeHTML(st)}</span>`;
     b.classList.toggle("hf-paused", !!(on && this.hf.asleep));
-    b.title = on ? `Hands-free conversation: just talk — no wake word. Talking to ${who}. Say another agent's name first ("Doom, …", "Cap, …") to switch; say "go quiet" to pause${this.hf.idle_sleep_min ? `; pauses itself after ${this.hf.idle_sleep_min} min of silence` : ""}. Click to turn hands-free off (wake words for every agent).`
-                 : "Hands-free is OFF: start each request with a wake phrase (Hey Jarvis, Hey Cap, Hey Doom…). Click to turn hands-free on.";
+    b.title = on ? `Conversation ON: just talk — no wake word. Talking to ${who}. Say another agent's name first ("Doom, …", "Cap, …") to switch; say "go quiet" to pause${this.hf.idle_sleep_min ? `; pauses itself after ${this.hf.idle_sleep_min} min of silence` : ""}. Click to turn conversation OFF (e.g. when talking with colleagues).`
+                 : "Conversation OFF: agents ignore talk in the room. Only a sentence that STARTS with a wake phrase (Hey Jarvis…, Hey Doom…) reaches them. Click to turn conversation ON.";
     const sub = document.getElementById("voice-sublabel");
-    if (sub) sub.innerHTML = !on ? "" : this.hf.asleep
-      ? `hands-free paused · say an agent's name · <button type="button" class="hf-link" data-hf-wake>RESUME</button>`
-      : `hands-free · talking to <b>${escapeHTML(who)}</b> · name another agent to switch`;
+    if (sub) sub.innerHTML = !on ? `conversation off · agents ignore room talk · start with “Hey Jarvis…” to ask` : this.hf.asleep
+      ? `conversation paused · say an agent's name · <button type="button" class="hf-link" data-hf-wake>RESUME</button>`
+      : `conversation on · talking to <b>${escapeHTML(who)}</b> · name another agent to switch`;
   },
   async load() { try { const d = await (await fetch("/api/conversation")).json(); this.set(d.on, d.handsfree); } catch (e) {} },
   async patch(body) {
@@ -527,7 +527,7 @@ var ConversationMode = {
     this.set(on);
     const d = await this.patch({ on });
     if (d.ok === false) return this.load();
-    logEvent(`<span class="tag">[voice]</span> hands-free ${on ? `ON — just talk, no wake word (talking to ${escapeHTML(String(this.hf.agent).toUpperCase())}); background voices muted (still shown here)` : "OFF — wake words for every agent + all agent voices"}`);
+    logEvent(`<span class="tag">[voice]</span> conversation ${on ? `ON — just talk, no wake word (talking to ${escapeHTML(String(this.hf.agent).toUpperCase())})` : "OFF — agents ignore room talk; only “Hey Jarvis / Hey Doom …” at the start of a sentence reaches them"}`);
   },
 };
 document.addEventListener("click", e => {
@@ -536,7 +536,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-hf-wake]")) ConversationMode.patch({ asleep: false });
   const t = e.target.closest("[data-hf-talk]");
   if (t) ConversationMode.patch({ on: true, agent: t.dataset.hfTalk, asleep: false }).then(d => {
-    if (d && d.ok !== false) logEvent(`<span class="tag">[voice]</span> hands-free → ${escapeHTML(t.dataset.hfTalk.toUpperCase())} · just talk`);
+    if (d && d.ok !== false) logEvent(`<span class="tag">[voice]</span> conversation → ${escapeHTML(t.dataset.hfTalk.toUpperCase())} · just talk`);
   });
 });
 setTimeout(() => ConversationMode.load(), 500);
@@ -2894,7 +2894,7 @@ function openVoiceEngineModal() {
     </div>
     <div class="mb-list">
       <div class="mb-row">Wake phrases: Hey Jarvis · Hey Stark/Tony · Hey Cap/Captain · Hey Widow/Natasha · Hey Hawkeye/Clint · Hey Hulk/Bruce · Hey Thor · Hey Vision · Hey Doom
-        <div class="mb-row-meta">FUZZY MATCH · INDIAN-ENGLISH BIASED · NOT NEEDED IN HANDS-FREE MODE</div></div>
+        <div class="mb-row-meta">FUZZY MATCH · INDIAN-ENGLISH BIASED · NOT NEEDED WHILE CONVERSATION IS ON</div></div>
       <div class="mb-row">Hands-free: just talk — every sentence goes to the agent you're talking to. Start with a name to switch ("Doom, scan my network"). "Stop" interrupts; "go quiet" pauses; a name resumes.
         <div class="mb-row-meta">AUTO-PAUSE AFTER <input type="number" id="hf-idle" min="0" max="240" value="${ConversationMode.hf.idle_sleep_min ?? 10}" style="width:4rem"/> MIN OF SILENCE (0 = NEVER) · <button class="hf-link" type="button" id="hf-idle-save">SAVE</button></div></div>
       <div class="mb-row"><button class="quick-btn" id="tts-test-btn" style="width:auto;padding:.45rem .9rem">RUN SPEAKER TEST</button></div>
@@ -2916,7 +2916,7 @@ async function openAgentModal(name) {
     const a = (d.agents || []).find(x => x.name === name);
     if (!a) throw new Error("agent not found");
     $("#modal-title").textContent = a.codename;
-    $("#modal-sub").innerHTML = `${escapeHTML(a.role.toUpperCase())} <button type="button" class="hf-link hf-talk" data-hf-talk="${escapeHTML(a.name)}" title="Talk to ${escapeHTML(a.codename)} hands-free — no wake word">🎙 TALK HANDS-FREE</button>`;
+    $("#modal-sub").innerHTML = `${escapeHTML(a.role.toUpperCase())} <button type="button" class="hf-link hf-talk" data-hf-talk="${escapeHTML(a.name)}" title="Turn conversation on with ${escapeHTML(a.codename)} — no wake word">🎙 TALK TO ${escapeHTML(a.codename.toUpperCase())}</button>`;
     const hist = (a.history || []).slice(-4).reverse().map(h =>
       `<div class="mb-row">${escapeHTML((h.a || "").slice(0, 160))}
         <div class="mb-row-meta">${new Date(h.ts * 1000).toTimeString().slice(0, 5)} · RE: ${escapeHTML((h.q || "").slice(0, 60))}</div></div>`).join("");
@@ -3641,7 +3641,7 @@ function handle(msg) {
       if (msg.event === "engaged")    OrbEngage.on(msg.seconds);
       if (msg.event === "unrouted")   setHeard(msg.text, msg.hint || "no wake word — start with “Hey Jarvis…” or double-clap");
       if (msg.event === "handsfree")  { ConversationMode.set(ConversationMode.on !== false, msg);
-                                        if (msg.note) logEvent(`<span class="tag">[voice]</span> hands-free · ${escapeHTML(msg.note)}`); }
+                                        if (msg.note) logEvent(`<span class="tag">[voice]</span> conversation · ${escapeHTML(msg.note)}`); }
       if (msg.event === "summon")     { JarvisSummon.open(); logEvent(`<span class="tag">[voice]</span> 👏👏 double clap — JARVIS summoned`); }
       if (msg.event === "heard")      JarvisSummon.heard(msg.text);
       if (msg.event === "processing") JarvisSummon.state("THINKING");

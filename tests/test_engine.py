@@ -451,3 +451,47 @@ class SourceHygiene(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(__import__("importlib").util.find_spec("numpy"), "numpy (optional voice dep) not installed")
+class ConversationOffVoice(ConversationVoice):
+    """Conversation OFF (v8.5.1): talk with colleagues is never taken as a task — only a sentence
+    that STARTS with a wake phrase ("Hey Jarvis …") reaches an agent; no follow-up window."""
+    def _off(self):
+        v, engine, np = self._loop()
+        engine.state["tts"].conversation_mode = False
+        return v, engine, np
+
+    def test_room_talk_with_names_is_ignored(self):
+        v, engine, np = self._off()
+        for chatter in ("did you see the vision document doom sent", "captain said the meeting moved",
+                        "jarvis is cool but let's get lunch", "the author of this book", "doom"):
+            self._hear(v, np, chatter)
+        engine.submit.assert_not_awaited()
+        engine.summon.assert_not_awaited()
+        self.assertTrue(v.diag[-1]["outcome"].startswith("ignored (conversation off"))
+
+    def test_wake_phrase_at_the_start_still_works(self):
+        v, engine, np = self._off()
+        self._hear(v, np, "Hey Doom, scan my network")
+        self.assertEqual(engine.submit.await_args.args[0], "scan my network")
+        self.assertEqual(engine.submit.await_args.kwargs["agent"], "doom")
+
+    def test_no_follow_up_window_after_a_reply(self):
+        v, engine, np = self._off()
+        self._hear(v, np, "hey jarvis check the disk")
+        self.assertEqual(engine.submit.await_count, 1)
+        v._open_followup("jarvis", 30)                      # an answer just finished
+        self._hear(v, np, "yeah I'll send it to you after lunch")
+        self.assertEqual(engine.submit.await_count, 1)       # colleague talk right after is NOT a task
+
+    # inherited hands-free tests don't apply when conversation is off
+    test_unaddressed_speech_goes_to_the_active_agent = None
+    test_back_to_back_without_wake_word = None
+    test_name_anywhere_starts_and_is_stripped = None
+    test_leading_name_switches_and_sticks = None
+    test_mid_sentence_name_does_not_switch = None
+    test_pause_and_resume = None
+    test_idle_auto_pause = None
+    test_bare_name_summons = None
+    test_settings_validate_and_persist = None

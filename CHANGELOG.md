@@ -5,6 +5,21 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-27 — v8.5.1 · Conversation ON/OFF, roomier command bar, steady clock, website polish
+- **Conversation ON / OFF is back in the header** (replaces the "HANDS-FREE" label):
+  - **ON:** just talk, no wake word.
+  - **OFF is now strict.** Talk with colleagues in the room is never taken as a task. Only a sentence that *starts* with a wake phrase ("Hey Jarvis…", "Hey Doom…") reaches an agent. Names mentioned mid-sentence, bare names and the old follow-up window after a reply no longer trigger anything. After an explicit summon (a double clap, or just "Hey Jarvis"), your next sentence is still heard without repeating the wake phrase.
+- **The command bar no longer overlaps:**
+  - The box grows to about five lines as dictated or typed text fills it. Enter sends, Shift+Enter starts a new line.
+  - The mic sits inside the box, and ▶ sits beside it.
+  - The agent picker ("TO · AUTO") and the 🎙 VOICE settings moved to their own row.
+  - In the narrow left panel, the recording strip shows your words on their own full-width line.
+- **fix: the top-right clock no longer shifts the header every second.** The display font's digits have different widths, so the clock now reserves the widest time.
+- **Website:**
+  - The small globe beside "The Interface Between AI and Humans" is replaced by the **Command Core**, a flat illustration of you at the centre with the nine agents. Commands pulse out and answers pulse back, and agents hand work to each other. Hover an agent to see its role.
+  - The location panel is gone. The browser now asks for location when the page opens. If you allow it, the background flies to your exact position; if not, it shows a demo location. Your coordinates stay in your browser.
+  - The Doomsday countdown has been removed.
+
 ## 2026-11-27 — v8.5.0 · Voice dictation in the command bar, LIVE satellite close-up
 - **feat: VOICE DICTATION** (ChatGPT-style). A 🎙 mic inside the command bar:
   - Tap it (or press Alt+M) and speak. A recording strip shows a live waveform, a timer, ✕ cancel (Esc) and ✓ done (Enter).

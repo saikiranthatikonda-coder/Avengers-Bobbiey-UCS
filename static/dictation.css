@@ -1,20 +1,32 @@
 /* VOICE DICTATION · v8.5 — mic inside the command bar, recording strip, settings popover */
-.ask-form { align-items: stretch; position: relative; }
-.ask-agent { flex: none; max-width: 6.8rem; background: rgba(0, 0, 0, 0.55); color: var(--accent); border: 1px solid var(--panel-edge);
-  border-radius: 4px; font-family: var(--font-display); font-size: 0.55rem; letter-spacing: 0.08em; padding: 0 0.3rem; cursor: pointer; outline: none; }
-.ask-agent:focus-visible { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
-.ask-agent option { background: #06121c; color: var(--text); }
-.ask-field { position: relative; flex: 1; min-width: 0; display: flex; }
-.ask-field > input { flex: 1; min-width: 0; padding-right: 3.6rem !important; }
-.ask-form .ask-field .dict-mic, .ask-form .ask-field .dict-opt {
-  position: absolute; top: 50%; transform: translateY(-50%); background: transparent; color: var(--text-dim, #8fb3c7); border: 0;
-  padding: 0; box-shadow: none; cursor: pointer; display: grid; place-items: center; border-radius: 50%; font-family: var(--font-mono); }
-.ask-form .ask-field .dict-mic { right: 1.35rem; width: 1.75rem; height: 1.75rem; transition: color 0.2s, background 0.2s; }
-.ask-form .ask-field .dict-opt { right: 0.25rem; width: 1rem; height: 1.6rem; font-size: 0.6rem; border-radius: 3px; }
+.ask-form { align-items: flex-end; position: relative; flex-wrap: wrap; row-gap: 0.35rem; }
+.ask-field { position: relative; flex: 1 1 0; min-width: 0; display: flex; container-type: inline-size; }
+.ask-form .ask-field > textarea { flex: 1; min-width: 0; width: 100%; box-sizing: border-box; resize: none; overflow-y: auto;
+  min-height: 2.15rem; max-height: 140px; line-height: 1.35; padding: 0.5rem 2.3rem 0.5rem 0.7rem; display: block;
+  background: rgba(0, 0, 0, 0.55); border: 1px solid var(--panel-edge); border-radius: 4px; color: var(--text);
+  font-family: var(--font-mono); font-size: 0.85rem; outline: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-form .ask-field > textarea:focus { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+.ask-form .ask-field > textarea::placeholder { color: var(--text-dim, #8fb3c7); opacity: 0.8; }
+.ask-form > button[type="submit"] { flex: none; align-self: stretch; max-height: 2.15rem; min-height: 2.15rem; }
+.ask-form .ask-field .dict-mic { position: absolute; right: 0.3rem; bottom: 0.22rem; width: 1.7rem; height: 1.7rem; padding: 0;
+  background: transparent; color: var(--text-dim, #8fb3c7); border: 0; box-shadow: none; cursor: pointer; display: grid; place-items: center;
+  border-radius: 50%; transition: color 0.2s, background 0.2s; }
 .ask-form .ask-field .dict-mic:hover, .ask-form .ask-field .dict-mic:focus-visible { color: var(--accent); background: rgba(255, 255, 255, 0.06); box-shadow: none; }
-.ask-form .ask-field .dict-opt:hover, .ask-form .ask-field .dict-opt:focus-visible { color: var(--accent); box-shadow: none; }
 .ask-form .ask-field .dict-mic.on { color: #fff; background: #ff3b5c; }
 .ask-form .ask-field .dict-mic:disabled { opacity: 0.5; cursor: wait; }
+
+/* second row: TO <agent> · voice settings */
+.ask-meta { flex-basis: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-width: 0; }
+.ask-to { display: inline-flex; align-items: center; gap: 0.35rem; min-width: 0; font-family: var(--font-display); font-size: 0.5rem;
+  letter-spacing: 0.16em; color: var(--text-dim, #8fb3c7); }
+.ask-agent { min-width: 0; max-width: 11rem; background: rgba(0, 0, 0, 0.55); color: var(--accent); border: 1px solid var(--panel-edge);
+  border-radius: 4px; font-family: var(--font-display); font-size: 0.52rem; letter-spacing: 0.08em; padding: 0.22rem 0.3rem; cursor: pointer; outline: none; }
+.ask-agent:focus-visible { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+.ask-agent option { background: #06121c; color: var(--text); }
+.ask-form .ask-meta .dict-opt { flex: none; background: transparent; color: var(--text-dim, #8fb3c7); border: 1px solid var(--panel-edge);
+  border-radius: 4px; padding: 0.2rem 0.45rem; font-family: var(--font-display); font-size: 0.48rem; letter-spacing: 0.14em; font-weight: 700;
+  box-shadow: none; cursor: pointer; }
+.ask-form .ask-meta .dict-opt:hover, .ask-form .ask-meta .dict-opt:focus-visible { color: var(--accent); border-color: var(--accent); box-shadow: none; }
 
 /* recording strip — covers the input while the mic is open, like ChatGPT */
 .dict-rec { position: absolute; inset: 0; display: flex; align-items: center; gap: 0.45rem; padding: 0 0.3rem 0 0.6rem; z-index: 2;
@@ -22,9 +34,10 @@
 .dict-rec[hidden] { display: none; }
 .dict-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #ff3b5c; flex: none; animation: dict-pulse 1.2s infinite; }
 @keyframes dict-pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 92, 0.7); } 70% { box-shadow: 0 0 0 7px rgba(255, 59, 92, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 92, 0); } }
-.dict-wave { flex: 0 1 34%; min-width: 3rem; height: 1.3rem; }
+.dict-wave { flex: 0 1 30%; min-width: 2.5rem; height: 1.3rem; }
+@container (max-width: 250px) { .dict-wave { display: none; } .dict-rec { gap: 0.3rem; padding-left: 0.45rem; } }
 .dict-live { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left;
-  font-family: var(--font-mono); font-size: 0.72rem; color: var(--text); opacity: 0.85; }
+  font-family: var(--font-mono); font-size: 0.7rem; color: var(--text); opacity: 0.9; }
 .dict-time { font-family: var(--font-mono); font-size: 0.7rem; color: #ff8fa3; flex: none; min-width: 2.2rem; text-align: right; }
 .ask-form .dict-rec button { flex: none; width: 1.7rem; height: 1.7rem; padding: 0; border-radius: 50%; display: grid; place-items: center;
   font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700; cursor: pointer; border: 1px solid var(--panel-edge); }
@@ -62,3 +75,13 @@
 .dp-chk input:disabled { opacity: 0.4; }
 .dp-foot { margin: 0; color: var(--text-dim, #9fb8c8); font-size: 0.56rem; }
 @media (prefers-reduced-motion: reduce) { .dict-dot, .dict-rec.busy .dict-dot { animation: none; } }
+.ask-form .ask-field > textarea { font-size: 0.78rem; scrollbar-width: thin; scrollbar-color: var(--panel-edge) transparent; }
+.ask-form .ask-field > textarea::-webkit-scrollbar { width: 5px; }
+.ask-form .ask-field > textarea::-webkit-scrollbar-thumb { background: var(--panel-edge); border-radius: 3px; }
+/* narrow command bar: controls on top, the words get their own full-width line(s) below */
+@container (max-width: 250px) {
+  .dict-rec { flex-wrap: wrap; align-content: center; row-gap: 0.2rem; padding: 0.25rem 0.3rem 0.3rem 0.45rem; bottom: auto; min-height: 100%; }
+  .dict-live { order: 5; flex-basis: 100%; white-space: normal; direction: ltr; text-overflow: clip; overflow-wrap: anywhere;
+    font-size: 0.68rem; line-height: 1.3; max-height: 6.6em; overflow-y: auto; }
+  .dict-time { margin-left: auto; }
+}
