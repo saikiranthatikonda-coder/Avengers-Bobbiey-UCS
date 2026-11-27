@@ -1142,7 +1142,7 @@
   // The live layers drawn on top are the same items/flights/satellites the other views use.
   function isGlobe() { return S.mode === "3d" || S.mode === "orbit"; }
   function syncViews() { if (G) syncGlobe(); if (M && S.mode === "sat") syncSat(); }
-  const SAT_MODES = [["sat", "SATELLITE"], ["hybrid", "HYBRID"], ["terrain", "3D TERRAIN"], ["city", "3D CITY"], ["night", "NIGHT"]];
+  const SAT_MODES = [["sat", "SATELLITE"], ["hybrid", "HYBRID"], ["terrain", "3D TERRAIN"], ["city", "3D CITY"], ["night", "NIGHT"], ["live", "◉ LIVE"]];
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const ATTR = {
     esri: "Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
@@ -1157,6 +1157,7 @@
     terrain: "SATELLITE IMAGERY on AWS Terrarium elevation ×1.3 · NOT A LIVE FEED",
     city: "SATELLITE IMAGERY + OpenStreetMap building heights (zoom ≥ 13) · NOT A LIVE FEED",
     night: "NIGHT LIGHTS · NASA Black Marble 2016 annual composite (VIIRS) · NOT A LIVE FEED · max detail zoom 8",
+    live: "◉ LIVE · newest geostationary-satellite frame + radar + nearby webcams, each with its capture time · ground imagery is archival",
   };
   const SAT_3D = { terrain: 1, city: 1 };
   const TERRAIN_MAXZ = 12, TERRAIN_FLYZ = 10.5;
@@ -1173,7 +1174,10 @@
         `<button type="button" role="tab" data-sm="${k}" aria-selected="${k === satMode}" class="${k === satMode ? "on" : ""}">${l}</button>`).join("")}</div>
       <div class="gm-sat-label" id="gm-sat-label">${esc(SAT_LABEL[satMode])}</div>
       <div class="gm-sat-info" id="gm-sat-info" hidden></div>
+      <div class="gm-live" id="gm-live" hidden aria-live="polite"></div>
     </div>
+    <div class="gm-cams" id="gm-cams" hidden></div>
+    <div class="gm-pip" id="gm-pip" hidden role="dialog" aria-label="Live webcam"></div>
     <div class="gm-sat-ctl" role="toolbar" aria-label="Satellite map controls">
       <button type="button" class="gm-btn" data-sa="in" title="Zoom in" aria-label="Zoom in">+</button>
       <button type="button" class="gm-btn" data-sa="out" title="Zoom out" aria-label="Zoom out">−</button>
@@ -1224,6 +1228,11 @@
       "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
     M.addLayer({ id: "o-sel", type: "circle", source: "gm-sel", paint: { "circle-color": "rgba(0,0,0,0)", "circle-radius": 13,
       "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
+    M.addSource("gm-cams", { type: "geojson", data: fc([]) });
+    M.addLayer({ id: "o-cams-h", type: "circle", source: "gm-cams", layout: { visibility: "none" },
+      paint: { "circle-color": "rgba(255,59,92,0.18)", "circle-radius": 11 } });
+    M.addLayer({ id: "o-cams", type: "circle", source: "gm-cams", layout: { visibility: "none" },
+      paint: { "circle-color": "#ff3b5c", "circle-radius": 5, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.6 } });
   }
   function ensureBuildings() {
     if (M.getSource("ofm")) return;
@@ -1316,7 +1325,8 @@
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     map.on("error", e => {                                  // tile/network errors: say so, never fake a tile
       const src = (e && e.sourceId) || "";
-      const name = { esri: "Esri imagery", esriPlaces: "Esri labels", esriRoads: "Esri roads", night: "NASA GIBS", dem: "AWS terrain", ofm: "OpenFreeMap" }[src] || src;
+      const name = { esri: "Esri imagery", esriPlaces: "Esri labels", esriRoads: "Esri roads", night: "NASA GIBS", dem: "AWS terrain", ofm: "OpenFreeMap",
+        lsat: "live satellite", lradar: "RainViewer radar" }[src] || src;
       if (name && !satTileErr.includes(name)) { satTileErr = satTileErr ? satTileErr + ", " + name : name; satLabel(); }
     });
     await new Promise((ok, bad) => {
@@ -1328,7 +1338,14 @@
       map.once("load", () => { clearInterval(t); ok(); });
     });
     addOverlays();
-    map.on("click", e => { const o = satHit(e.point); if (o) select(o); else closeCard(); });
+    map.on("click", e => {
+      if (liveOn && map.getLayer("o-cams")) {
+        const cf = map.queryRenderedFeatures([[e.point.x - 7, e.point.y - 7], [e.point.x + 7, e.point.y + 7]], { layers: ["o-cams"] })[0];
+        if (cf) { openCam(cf.properties.n); return; }
+      }
+      const o = satHit(e.point); if (o) select(o); else closeCard();
+    });
+    map.on("moveend", liveMoved);
     let hovRaf = 0;
     map.on("mousemove", e => {
       if (hovRaf) return;
@@ -1377,7 +1394,8 @@
     const vis = (id, on) => { if (M.getLayer(id)) M.setLayoutProperty(id, "visibility", on ? "visible" : "none"); };
     if (m === "city") ensureBuildings();
     vis("b-esri", m !== "night"); vis("b-night", m === "night");
-    vis("b-places", m === "hybrid"); vis("b-roads", m === "hybrid"); vis("b-bld", m === "city");
+    vis("b-places", m === "hybrid" || m === "live"); vis("b-roads", m === "hybrid"); vis("b-bld", m === "city");
+    setLive(m === "live");
     try { M.setTerrain(m === "terrain" ? { source: "dem", exaggeration: 1.3 } : null); } catch (e) { /* terrain unsupported */ }
     // MapLibre 4 places the camera relative to sea level: zoomed in close over high ground (Andes,
     // Himalaya) a pitched camera ends up inside the mountain, so 3D terrain stops at a safe zoom
@@ -1468,6 +1486,16 @@
   satv.addEventListener("click", e => {
     const m = e.target.closest("[data-sm]");
     if (m) { applySatMode(m.dataset.sm); return; }
+    const lv = e.target.closest("[data-live]");
+    if (lv && lv.tagName === "BUTTON") {
+      const k = lv.dataset.live;
+      if (k === "radar") { store("live.radar", !radarOn()); liveVis(); renderLive(); }
+      else if (k === "pipclose") closePip();
+      else if (k === "camsretry") { camsKey = ""; fetchCams(true); }
+      else if (k === "camsmin" || k === "camsmax") { store("live.camsmin", k === "camsmin"); renderCams(); }
+      return;
+    }
+    const cam = e.target.closest("[data-cam]"); if (cam) { openCam(+cam.dataset.cam); return; }
     const b = e.target.closest("[data-sa]"); if (!b) return;
     const a = b.dataset.sa;
     if (a === "retry") { openSat(); return; }
@@ -1477,6 +1505,155 @@
     if (a === "in") M.zoomIn(); else if (a === "out") M.zoomOut();
     else if (a === "north") { setOrbit(false); M.easeTo({ bearing: 0, pitch: SAT_3D[satMode] ? 60 : 0, duration: reduced ? 0 : 600 }); }
     else if (a === "orbit") setOrbit(!orbitOn);
+  });
+
+  // ───────── ◉ LIVE (v8.5) · the newest geostationary-satellite frame for this part of the world
+  // (10–15 min cadence, ~0.5–3 km/px), RainViewer radar and the public webcams near the view —
+  // each with its own capture time. The ground underneath stays the archival Esri mosaic and is
+  // labelled that way: nothing archival is ever presented as live. Backend: globalmap_live.py.
+  let live = null, liveOn = false, liveTimer = 0, liveMoveT = 0, liveCams = null, camsKey = "", camsBusy = false;
+  const liveEl = $("#gm-live"), camsEl = $("#gm-cams"), pipEl = $("#gm-pip");
+  const radarOn = () => store("live.radar") !== false;
+  const hhmm = t => { const d = typeof t === "number" ? new Date(t * 1000) : new Date(t); return isNaN(d) ? "?" : d.toISOString().slice(11, 16) + " UTC"; };
+  const agoS = s => s == null || !isFinite(s) ? "" : s < 90 ? `${Math.max(0, Math.round(s))} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${(s / 3600).toFixed(1)} h ago`;
+  function liveLayer(id, src, tiles, maxzoom, attribution, paint, before) {
+    const s = M.getSource(src);
+    if (s && s._gmTiles === tiles[0]) return;
+    if (M.getLayer(id)) M.removeLayer(id);
+    if (s) M.removeSource(src);
+    M.addSource(src, { type: "raster", tiles, tileSize: 256, maxzoom, attribution });
+    M.getSource(src)._gmTiles = tiles[0];
+    M.addLayer({ id, type: "raster", source: src, paint, layout: { visibility: liveOn ? "visible" : "none" } }, M.getLayer(before) ? before : undefined);
+    const at = M.getContainer().querySelector(".maplibregl-ctrl-attrib");   // keep credits collapsed behind (i)
+    if (at) setTimeout(() => at.classList.remove("maplibregl-compact-show"), 0);
+  }
+  function liveVis() {
+    const v = (id, on) => { if (M && M.getLayer(id)) M.setLayoutProperty(id, "visibility", on ? "visible" : "none"); };
+    v("l-sat", !!(liveOn && live && live.satellite && live.satellite.ok));
+    v("l-radar", !!(liveOn && radarOn() && live && live.radar && live.radar.ok));
+    v("o-cams", liveOn); v("o-cams-h", liveOn);
+  }
+  async function fetchLive() {
+    if (!M || !M._gmReady || !liveOn) return;
+    const c = M.getCenter();
+    try {
+      const d = await getJSON(`/api/globalmap/live?lat=${c.lat.toFixed(3)}&lon=${c.lng.toFixed(3)}`);
+      if (!liveOn || !M) return;
+      live = { ...d, at: Date.now() };
+      const s = d.satellite, r = d.radar;
+      if (s && s.ok) liveLayer("l-sat", "lsat", s.tiles, s.maxzoom, esc(s.attribution),
+        { "raster-opacity": ["interpolate", ["linear"], ["zoom"], 2, 0.95, 6, 0.8, 9, 0.5, 13, 0.32], "raster-fade-duration": 0 }, "b-roads");
+      if (r && r.ok) liveLayer("l-radar", "lradar", r.tiles, r.maxzoom, esc(r.attribution), { "raster-opacity": 0.72, "raster-fade-duration": 0 }, "b-roads");
+      liveVis(); renderLive();
+      fetchCams();
+    } catch (e) { live = { error: e.message, at: Date.now() }; renderLive(); }
+  }
+  function renderLive() {
+    if (!liveOn) { liveEl.hidden = true; return; }
+    const L = live, now = Date.now(), lines = [];
+    if (!L) lines.push(`<div class="gl-row"><span class="gl-dot wait"></span>finding the newest satellite frame for this area…</div>`);
+    else if (L.error) lines.push(`<div class="gl-row bad"><span class="gl-dot bad"></span>live layers unavailable · ${esc(L.error)}</div>`);
+    else {
+      const drift = (now - L.at) / 1000, s = L.satellite, r = L.radar;
+      lines.push(s && s.ok
+        ? `<div class="gl-row"><span class="gl-dot on"></span><b>LIVE SATELLITE</b> ${esc(s.name)} · frame ${hhmm(s.time)} · <b>${agoS(s.age_s + drift)}</b>${s.stale ? " · <i>refresh failed, showing last frame</i>" : ""}
+           <small>${esc(s.band)} · new frame every ${s.cadence_min} min · ~${s.km_per_px} km per pixel · ${esc(s.operator)}</small></div>`
+        : `<div class="gl-row bad"><span class="gl-dot bad"></span>live satellite unavailable · ${esc(s ? s.error : "?")}</div>`);
+      lines.push(r && r.ok
+        ? `<div class="gl-row"><span class="gl-dot ${radarOn() ? "on" : "off"}"></span><b>RADAR</b> RainViewer · ${hhmm(r.time)} · ${agoS(r.age_s + drift)}
+           <button type="button" class="gl-tog" data-live="radar" aria-pressed="${radarOn()}">${radarOn() ? "HIDE" : "SHOW"}</button>
+           <small>precipitation · coverage varies by country</small></div>`
+        : `<div class="gl-row bad"><span class="gl-dot bad"></span>radar unavailable · ${esc(r ? r.error : "?")}</div>`);
+      lines.push(`<div class="gl-row dim"><span class="gl-dot off"></span><b>GROUND</b> Esri archival mosaic · capture dates vary · <b>not live</b></div>`);
+    }
+    liveEl.innerHTML = lines.join("");
+    liveEl.hidden = false;
+  }
+  function camRadius() {
+    const b = M.getBounds(), c = M.getCenter();
+    return Math.max(5, Math.min(250, Math.round(km(c.lat, c.lng, b.getNorth(), b.getEast()))));
+  }
+  async function fetchCams(force) {
+    if (!M || !liveOn) return;
+    if (M.getZoom() < 7.5) { liveCams = { far: true }; camsKey = ""; renderCams(); setData("gm-cams", []); return; }
+    const c = M.getCenter(), rad = camRadius();
+    const key = `${c.lat.toFixed(1)},${c.lng.toFixed(1)},${Math.round(rad / 10)}`;
+    if (!force && key === camsKey && liveCams && !liveCams.far) return;
+    if (camsBusy) return;
+    camsBusy = true; camsKey = key;
+    try {
+      const d = await getJSON(`/api/globalmap/webcams?lat=${c.lat.toFixed(3)}&lon=${c.lng.toFixed(3)}&radius=${rad}`);
+      liveCams = d;
+      setData("gm-cams", (d.webcams || []).map((w, n) => pt(w.lon, w.lat, { k: "c", n })));
+    } catch (e) { liveCams = { ok: false, configured: true, error: e.message, webcams: [] }; }
+    finally { camsBusy = false; }
+    renderCams();
+  }
+  function renderCams() {
+    if (!liveOn) { camsEl.hidden = true; return; }
+    const d = liveCams, n = d && d.webcams ? d.webcams.length : 0;
+    const mini = store("live.camsmin") === true;
+    camsEl.classList.toggle("min", mini);
+    if (mini) {
+      camsEl.innerHTML = `<button type="button" class="gc-pill" data-live="camsmax" aria-label="Show live webcams">📹 WEBCAMS${n ? ` · ${n}` : ""}</button>`;
+      camsEl.hidden = false; return;
+    }
+    let h = `<div class="gc-h">📹 LIVE WEBCAMS NEAR VIEW<button type="button" class="gc-min" data-live="camsmin" aria-label="Minimise webcams panel" title="Minimise">–</button></div>`;
+    if (!d || d.far) h += `<p class="gc-p">Zoom in on a city or region to find public webcams near it.</p>`;
+    else if (!d.configured) h += `<p class="gc-p">Live public cameras come from the <b>Windy Webcams API</b>. Add your own free key
+        (<a href="https://api.windy.com/keys" target="_blank" rel="noopener noreferrer">api.windy.com/keys ↗</a>, choose “Webcams API”). It stays on this machine.</p>
+        <form class="gc-key" data-live="keyform" autocomplete="off"><input type="password" name="k" placeholder="paste Windy Webcams API key" aria-label="Windy Webcams API key" spellcheck="false"/>
+        <button type="submit" class="gm-btn">SAVE</button></form><p class="gc-err" id="gc-err" hidden></p>`;
+    else if (d.error) h += `<p class="gc-p bad">${esc(d.error)}</p><button type="button" class="gm-btn" data-live="camsretry">RETRY</button>`;
+    else if (!d.webcams.length) h += `<p class="gc-p">No public webcams within ${d.radius_km} km of the map centre. Try zooming out a little.</p>`;
+    else h += `<div class="gc-sub">${d.webcams.length} camera${d.webcams.length > 1 ? "s" : ""} within ${d.radius_km} km · windy.com</div><ul class="gc-list">` +
+      d.webcams.map((w, n) => `<li><button type="button" data-cam="${n}">
+        ${w.preview ? `<img src="${esc(w.preview)}" alt="" loading="lazy" referrerpolicy="no-referrer"/>` : `<span class="gc-noimg">📹</span>`}
+        <span class="gc-t"><b>${esc(w.title)}</b><small>${esc(w.place || "")}${w.updated ? " · image " + esc(agoS((Date.now() - Date.parse(w.updated)) / 1000)) : ""}</small>
+        <small class="gc-kind ${w.player_kind === "live stream" ? "live" : ""}">${w.player_kind === "live stream" ? "● LIVE STREAM" : "TIMELAPSE · today"}</small></span></button></li>`).join("") + `</ul>`;
+    camsEl.innerHTML = h; camsEl.hidden = false;
+  }
+  function openCam(n) {
+    const w = liveCams && liveCams.webcams && liveCams.webcams[n]; if (!w) return;
+    const body = w.player
+      ? `<iframe src="${esc(w.player)}" title="${esc(w.title)}" allow="fullscreen; autoplay" allowfullscreen loading="lazy"
+           referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe>`
+      : w.preview ? `<img src="${esc(w.preview)}" alt="${esc(w.title)}" referrerpolicy="no-referrer"/>` : `<p class="gc-p">No player for this camera.</p>`;
+    pipEl.innerHTML = `<div class="gp-h"><span class="gp-live ${w.player_kind === "live stream" ? "on" : ""}">${w.player_kind === "live stream" ? "● LIVE" : "TIMELAPSE"}</span>
+      <b>${esc(w.title)}</b><span class="gp-s">${esc(w.place || "")}</span>
+      ${w.detail ? `<a href="${esc(w.detail)}" target="_blank" rel="noopener noreferrer" title="Open on windy.com">↗</a>` : ""}
+      <button type="button" data-live="pipclose" aria-label="Close camera">✕</button></div>${body}
+      <div class="gp-f">Webcam by windy.com${w.updated ? " · last image " + esc(hhmm(w.updated)) : ""}</div>`;
+    pipEl.hidden = false;
+    if (M) M.easeTo({ center: [w.lon, w.lat], zoom: Math.max(M.getZoom(), 12), duration: reduced ? 0 : 900 });
+  }
+  function closePip() { pipEl.hidden = true; pipEl.innerHTML = ""; }
+  function setLive(on) {
+    const was = liveOn;
+    liveOn = !!on;
+    clearInterval(liveTimer); liveTimer = 0;
+    if (!liveOn) { liveVis(); liveEl.hidden = true; camsEl.hidden = true; if (was) closePip(); return; }
+    renderLive(); renderCams(); fetchLive();
+    liveTimer = setInterval(() => {
+      if (!liveOn || S.mode !== "sat" || !S.visible) return;
+      if (!live || Date.now() - live.at > 120000) fetchLive(); else renderLive();
+    }, 30000);
+  }
+  function liveMoved() {
+    if (!liveOn) return;
+    clearTimeout(liveMoveT);
+    liveMoveT = setTimeout(fetchLive, 1200);
+  }
+  satv.addEventListener("submit", async e => {
+    const f = e.target.closest('[data-live="keyform"]'); if (!f) return;
+    e.preventDefault();
+    const k = f.k.value.trim(), err = $("#gc-err");
+    try {
+      const r = await fetch("/api/globalmap/webcams/key", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: k }) });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || "rejected");
+      f.k.value = ""; camsKey = ""; liveCams = null; fetchCams(true);
+    } catch (x) { if (err) { err.textContent = x.message; err.hidden = false; } }
   });
   let satTick = 0;
   setInterval(() => {

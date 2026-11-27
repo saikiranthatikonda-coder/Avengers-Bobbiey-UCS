@@ -5,6 +5,30 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-27 — v8.5.0 · Voice dictation in the command bar, LIVE satellite close-up
+- **feat: VOICE DICTATION** (ChatGPT-style). A 🎙 mic inside the command bar:
+  - Tap it (or press Alt+M) and speak. A recording strip shows a live waveform, a timer, ✕ cancel (Esc) and ✓ done (Enter).
+  - Your words land in the box as editable text. Press ▶ / Enter to send. An optional setting sends immediately instead.
+  - **Local and private by default.** Whisper runs on this PC (the same model as the voice loop, shared when it is loaded). Audio is transcribed in memory and never stored, logged or sent anywhere else.
+  - **Multilingual.** Auto-detects ~99 languages and shows which one it heard, or you can pick one (Hindi, Telugu, Tamil and 30 more in the menu). It can also translate to English.
+  - Optional **Browser engine** that shows live words as you speak. It is clearly labelled: audio goes to the browser's speech service.
+  - **New agent picker** next to the box (AUTO or any agent). Starting with a name ("Doom, scan my network…") picks that agent automatically, and @name still works.
+  - Text already in the box is passed to Whisper as context, so names and context carry over.
+  - The hands-free voice loop ignores what it hears while you dictate, so nothing is answered twice.
+  - Clear messages explain microphone permission, missing microphones and insecure-page problems.
+  - Endpoints: `GET /api/dictate/status`, `POST /api/dictate`, `POST /api/dictate/hold`.
+- **feat: GLOBAL ACTIVITY MAP · ◉ LIVE mode** (SATELLITE view). The close-up now shows real live layers, each with its capture time:
+  - The newest **geostationary weather-satellite frame** for wherever you are looking, refreshed every 10–15 minutes. Frames typically appear 20–40 minutes after capture.
+    - Coverage: GOES-West/East (Americas), Meteosat MTG (Europe/Africa), Meteosat IODC (India and the Indian Ocean) and Himawari (East Asia and Australia).
+    - At night it switches to the infrared band automatically.
+    - The frame time is read from the provider, never guessed.
+  - **RainViewer radar**, refreshed every 10 minutes.
+  - **Live public webcams near the view.** They come from the Windy Webcams API, using your own free key, which is stored locally and never shown back.
+    - Webcams appear as map markers and in a list showing each camera's image age.
+    - A picture-in-picture player shows the live stream or today's timelapse.
+  - The ground imagery underneath stays archival and is labelled "not live". No free source offers real-time street-level satellite imagery.
+- **Tests:** `tests/test_dictation.py` (17) and `tests/test_globalmap_live.py` (13). Both run offline, with no microphone, no model download and no network.
+
 ## 2026-11-27 — v8.4.0 · DOOM, hands-free conversation, satellite map, immersive website
 - **feat: DOOM joins the team.** A ninth built-in agent for cyber defense and global awareness:
   - Handles threat hunting, CVEs, exposure, hardening, phishing and scams, and global situations.

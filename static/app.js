@@ -3755,7 +3755,8 @@ $("#ask-form").addEventListener("submit", async (e) => {
   inp.value = "";
   logEvent(`<span class="tag">[you]</span> ${escapeHTML(text)}`);
   const m = text.match(/^@(\w+)\s+(.+)/);
-  const agent = m ? m[1] : null;
+  const picked = ($("#ask-agent") && $("#ask-agent").value) || null;   // agent picker (v8.5)
+  const agent = m ? m[1] : picked;
   const prompt = m ? m[2] : text;
   try {
     // real-time engine: returns at once; ack, streaming reply and timings

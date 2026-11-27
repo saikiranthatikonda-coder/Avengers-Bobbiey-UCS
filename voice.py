@@ -78,6 +78,14 @@ AGENT_TRIGGERS: list[tuple[str, str]] = [
 CUSTOM_TRIGGERS: list[tuple[str, str]] = []
 
 
+def _dictation_holding() -> bool:
+    try:
+        import dictation
+        return dictation.holding()
+    except Exception:
+        return False
+
+
 def match_custom(text: str) -> tuple[str | None, str | None, int]:
     """(agent_key, command, position) for the custom wake phrase that occurs first in `text`
     (longest wins on a tie), or (None, None, -1)."""
@@ -259,6 +267,7 @@ class VoiceLoop:
 
         try:
             stt = WhisperModel(model_name, device="cpu", compute_type="int8")
+            self.stt = stt                 # shared with dashboard dictation (dictation.py)
         except Exception as e:
             await self.hub.broadcast({
                 "type": "log", "level": "warn",
@@ -469,6 +478,12 @@ class VoiceLoop:
         self.diag.append(entry)
         if not text or len(text) < 2 or is_phantom(text, seconds):
             entry["outcome"] = "ignored (empty / phantom)"
+            await self.hub.broadcast({"type": "voice", "event": "idle"})
+            return
+        if _dictation_holding():
+            # the operator is dictating into the dashboard's command bar: that speech is
+            # text for the box, not a spoken command — hands-free must not answer it too
+            entry["outcome"] = "ignored (dashboard dictation in progress)"
             await self.hub.broadcast({"type": "voice", "event": "idle"})
             return
 

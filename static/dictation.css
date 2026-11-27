@@ -1,0 +1,64 @@
+/* VOICE DICTATION · v8.5 — mic inside the command bar, recording strip, settings popover */
+.ask-form { align-items: stretch; position: relative; }
+.ask-agent { flex: none; max-width: 6.8rem; background: rgba(0, 0, 0, 0.55); color: var(--accent); border: 1px solid var(--panel-edge);
+  border-radius: 4px; font-family: var(--font-display); font-size: 0.55rem; letter-spacing: 0.08em; padding: 0 0.3rem; cursor: pointer; outline: none; }
+.ask-agent:focus-visible { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+.ask-agent option { background: #06121c; color: var(--text); }
+.ask-field { position: relative; flex: 1; min-width: 0; display: flex; }
+.ask-field > input { flex: 1; min-width: 0; padding-right: 3.6rem !important; }
+.ask-form .ask-field .dict-mic, .ask-form .ask-field .dict-opt {
+  position: absolute; top: 50%; transform: translateY(-50%); background: transparent; color: var(--text-dim, #8fb3c7); border: 0;
+  padding: 0; box-shadow: none; cursor: pointer; display: grid; place-items: center; border-radius: 50%; font-family: var(--font-mono); }
+.ask-form .ask-field .dict-mic { right: 1.35rem; width: 1.75rem; height: 1.75rem; transition: color 0.2s, background 0.2s; }
+.ask-form .ask-field .dict-opt { right: 0.25rem; width: 1rem; height: 1.6rem; font-size: 0.6rem; border-radius: 3px; }
+.ask-form .ask-field .dict-mic:hover, .ask-form .ask-field .dict-mic:focus-visible { color: var(--accent); background: rgba(255, 255, 255, 0.06); box-shadow: none; }
+.ask-form .ask-field .dict-opt:hover, .ask-form .ask-field .dict-opt:focus-visible { color: var(--accent); box-shadow: none; }
+.ask-form .ask-field .dict-mic.on { color: #fff; background: #ff3b5c; }
+.ask-form .ask-field .dict-mic:disabled { opacity: 0.5; cursor: wait; }
+
+/* recording strip — covers the input while the mic is open, like ChatGPT */
+.dict-rec { position: absolute; inset: 0; display: flex; align-items: center; gap: 0.45rem; padding: 0 0.3rem 0 0.6rem; z-index: 2;
+  background: rgba(4, 12, 20, 0.96); border: 1px solid #ff3b5c; border-radius: 4px; box-shadow: 0 0 14px rgba(255, 59, 92, 0.35); }
+.dict-rec[hidden] { display: none; }
+.dict-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #ff3b5c; flex: none; animation: dict-pulse 1.2s infinite; }
+@keyframes dict-pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 92, 0.7); } 70% { box-shadow: 0 0 0 7px rgba(255, 59, 92, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 92, 0); } }
+.dict-wave { flex: 0 1 34%; min-width: 3rem; height: 1.3rem; }
+.dict-live { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left;
+  font-family: var(--font-mono); font-size: 0.72rem; color: var(--text); opacity: 0.85; }
+.dict-time { font-family: var(--font-mono); font-size: 0.7rem; color: #ff8fa3; flex: none; min-width: 2.2rem; text-align: right; }
+.ask-form .dict-rec button { flex: none; width: 1.7rem; height: 1.7rem; padding: 0; border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700; cursor: pointer; border: 1px solid var(--panel-edge); }
+.ask-form .dict-rec .dict-x { background: transparent; color: var(--text); }
+.ask-form .dict-rec .dict-ok { background: var(--accent); color: #00131a; border-color: var(--accent); }
+.ask-form .dict-rec .dict-x:hover { border-color: #ff3b5c; color: #ff3b5c; box-shadow: none; }
+.dict-rec.busy { border-color: var(--accent); box-shadow: 0 0 14px var(--accent-glow); }
+.dict-rec.busy .dict-dot { background: var(--accent); animation: dict-spin 0.9s linear infinite; border-radius: 2px; box-shadow: none; }
+.dict-rec.busy .dict-wave { display: none; }
+.dict-rec.busy .dict-live, .dict-live.hint { direction: ltr; }
+@keyframes dict-spin { to { transform: rotate(360deg); } }
+.ask-form.dict-on button[type="submit"] { opacity: 0.45; }
+
+.dict-note { margin-top: 0.35rem; font-family: var(--font-mono); font-size: 0.62rem; line-height: 1.4; color: var(--text-dim, #9fb8c8);
+  border-left: 2px solid var(--panel-edge); padding: 0.2rem 0.45rem; background: rgba(0, 0, 0, 0.35); }
+.dict-note[hidden] { display: none; }
+.dict-note.ok { border-left-color: var(--accent); color: var(--text); }
+.dict-note.bad { border-left-color: #ff3b5c; color: #ffc2cc; }
+.dict-note b { color: var(--accent); }
+
+.dict-pop { margin-top: 0.4rem; background: rgba(4, 12, 20, 0.97); border: 1px solid var(--panel-edge-bright, var(--accent)); border-radius: 6px;
+  padding: 0.55rem 0.65rem; font-family: var(--font-mono); font-size: 0.64rem; color: var(--text); display: flex; flex-direction: column; gap: 0.45rem; }
+.dict-pop[hidden] { display: none; }
+.dp-h { font-family: var(--font-display); font-size: 0.55rem; letter-spacing: 0.18em; color: var(--accent); }
+.dp-row { display: flex; align-items: center; gap: 0.5rem; justify-content: space-between; }
+.dp-row select { flex: 1; max-width: 14rem; background: rgba(0, 0, 0, 0.55); color: var(--text); border: 1px solid var(--panel-edge); border-radius: 3px;
+  font-family: var(--font-mono); font-size: 0.66rem; padding: 0.2rem; }
+.dp-eng { border: 1px solid var(--panel-edge); border-radius: 4px; padding: 0.3rem 0.45rem; margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.dp-eng legend { padding: 0 0.25rem; color: var(--text-dim, #9fb8c8); }
+.dp-eng label { display: flex; gap: 0.4rem; align-items: flex-start; cursor: pointer; }
+.dp-eng label span { display: flex; flex-direction: column; }
+.dp-eng small { color: var(--text-dim, #9fb8c8); font-size: 0.58rem; line-height: 1.35; }
+.dp-eng input:disabled + span { opacity: 0.55; }
+.dp-chk { display: flex; gap: 0.4rem; align-items: center; cursor: pointer; }
+.dp-chk input:disabled { opacity: 0.4; }
+.dp-foot { margin: 0; color: var(--text-dim, #9fb8c8); font-size: 0.56rem; }
+@media (prefers-reduced-motion: reduce) { .dict-dot, .dict-rec.busy .dict-dot { animation: none; } }
