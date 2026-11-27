@@ -75,6 +75,17 @@ def _is_loopback(host: str | None) -> bool:
     return (host or "") in LOOPBACK
 
 
+def _perimeter_event(kind: str, ip: str, path: str = "", why: str = "") -> None:
+    """DOOM SENTINEL intrusion watch (doomsentinel.py) — records a refusal. Never raises, never
+    blocks, never changes the perimeter's decision. Keeps IP, path (no query), reason, time only."""
+    try:
+        s = state.get("doomsentinel")
+        if s is not None:
+            s.record(kind, ip, path, why)
+    except Exception:
+        pass
+
+
 def _authed(request: Request) -> bool:
     hdr = request.headers.get("authorization", "")
     if hdr.startswith("Bearer ") and AUTH.verify_api_token(hdr[7:].strip()):
@@ -374,6 +385,7 @@ async def auth_gate(request: Request, call_next):
         # node agents authenticate with their own token / the pairing code
         return await _pass()
     if not AUTH.password_set:
+        _perimeter_event("remote_off", client, path)
         if path.startswith("/api/"):
             return JSONResponse({"ok": False, "error":
                                  "remote access disabled — set an access password "
@@ -382,6 +394,7 @@ async def auth_gate(request: Request, call_next):
         return RedirectResponse("/login")
     if _authed(request):
         return await _pass()
+    _perimeter_event("unauth", client, path)
     if path.startswith("/api/"):
         return JSONResponse({"ok": False, "error": "authentication required"},
                             status_code=401)
@@ -437,6 +450,7 @@ async def origin_guard(request: Request, call_next):
                           request.headers.get("sec-fetch-site"), _is_loopback(client),
                           request.url.path.startswith("/api/"))
     if why:
+        _perimeter_event("origin", client, request.url.path, why)
         return JSONResponse({"ok": False, "error": f"refused: {why}"}, status_code=403)
     return await call_next(request)
 
@@ -491,8 +505,10 @@ async def auth_login(req: LoginReq, request: Request):
         return {"ok": False, "error": "remote access disabled — no password set on the host"}
     locked = AUTH.is_locked(ip)
     if locked:
+        _perimeter_event("lockout", ip, "/api/auth/login")
         return {"ok": False, "error": f"locked out — retry in {locked}s"}
     if not AUTH.verify_password(req.password):
+        _perimeter_event("login_fail", ip, "/api/auth/login")
         n = AUTH.record_failure(ip)
         await _audit("auth.login_failed", f"from {ip} (attempt {n})")
         if n >= 5:
@@ -2017,7 +2033,7 @@ def _exit_soon(reason: str) -> None:
 import importlib  # noqa: E402
 
 FEATURE_MODULES = ("disaster", "devices", "secagent", "computeruse", "phone", "evolution", "agentos", "globalmap",
-                   "dashboard_context", "customagents", "openintel", "dictation", "globalmap_live", "privacyshield", "regionmap")
+                   "dashboard_context", "customagents", "openintel", "dictation", "globalmap_live", "privacyshield", "regionmap", "doomsentinel")
 _feature_ctx = {"state": state, "audit": lambda action, detail="": _audit(action, detail),
                 "commander": lambda: _commander(), "host_only": lambda request: _host_only(request)}
 for _name in FEATURE_MODULES:

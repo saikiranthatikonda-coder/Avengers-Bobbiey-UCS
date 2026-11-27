@@ -780,6 +780,20 @@ async def r_privacy(state, q, cmd):
             "remote_access": s["perimeter"]["remote_access"]}
 
 
+async def r_sentinel(state, q, cmd):
+    s = _need(state, "doomsentinel").snapshot()
+    d, i, g, j = s["defcon"], s["intrusion"], s["integrity"], s["injection"]
+    return {"source": "DOOM SENTINEL (perimeter refusals · git + SHA-256 code integrity · injection shield)",
+            "defcon": d["level"], "defcon_name": d["name"], "reasons": d["reasons"][:5],
+            "perimeter_refusals_24h": i["total_24h"], "refusals_last_hour": i["last_hour"],
+            "top_sources": [{"ip": t["ip"], "refusals": t["n"], "kinds": t["kinds"]} for t in i["top_sources"][:4]],
+            "intrusion_bursts_24h": len(i["bursts"]),
+            "code_integrity": g.get("verdict"), "perimeter_files_changed": g.get("perimeter_changed", []),
+            "code_changed_outside_commit": len(g.get("modified", []) or []) + len(g.get("deleted", []) or []),
+            "new_untracked_executables": g.get("untracked_exec", [])[:5],
+            "injections_neutralised_24h": j["last_24h"], "injection_sources": j["by_source"]}
+
+
 async def r_regions(state, q, cmd):
     """INDIA + TELANGANA immersive maps: live weather / air at every state & district point + hazards inside."""
     import regionmap
@@ -807,6 +821,10 @@ async def r_regions(state, q, cmd):
 
 
 SECTIONS: dict[str, tuple[str, object, str]] = {
+    "sentinel": ("DOOM Sentinel", r_sentinel,
+                 r"\b(defcon|threat level|intrusions?|intruders?|break[- ]?ins?|brute[- ]?force|attack(s|ed|ing)?|hack(ed|ers?|ing)?|"
+                 r"probing|failed logins?|lock(ed)?[- ]?out|tamper(ed|ing)?|code integrity|integrity|prompt[- ]injections?|"
+                 r"injection attempts?|sentinel|is (bucs|the system|my system) (safe|secure|compromised))\b"),
     "regions": ("India & Telangana live maps", r_regions,
                 r"\b(telangana|india(n)? (map|grid|states?)|districts?|hyderabad|warangal|karimnagar|nizamabad|khammam|adilabad|"
                 r"which (state|district)|hottest (state|district|city)|coolest (state|district)|worst air)\b"),
@@ -964,6 +982,17 @@ def _compact(entry: dict, limit: int = SECTION_CHARS) -> str:
     return scrub_text(txt)
 
 
+def _shield(text: str, source: str) -> str:
+    """DOOM SENTINEL injection shield: neutralise prompt-injection phrases in facts before an agent
+    reads them (doomsentinel.shield_text), counted per source when the sentinel is running."""
+    try:
+        import doomsentinel
+        s = doomsentinel.current()
+        return s.shield(text, source) if s is not None else doomsentinel.shield_text(text)[0]
+    except Exception:
+        return text
+
+
 def render_block(entries: list[dict], limit: int = BLOCK_CHARS) -> str:
     if not entries:
         return ""
@@ -980,6 +1009,7 @@ def render_block(entries: list[dict], limit: int = BLOCK_CHARS) -> str:
             line = f"• {e['title']} (source: {e.get('source')}; as of {e.get('as_of')}): {_compact(e, cap)}"
         else:
             line = f"• {e['title']}: UNAVAILABLE — {e.get('unavailable')}"
+        line = _shield(line, e.get("section") or e.get("title") or "?")
         if used + len(line) + 1 > limit:
             break
         lines.append(line)
@@ -1002,7 +1032,7 @@ async def context_for(state: dict | None, question: str, commander: bool | None 
         if "screen" not in secs and screen_match(state, question) and (_ASKY.search(question or "") or "?" in (question or "")):
             secs = (secs + ["screen"])[:MAX_SECTIONS]
         if not secs and (meta or {}).get("agent") == "doom":
-            secs = ["secagent", "privacy", "threats"]           # DOOM's standing brief: posture, privacy, threats
+            secs = ["sentinel", "secagent", "privacy", "threats"]   # DOOM standing brief: DEFCON, posture, privacy, threats
         if not secs and (meta or {}).get("agent") == "bob":
             secs = ["evolution", "secagent", "missions"]        # BOB's standing brief: approvals, security, team
         if allow is not None:

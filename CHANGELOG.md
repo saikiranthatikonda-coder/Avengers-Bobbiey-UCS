@@ -5,6 +5,40 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-27 — v8.9.0 · DOOM SENTINEL: intrusion watch, code integrity, injection shield, DEFCON
+- **feat: DOOM SENTINEL** (`doomsentinel.py`, new DOOM panel). It is a live defence layer on top of the cyber analyst, the Privacy Shield and the DOOM GATE. Everything is measured on this machine.
+  - **INTRUSION WATCH:** records every request the perimeter refuses:
+    - unauthenticated remote API calls;
+    - requests made while remote access is off;
+    - cross-site and DNS-rebinding attempts stopped by the origin guard;
+    - failed logins and locked-out sources.
+
+    It keeps only the IP, the path without its query string, the reason and the time, in memory. It never keeps headers, cookies, tokens or bodies. It shows a 24-hour hourly chart, the top sources and a breakdown by kind. 12 refusals from one source within 5 minutes raise an **intrusion-burst alert** and an audit entry. The perimeter's decisions are unchanged: `main.py` only reports them through `_perimeter_event`.
+  - **CODE INTEGRITY:**
+    - The security-perimeter files are SHA-256 fingerprinted at start. A change on disk while BUCS runs is **TAMPER**: a critical alert plus an audit entry.
+    - Every 5 minutes, `git status` lists code changed outside a commit and **new untracked executables or scripts** in the app folder.
+    - Run it on demand with INTEGRITY CHECK. After reviewing a change, ACCEPT CURRENT CODE (commander only, audited) makes it the new reference.
+  - **INJECTION SHIELD:** every block of dashboard facts handed to an agent is screened. Phrases matching any of 8 patterns are replaced with "[instruction removed by DOOM]" and counted per source:
+    - override and role-hijack phrases;
+    - jailbreak markers;
+    - fake system tags;
+    - prompt extraction;
+    - data exfiltration;
+    - piped shell one-liners and encoded PowerShell;
+    - tool hijack.
+
+    Only the pattern name and source are recorded, never the text.
+  - **DEFCON 5 to 1:** one threat level from tamper, intrusion bursts, critical findings, the cyber-analyst score, code changed outside a commit, the refusal rate, injections and the privacy score. Every reason is listed.
+- **DOOM, upgraded:**
+  - DOOM's standing brief now starts with the Sentinel.
+  - DOOM answers "what's our DEFCON?", "any intrusions?" and "is the code intact?" (the last one runs a live integrity check).
+  - A new `sentinel` facts section is readable by every agent.
+  - The DOOM GATE now treats `doomsentinel.py` as security-perimeter code: any self-written change to it needs your review.
+- **API:** `GET /api/sentinel`, `POST /api/sentinel/scan`, `POST /api/sentinel/rebaseline` (both POSTs are commander only).
+- **Website:** DOOM gains INTRUSION WATCH, CODE INTEGRITY, INJECTION SHIELD and DEFCON cards. The rule now reads "Sentinel watches · DOOM scans · BOB signs · you approve".
+- **Dashboard:** voice/agent dashboard targets for `sentinel`, `india` and `telangana`.
+- **Tests:** `tests/test_v89.py` (9), including an end-to-end check that a cross-site attack on the running server is refused and recorded.
+
 ## 2026-11-27 — v8.8.0 · Immersive INDIA, TELANGANA and DISASTER RESPONSE maps (and the first release of v8.7.0)
 v8.7.0 below was finished but never published on its own. It ships in this release.
 - **feat: immersive INDIA and TELANGANA maps.** The two side maps beside the global activity map are now full MapLibre satellite maps.

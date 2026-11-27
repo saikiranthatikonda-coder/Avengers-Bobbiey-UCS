@@ -24,7 +24,7 @@ PRIVATE = re.compile(r"(^|/)(\.env|credentials\.json|token\.json|auth\.json|flee
                      r"node_token\.txt|governance\.json|operator_memory\.json|audio_pref\.json|audit\.log|model_pref\.json|"
                      r"commander_memory\.md|license_signing\.key|licences_issued\.json|providers\.json|license\.json|"
                      r"operators\.json|commerce_[^/]*\.db)$|(^|/)\.update/|(^|/)\.git/", re.I)
-PERIMETER = re.compile(r"^(main\.py|auth\w*\.py|rbac\w*\.py|licensing\w*\.py|updater\.py|doomgate\.py|"
+PERIMETER = re.compile(r"^(main\.py|auth\w*\.py|rbac\w*\.py|licensing\w*\.py|updater\.py|doomgate\.py|doomsentinel\.py|"
                        r"tools/release\.py|computeruse_core\.py)$", re.I)
 PERIMETER_SYMBOLS = re.compile(r"\b(auth_gate|origin_guard|licence_gate|_origin_problem|_is_loopback|_commander|"
                                r"verify_manifest|PUBLIC_PATHS|LOCAL_HOSTNAMES|JARVIS_ALLOWED_HOSTS)\b")

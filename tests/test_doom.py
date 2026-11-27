@@ -60,7 +60,7 @@ class StandingBrief(unittest.TestCase):
             return []
         with mock.patch.object(dc, "read_sections", fake_read), mock.patch.object(dc, "render_block", lambda e: "B"):
             asyncio.run(dc.context_for({"x": 1}, "how are we doing", commander=True, meta={"agent": "doom"}))
-        self.assertEqual(seen["secs"], ["secagent", "privacy", "threats"])     # v8.7: posture, privacy, threats
+        self.assertEqual(seen["secs"], ["sentinel", "secagent", "privacy", "threats"])     # v8.9: DEFCON first
         seen.clear()
         with mock.patch.object(dc, "read_sections", fake_read), mock.patch.object(dc, "render_block", lambda e: "B"):
             asyncio.run(dc.context_for({"x": 1}, "how are we doing", commander=True, meta={"agent": "jarvis"}))

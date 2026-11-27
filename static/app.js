@@ -2552,7 +2552,7 @@ const DASH_TARGETS = {
   roster: "#avengers-panel", readiness: "#intel-readiness",
   computeruse: "#computeruse-mount", phone: "#phone-mount", disaster: "#disaster-mount",
   devices: "#devices-mount", secagent: "#secagent-mount", evolution: "#evolution-mount",
-  agentos: "#agentos-mount", globalmap: "#globalmap-mount", privacy: "#privacy-mount",
+  agentos: "#agentos-mount", globalmap: "#globalmap-mount", privacy: "#privacy-mount", sentinel: "#sentinel-mount", india: ".india-panel", telangana: ".telangana-panel",
 };
 function execDashCmd(target) {
   const sel = DASH_TARGETS[target]; if (!sel) return;

@@ -112,3 +112,26 @@
 .dim-pulse { width: 14px; height: 14px; border-radius: 50%; pointer-events: none; border: 2px solid var(--c); animation: rm-ping 1.8s ease-out infinite; }
 /* [hidden] must win over the display rules above */
 .im-err[hidden], .dim-bar[hidden], .dim-feed[hidden], .rm-tip[hidden], .dis-imm[hidden] { display: none !important; }
+
+/* DOOM SENTINEL (v8.9) — shares the Privacy Shield card styles (.pv-*) */
+.sn-grid { grid-template-columns: 210px minmax(0, 1.2fr) minmax(0, 1fr); }
+@media (max-width: 1100px) { .sn-grid { grid-template-columns: 1fr; } }
+.sn-def { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 4px; }
+.sn-def-n { font-family: var(--font-display, monospace); font-size: 3.6rem; line-height: 1; font-weight: 900; transition: color .3s; }
+.sn-def-l { font-family: var(--font-display, monospace); font-size: 0.55rem; letter-spacing: 0.24em; color: #9fb; }
+.sn-def-bar { display: flex; gap: 3px; margin: 4px 0 6px; }
+.sn-def-bar i { font-style: normal; width: 26px; height: 18px; display: grid; place-items: center; font-family: var(--font-display, monospace); font-size: 0.55rem;
+  color: #000; background: color-mix(in srgb, var(--c) 25%, transparent); border: 1px solid color-mix(in srgb, var(--c) 60%, transparent); border-radius: 3px; opacity: 0.55; }
+.sn-def-bar i.on { background: var(--c); opacity: 1; box-shadow: 0 0 12px var(--c); }
+.sn-spark { display: flex; align-items: flex-end; gap: 2px; height: 34px; margin: 2px 0 6px; border-bottom: 1px solid rgba(43, 212, 111, 0.25); }
+.sn-spark i { flex: 1; background: rgba(43, 212, 111, 0.18); border-radius: 1px 1px 0 0; }
+.sn-spark i.on { background: #ff8c42; box-shadow: 0 0 6px rgba(255, 140, 66, 0.6); }
+.sn-kinds { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.sn-kinds span, .sn-chip { font-size: 0.58rem; color: #cfe; background: rgba(43, 212, 111, 0.08); border: 1px solid rgba(43, 212, 111, 0.25); border-radius: 10px; padding: 0.1rem 0.45rem; }
+.sn-kinds b, .sn-chip b { color: #ffd84d; }
+.sn-burst { margin-top: 4px; font-size: 0.62rem; color: #ffb38a; }
+.sn-verdict { font-size: 0.7rem; display: flex; align-items: center; gap: 6px; }
+.sn-verdict.ok b { color: #2bd46f; } .sn-verdict.warn b { color: #ffd84d; } .sn-verdict.bad b { color: #ff3b5c; }
+.sn-sub { font-size: 0.6rem; color: #9db8b0; margin-top: 3px; line-height: 1.45; word-break: break-word; }
+.sn-sub.bad, .sn-sub b.bad { color: #ff6b81; }
+.sn-inj { display: flex; flex-wrap: wrap; gap: 4px; }

@@ -578,6 +578,24 @@ async def i_privacy(ctx, text, low):
               action={"name": "privacy.report"})
 
 
+async def i_sentinel(ctx, text, low):
+    """v8.9 · DOOM SENTINEL: DEFCON, intrusions, code integrity, injection shield."""
+    if not re.search(r"\b(defcon|threat level|security level|any (intrusions?|intruders?|break[- ]?ins?|attacks?)|"
+                     r"(intrusion|attack) (report|status|watch)|is (bucs|the system|my system|the dashboard) "
+                     r"(safe|secure|compromised|under attack|being attacked)|is (the|our|my) code (intact|tampered|safe)|"
+                     r"code integrity|integrity (check|report|status)|(prompt )?injection (attempts?|report|shield)|sentinel (report|status))\b", low):
+        return None
+    s = ctx.get("doomsentinel")
+    if s is None:
+        return _r("DOOM Sentinel isn't loaded on this install.", "doom")
+    if re.search(r"\b(check|scan|verify)\b.*\bintegrity\b|\bintegrity (check|scan)\b|\bis (the|our|my) code (intact|tampered|safe)", low):
+        try:
+            await s.integrity()
+        except Exception:
+            pass
+    return _r(s.summary(), "doom", ui=[{"type": "dash-cmd", "target": "sentinel"}], action={"name": "sentinel.report"})
+
+
 async def i_memory(ctx, text, low):
     mem = ctx.get("memory")
     if mem and re.search(r"\b(what do you know about me|who am i|remember about me|my memory)\b", low):
@@ -689,7 +707,7 @@ async def i_dashboard(ctx, text, low):
 # sections, specific questions before broad ones
 HANDLERS = [i_conversation, i_agentvoice, i_handsfree, i_remember, i_computeruse, i_brain, i_dev, i_time, i_region_map, i_ui,
             i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
-            i_inbox, i_threats, i_news, i_privacy, i_memory, i_vision, i_missions, i_dashboard]
+            i_inbox, i_sentinel, i_threats, i_news, i_privacy, i_memory, i_vision, i_missions, i_dashboard]
 
 
 async def match(ctx: dict, text: str) -> dict | None:

@@ -673,7 +673,7 @@ def builtin_tools(state: dict, memory=None, folders_fn=lambda: []) -> list[Tool]
              S({"section": {**st, "enum": ["auto", "system", "hardware", "network", "threats", "insights", "decisions",
                                             "missions", "productivity", "agenda", "weather", "news", "fleet", "devices",
                                             "disaster", "globalmap", "secagent", "computeruse", "phone", "evolution",
-                                            "aicore", "selfheal", "enterprise", "licence", "brain", "roadmap", "openintel", "screen", "privacy", "regions"]},
+                                            "aicore", "selfheal", "enterprise", "licence", "brain", "roadmap", "openintel", "screen", "privacy", "regions", "sentinel"]},
                 "query": {**st, "maxLength": 300}}, ["section"]), "read", dashboard_read),
         Tool("computer_use_task", "Launch a computer-use task on this PC (drives mouse/keyboard). Always needs approval.",
              S({"goal": {**st, "maxLength": 600}}, ["goal"]), "destructive", computer_use,
