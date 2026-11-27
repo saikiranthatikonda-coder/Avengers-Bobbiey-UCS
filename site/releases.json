@@ -1,14 +1,15 @@
 {
   "kind": "bucs-release",
-  "version": "8.5.0",
+  "version": "8.5.1",
   "date": "2026-11-27",
-  "commit": "1fe395c",
+  "commit": "50c8402",
   "notes": [
-    "Voice dictation: a mic in the command bar turns speech into editable text — local, private, multilingual",
-    "Global map LIVE mode: newest satellite frame, live radar and nearby webcams, each with its capture time"
+    "Conversation ON/OFF is back; OFF ignores room talk unless you start with Hey Jarvis",
+    "Command bar fixed: growing text box, mic inside, agent picker on its own row",
+    "Header clock no longer shifts the header"
   ],
-  "url": "releases/bucs-8.5.0.zip",
-  "sha256": "e7d629aedeec054126774a14b2c835d261442c8639671b1fbd8b3712d6b9a90b",
-  "size": 966868,
-  "sig": "wsZPiynpYX1prz8p0VS5VvpZBIF3nAxplMbSEf9-_-T-LcIqkrUPwuih4uajN-ASRlhgePZoCI6i-UR69bC7AA"
+  "url": "releases/bucs-8.5.1.zip",
+  "sha256": "77f7857d07aaf610e92d5fd2ac5051aaa4f537f0911fb00197dafbb2d8087053",
+  "size": 969038,
+  "sig": "6hmOZLUKKGg9jIm1i-7qr7Fj_QUed4xyFfecJoVx147lTHq_OawOL0wCsrAyuPxpgnPOMT89YnBdcEmemNhxBg"
 }
