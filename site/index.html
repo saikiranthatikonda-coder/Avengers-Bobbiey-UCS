@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/bucs-immersive.css">
 <style>
 /* ═══════════════════════════════════════════════════════
    AVENGERS × BOBBIEY · Launch site
@@ -688,12 +689,27 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
 <div class="bg-glow a"></div>
 <div class="bg-glow b"></div>
 <div class="grid-layer"></div>
+<div id="imm-map" aria-hidden="true"></div>
+<div id="imm-scrim" aria-hidden="true"></div>
+<div id="doom-tint" aria-hidden="true"></div>
+<aside class="imm-hud" id="imm-hud" aria-label="Background map">
+  <div class="imm-row">
+    <button type="button" class="imm-chip" data-imm-locate>📍 Fly to my location</button>
+    <button type="button" class="imm-chip mini" id="imm-tilt" hidden>↻ Enable tilt</button>
+    <button type="button" class="imm-min" id="imm-min" aria-expanded="true" aria-controls="imm-hud" title="Collapse">–</button>
+  </div>
+  <div class="imm-where imm-hide" data-imm-where>Showing: <b>demo location</b></div>
+  <div class="imm-hide"><span class="imm-msg" data-imm-msg></span></div>
+  <div class="imm-hide">Camera altitude <span class="imm-alt" id="imm-alt">≈</span> · satellite imagery (not a live feed)</div>
+  <div class="imm-attr">Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community · Terrain: Mapzen/AWS Open Data · MapLibre</div>
+</aside>
 
 <nav id="nav">
   <a class="logo" href="#top" title="Stark Industries × Bobbiey"><span class="lg-terms"><span class="lg-stark">STARK INDUSTRIES</span> × <span class="lg-bob">BOBBIEY</span></span></a>
   <div class="nav-links">
     <a href="#new">NEW</a>
     <a href="#agents">AGENTS</a>
+    <a href="#doom">DOOM</a>
     <a href="#caps">CAPABILITIES</a>
     <a href="#console">CONSOLE</a>
     <a href="#pricing">PRICING</a>
@@ -705,16 +721,16 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
 <section class="hero" id="top">
   <div class="wrap hero-grid">
     <div>
-      <div class="hero-tag"><span class="dot"></span>NOW AVAILABLE · BUILT IN HYDERABAD</div>
+      <div class="hero-tag"><span class="dot"></span>NOW AVAILABLE · BUILT IN HYDERABAD</div><a class="doom-pill" href="#launch">DOOMSDAY PROTOCOL · <b id="doom-pill-cd">DEC 18, 2026</b></a>
       <h1>The Interface Between <span class="grad">AI And Humans</span></h1>
-      <p class="hero-sub">Eight specialist AI agents in one command center on your own Windows PC, Mac or Linux machine. They operate your apps, take phone calls, watch the world live and improve themselves, and they act only with your approval.</p>
+      <p class="hero-sub">Nine specialist AI agents, now led on cyber defense by DOOM, in one command center on your own Windows PC, Mac or Linux machine. They operate your apps, take phone calls, watch the world live and improve themselves, and they act only with your approval.</p>
       <div class="cta-row">
         <a class="btn primary" id="hero-dl" href="#get">GET BUCS</a>
         <a class="btn ghost" href="#console">WATCH IT WORK</a>
       </div>
       <p class="hero-dl-hint" id="hero-dl-hint">Windows · macOS · Linux · <a href="#get">all downloads</a></p>
       <div class="hero-stats">
-        <div class="hstat"><div class="n">8</div><div class="l">SPECIALIST AGENTS</div></div>
+        <div class="hstat"><div class="n">9</div><div class="l">SPECIALIST AGENTS</div></div>
         <div class="hstat"><div class="n">3</div><div class="l">WINDOWS · MACOS · LINUX</div></div>
         <div class="hstat"><div class="n">100%</div><div class="l">LOCAL AI OPTION</div></div>
       </div>
@@ -728,6 +744,26 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
         <span><b style="--c:#ff6b6b"></b>Earthquakes</span><span><b style="--c:#00d9ff"></b>Flights</span><span><b style="--c:#8b7cf8"></b>Satellites</span><span><b style="--c:#ffb35c"></b>Space weather</span><span><b style="--c:#e879f9"></b>Outages</span>
       </figcaption>
     </figure>
+  </div>
+</section>
+
+<!-- ═══ LAUNCH · DOOMSDAY PROTOCOL ═══ -->
+<section class="launch" id="launch">
+  <div class="wrap">
+    <div class="launch-card reveal">
+      <div>
+        <div class="launch-k">— DOOMSDAY PROTOCOL</div>
+        <h2>BUCS × <span>the Doomsday era</span></h2>
+        <p>Launching on Product Hunt as the countdown to <b>Avengers: Doomsday</b> runs out. New in this release: DOOM, a sovereign cyber-defense agent, hands-free conversation with the whole team, and the satellite edition of the Global Activity Map.</p>
+        <div class="ph-line2">Keep scrolling: the background flies from orbit down to street level.</div>
+      </div>
+      <div>
+        <div class="cd" id="doom-cd" role="timer" aria-label="Countdown to December 18, 2026, in your local time">
+          <div><b>–</b><span>DAYS</span></div><div><b>–</b><span>HOURS</span></div><div><b>–</b><span>MIN</span></div><div><b>–</b><span>SEC</span></div>
+        </div>
+        <div class="cd-note">to December 18, 2026 · 00:00 your local time · theatrical release</div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -752,7 +788,7 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
     </div>
     <div class="vision-narrative reveal">
       <p><strong>Bobbiey UCS</strong> is built on a simple conviction: the interface to your operations should behave like a trusted chief-of-staff — perceiving everything, reasoning continuously, speaking when it matters, and acting on your command.</p>
-      <p>One screen. Eight specialist AI agents. Live telemetry, vision awareness, voice command, predictive analytics and a local-first AI core — fused into a single cinematic operations console. This is the JARVIS blueprint, made real.</p>
+      <p>One screen. Nine specialist AI agents. Live telemetry, vision awareness, voice command, predictive analytics and a local-first AI core — fused into a single cinematic operations console. This is the JARVIS blueprint, made real.</p>
     </div>
   </div>
 </section>
@@ -791,7 +827,7 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
   <div class="wrap">
     <div class="reveal">
       <div class="eyebrow">— THE TEAM</div>
-      <h2 class="sect">Eight agents. <span class="grad">One mind.</span></h2>
+      <h2 class="sect">Nine agents. <span class="grad">One mind.</span></h2>
       <p class="sect-sub">Every Avenger is a specialist with a role, a voice and a wake word. JARVIS leads: it delegates directives over a shared context blackboard, and the team builds on one persistent cross-agent memory.</p>
     </div>
     <div class="team-grid">
@@ -805,6 +841,95 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
   </div>
 </section>
 
+<!-- ═══ DOOM · NEW AGENT ═══ -->
+<section class="doom" id="doom">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="eyebrow">— NEW AGENT</div>
+      <h2 class="sect">Meet <span class="dg">DOOM.</span></h2>
+      <p class="sect-sub">Sovereign cyber-defense &amp; global awareness agent. The strongest security analyst on the team: it hunts threats, scans your exposure and watches the world, then brings you a plan. DOOM proposes. You approve.</p>
+    </div>
+    <div class="doom-grid">
+      <div class="doom-stage reveal">
+        <button type="button" class="doom-emblem" id="doom-emblem" aria-label="DOOM emblem">
+          <svg viewBox="0 0 240 240" aria-hidden="true">
+            <defs>
+              <linearGradient id="de-iron" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a4a40"/><stop offset=".55" stop-color="#1a2620"/><stop offset="1" stop-color="#0c1410"/></linearGradient>
+              <linearGradient id="de-edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2bd46f"/><stop offset="1" stop-color="#1f8a4c"/></linearGradient>
+              <radialGradient id="de-glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#2bd46f" stop-opacity=".35"/><stop offset="1" stop-color="#2bd46f" stop-opacity="0"/></radialGradient>
+            </defs>
+            <circle cx="120" cy="120" r="112" fill="url(#de-glow)"/>
+            <g class="de-ring" fill="none" stroke="#2bd46f" stroke-opacity=".55">
+              <circle cx="120" cy="120" r="104" stroke-dasharray="2 7"/>
+              <path d="M120 10a110 110 0 0 1 95 55" stroke-width="2"/><path d="M120 230a110 110 0 0 1-95-55" stroke-width="2"/>
+            </g>
+            <path d="M120 36L182 66 192 128 160 190 120 206 80 190 48 128 58 66Z" fill="url(#de-iron)" stroke="url(#de-edge)" stroke-width="3"/>
+            <path d="M120 36L120 206M58 66L120 98 182 66M48 128L120 98 192 128" fill="none" stroke="#2bd46f" stroke-opacity=".18"/>
+            <path d="M64 104L120 92 176 104 172 124 120 116 68 124Z" fill="#0a110d" stroke="#1f8a4c" stroke-width="1.5"/>
+            <path class="de-eye" d="M78 108L110 102 108 112 82 116Z M162 108L130 102 132 112 158 116Z" fill="#2bd46f"/>
+            <g stroke="#2bd46f" stroke-opacity=".7" stroke-width="3" stroke-linecap="round"><path d="M104 146V176M114 148V182M126 148V182M136 146V176"/></g>
+            <path d="M92 140L120 134 148 140" fill="none" stroke="#1f8a4c" stroke-width="2"/>
+            <circle cx="120" cy="64" r="5" fill="#2bd46f"/>
+          </svg>
+        </button>
+        <div class="doom-id">
+          <h3>DOOM</h3>
+          <div>SOVEREIGN CYBER-DEFENSE &amp; GLOBAL AWARENESS</div>
+          <div class="ad-wake"><span>WAKE WORD</span>“Doom …”</div>
+        </div>
+      </div>
+      <div class="doom-cards">
+        <div class="doom-card reveal"><div class="k">THREAT HUNTING</div><h4>Looks for what doesn't belong</h4><p>Correlates processes, connections, sign-ins and threat-intel feeds, and explains each finding in plain language with the evidence.</p></div>
+        <div class="doom-card reveal"><div class="k">EXPOSURE SCANNING</div><h4>Maps your attack surface</h4><p>Open ports, services listening on every interface, weak settings and outdated software across this machine and your fleet nodes.</p></div>
+        <div class="doom-card reveal"><div class="k">POSTURE HARDENING</div><h4>Proposals, not surprises</h4><p>Drafts concrete hardening steps with their impact and a way back. Nothing is applied until you, the owner, say yes.</p></div>
+        <div class="doom-card reveal"><div class="k">GLOBAL AWARENESS</div><h4>Watches the world for you</h4><p>Reads the Global Activity Map, world news and disaster feeds, and briefs you on what touches your locations.</p></div>
+        <div class="doom-law reveal"><b>DOOM PROPOSES · YOU APPROVE</b><span>Nothing destructive runs unattended, and every action is written to the audit trail.</span></div>
+        <div class="doom-term reveal" role="img" aria-label="Illustrative DOOM proposal waiting for owner approval">
+          <span class="g">doom ›</span> exposure scan complete · <span class="w">1 finding</span><br>
+          <span class="w">!</span> remote-desktop service reachable from the LAN · proposal: restrict to this machine<br>
+          <span class="g">›</span> impact: remote sessions from other devices stop · rollback: one click<br>
+          <span class="g">›</span> awaiting owner approval &nbsp;<span class="appr"><span>APPROVE</span><span>REJECT</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ HANDS-FREE CONVERSATION ═══ -->
+<section class="handsfree" id="handsfree">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="eyebrow">— HANDS-FREE CONVERSATION</div>
+      <h2 class="sect">Just keep talking. <span class="grad">The team keeps up.</span></h2>
+      <p class="sect-sub">Talk to JARVIS, the Avenger agents and DOOM back to back, with no wake word before every sentence. Name an agent once and keep talking to it.</p>
+    </div>
+    <div class="hf-grid">
+      <ul class="hf-rules reveal">
+        <li><span class="hf-ic">∞</span><div><b>NO WAKE WORD EACH TIME</b>Once the conversation is open, just speak. Follow-ups go straight through.</div></li>
+        <li><span class="hf-ic">→</span><div><b>NAME AN AGENT ONCE</b>Say “Doom, …” or “Cap, …” and that agent stays on the line until you name another.</div></li>
+        <li><span class="hf-ic">■</span><div><b>SAY “STOP”</b>Interrupts the reply mid-sentence, so you can redirect.</div></li>
+        <li><span class="hf-ic">z</span><div><b>“SLEEP” OR “GO QUIET”</b>Pauses listening. Say “Jarvis” to wake the team again.</div></li>
+      </ul>
+      <div class="hf-panel reveal">
+        <div class="hf-head"><span class="cu-live"></span>CONVERSATION MODE<span class="tag">ILLUSTRATIVE</span></div>
+        <div class="hf-body">
+          <div class="hf-l"><span class="who">you</span><span class="t">Jarvis, what's on today?</span></div>
+          <div class="hf-l ai" style="--c:#00d9ff"><span class="who">JARVIS</span><span class="t">Two meetings and a dentist call at four.</span></div>
+          <div class="hf-l"><span class="who">you</span><span class="t">Cap, push the dentist to Friday.</span></div>
+          <div class="hf-l ai" style="--c:#3b82f6"><span class="who">CAPTAIN</span><span class="t">Moved to Friday, 4 pm.</span></div>
+          <div class="hf-l"><span class="who">you</span><span class="t">And remind me the day before.</span></div>
+          <div class="hf-l ai" style="--c:#3b82f6"><span class="who">CAPTAIN</span><span class="t">Reminder set for Thursday.</span></div>
+          <div class="hf-l"><span class="who">you</span><span class="t">Doom, anything exposed on my network?</span></div>
+          <div class="hf-l ai" style="--c:#2bd46f"><span class="who">DOOM</span><span class="t">One service is reachable from every device on the LAN. I have a proposal to restrict it—</span></div>
+          <div class="hf-l"><span class="who">you</span><span class="t">Stop. Show me on screen.</span></div>
+          <div class="hf-l sys" style="--c:#8b7cf8"><span class="who">you</span><span class="t">“go quiet” → listening paused · say “Jarvis” to wake</span></div>
+        </div>
+        <div class="hf-note">Illustrative conversation: replies depend on your calendar, devices and the model you choose.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ═══ CAPABILITIES ═══ -->
 <section class="caps" id="caps">
   <div class="wrap">
@@ -814,7 +939,7 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
     </div>
     <div class="cap-grid">
       <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></div><h4>UNIFIED COMMAND CENTER</h4><p>Telemetry, agenda, comms, news, weather, maps and security — one live HUD, zero tab-switching.</p></div>
-      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18" opacity=".5"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></div><h4>AI INTELLIGENCE LAYER</h4><p>Eight specialist agents observe, summarize, alert and recommend — continuously, in plain language.</p></div>
+      <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18" opacity=".5"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></div><h4>AI INTELLIGENCE LAYER</h4><p>Nine specialist agents observe, summarize, alert and recommend — continuously, in plain language.</p></div>
       <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 17l5-6 4 4 6-8 3 4"/></svg></div><h4>REAL-TIME MONITORING</h4><p>CPU, memory, network, connectivity, presence and global activity streamed over WebSockets at 2-second cadence.</p></div>
       <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-8M21 19H3" opacity=".6"/><path d="M4 9l6-4 6 6 5-3" stroke-dasharray="3 2"/></svg></div><h4>PREDICTIVE ANALYTICS</h4><p>Trend regression projects resource pressure 15 minutes ahead — the system warns before things break.</p></div>
       <div class="cap reveal"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><circle cx="12" cy="12" r="3"/></svg></div><h4>COMPUTER VISION OPS</h4><p>Identity-free presence awareness — the console knows when its operator arrives, idles or leaves. Nothing leaves the machine.</p></div>
@@ -1044,7 +1169,7 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
           <p class="sect-sub">Scroll to open the command center layer by layer. Everything runs on your own machine, and every sensitive step waits for you.</p>
           <ol class="sc-layers" id="sc-layers">
             <li><b>Command HUD</b><span>Live telemetry, forecasts, agenda and alerts on one screen.</span></li>
-            <li><b>Agent roster</b><span>Eight specialists sharing one context and one memory.</span></li>
+            <li><b>Agent roster</b><span>Nine specialists sharing one context and one memory.</span></li>
             <li><b>Global Activity Map</b><span>Earthquakes, flights, satellites, space weather and outages.</span></li>
             <li><b>AI Core</b><span>Local and cloud models, tool calling, memory and plugins.</span></li>
             <li><b>Approvals</b><span>Computer Use, phone calls and upgrades wait for your yes.</span></li>
@@ -1104,6 +1229,46 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
         <div class="ph">PHASE 6 <span class="now-badge">IN DEVELOPMENT</span></div>
         <h4>Ecosystem &amp; Licensing</h4>
         <p>Turning the platform into a business: one paid plan, BUCS Pro, paid over UPI and unlocked by an owner-signed licence key that every install verifies offline. Live today. Alongside it, the platform keeps growing outward: hands-free voice with sleep and wake word, smart-device control, cross-network fleet links, an approval-gated cyber analyst and a self-healing core, and now Computer Use, an AI Phone Agent, a live Global Activity Map, the AI Core with its agent builder and plugin marketplace, and autonomous evolution that never ships a change without your approval. Native installers for Windows and macOS are in final testing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ GLOBAL ACTIVITY MAP · SATELLITE EDITION ═══ -->
+<section class="orbit" id="orbit">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="eyebrow">— GLOBAL ACTIVITY MAP · SATELLITE EDITION</div>
+      <h2 class="sect">From orbit to your street.<br><span class="grad">One scroll.</span></h2>
+      <p class="sect-sub">The flight behind this page uses the same satellite imagery as the dashboard's new Global Activity Map. In BUCS you switch between five views and stack live layers on top.</p>
+    </div>
+    <div class="orb-grid">
+      <div class="orb-panel reveal">
+        <div class="gr-t">FIVE VIEWS</div>
+        <div class="orb-modes">
+          <div class="orb-mode"><b>SATELLITE</b><span>Esri World Imagery, from the whole planet down to street level.</span></div>
+          <div class="orb-mode"><b>HYBRID</b><span>The same imagery with borders, places and labels.</span></div>
+          <div class="orb-mode"><b>3D TERRAIN</b><span>Real elevation from the open AWS Terrarium model.</span></div>
+          <div class="orb-mode"><b>3D CITY</b><span>Extruded buildings standing on the imagery.</span></div>
+          <div class="orb-mode night"><b>NIGHT</b><span>A dark basemap that lets the live layers glow.</span></div>
+        </div>
+        <div class="gr-t" style="margin-top:1.2rem">LIVE LAYERS</div>
+        <div class="orb-layers"><span>Earthquakes · USGS</span><span>GDACS alerts</span><span>Natural events</span><span>Volcanoes</span><span>Weather alerts</span><span>Internet outages</span><span>Flights · OpenSky</span><span>Satellites · CelesTrak</span><span>Space weather · NOAA</span><span>Day / night</span></div>
+        <p class="orb-tie">This is the imagery the dashboard uses. Every live layer names its source and fetch time, and the imagery is labelled for what it is: satellite imagery, not a live feed.</p>
+      </div>
+      <div class="orb-panel reveal">
+        <div class="gr-t">CLOSE-UP <span class="orb-badge">SATELLITE IMAGERY · NOT A LIVE FEED</span></div>
+        <dl class="orb-read" aria-live="polite">
+          <dt>TARGET</dt><dd id="orb-where">–</dd>
+          <dt>LOCAL TIME</dt><dd id="orb-time">–</dd>
+          <dt>SUN</dt><dd id="orb-sun">–</dd>
+          <dt>WEATHER NOW</dt><dd id="orb-wx">loads when you get here <small>source: Open-Meteo.com</small></dd>
+        </dl>
+        <div class="orb-actions">
+          <button type="button" class="imm-chip" data-imm-locate>📍 Fly to my location</button>
+          <span class="orb-msg" data-imm-msg></span>
+        </div>
+        <p class="orb-privacy">Privacy: we never ask for your location on load. If you click the button, your coordinates stay in this browser tab: they are not sent to us, not put in the URL and not stored. Map tiles load from Esri (imagery and labels) and AWS (terrain), so those hosts see which tiles are viewed. Current weather is fetched from Open-Meteo for the location shown: the demo location, or yours (rounded to about 1 km) only after you click.</p>
       </div>
     </div>
   </div>
@@ -1323,6 +1488,7 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
 <footer>
   <span class="fl"><b>AVENGERS × BOBBIEY</b> · UNIFIED COMMAND SYSTEM</span>
   <span class="fr">© 2026 Bobbiey · built in Hyderabad, India · jarvis-class systems for human operators</span>
+  <p class="tm">Marvel, Avengers, Doctor Doom and related names are trademarks of Marvel/Disney. BUCS is an independent fan-inspired project, not affiliated with or endorsed by Marvel or Disney. Background imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community · terrain: Mapzen/AWS Open Data · weather: Open-Meteo.com (CC BY 4.0).</p>
 </footer>
 <!-- build: __BUILD__ -->
 
@@ -1434,5 +1600,6 @@ document.getElementById("pay-form").addEventListener("submit", (e) => {
 <script src="assets/bucs-fx.js" defer></script>
 <script src="assets/bucs-download.js" defer></script>
 <script src="assets/bucs-stack.js" defer></script>
+<script src="assets/bucs-immersive.js" defer></script>
 </body>
 </html>

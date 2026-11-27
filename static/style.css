@@ -45,6 +45,16 @@ body.theme-stealth {
   --title-shadow: 0 0 12px rgba(255,255,255,0.4), 0 0 22px rgba(200,208,216,0.3);
 }
 
+body.theme-doom {
+  --accent: #2bd46f; --accent-glow: rgba(43,212,111,0.45); --accent-soft: #7dffb0;
+  --stark: #9fb3a6; --stark-glow: rgba(159,179,166,0.4);
+  --orb-color: var(--accent);
+  --panel-edge: #17402a; --panel-edge-bright: #2a7a4c;
+  --text: #dff5e7; --text-dim: #7fa08a; --bg-grad-1: #0c1a12;
+  --title-grad: linear-gradient(135deg, #b8c4bd 0%, #2bd46f 45%, #0f7a3f 90%);
+  --title-shadow: 0 0 12px rgba(43,212,111,0.5), 0 0 22px rgba(15,122,63,0.4);
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 
@@ -193,6 +203,7 @@ body {
 .theme-btn[data-theme="jarvis"]  { color: #00d9ff; }
 .theme-btn[data-theme="stark"]   { color: #ffb000; }
 .theme-btn[data-theme="stealth"] { color: #c8d0d8; }
+.theme-btn[data-theme="doom"]    { color: #2bd46f; }
 .theme-btn:hover { background: rgba(255,255,255,0.06); }
 .theme-btn.active { background: rgba(0,0,0,0.6); box-shadow: 0 0 10px currentColor inset; }
 
@@ -2984,3 +2995,12 @@ body { grid-template-columns: minmax(0, 1fr); }
 .agenda-task.prio-low .agenda-task-title { color: var(--text-dim); }
 #pc-focus { cursor: pointer; }
 @media (max-width: 480px) { .ce-form.ce-col { grid-template-columns: 1fr; } .ce-label { width: 4.5rem; } }
+
+/* ═══ HANDS-FREE + DOOM (v8.4) ═══ */
+.conv-btn.hf-paused { color: var(--warn); border-color: var(--warn); background: rgba(255,184,108,0.08); box-shadow: none; }
+.hf-link { font: inherit; font-size: 0.62rem; letter-spacing: 0.14em; color: var(--accent); background: transparent; border: 1px solid var(--panel-edge); border-radius: 4px; padding: 0.1rem 0.45rem; cursor: pointer; }
+.hf-link:hover, .hf-link:focus-visible { outline: none; border-color: var(--accent); }
+.hf-talk { margin-left: 0.6rem; vertical-align: middle; }
+.agent-card[data-agent="doom"] { background: linear-gradient(120deg, rgba(43,212,111,0.10), rgba(12,20,16,0.55) 60%); border-color: rgba(43,212,111,0.45); }
+.agent-card[data-agent="doom"] .agent-icon { color: #2bd46f; border-color: #2bd46f; box-shadow: 0 0 12px rgba(43,212,111,0.35) inset; }
+.doom-eta { display: block; font-size: 0.56rem; letter-spacing: 0.16em; color: #2bd46f; opacity: 0.85; margin-top: 2px; }

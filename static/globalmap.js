@@ -4,6 +4,8 @@
    a feed that cannot be reached is shown as stale/unavailable, never invented.
    2D TACTICAL: canvas + d3-geo (land cached to an offscreen bitmap, markers batched).
    3D GLOBE / ORBITAL: globe.gl (lazy, pinned) with satellites at their real altitude.
+   SATELLITE: MapLibre GL (lazy, pinned) over Esri World Imagery / AWS Terrarium DEM /
+   OpenFreeMap buildings / NASA Black Marble — archival imagery, labelled "not a live feed".
    Public API: window.GlobalMap = { focus({lat, lon, id, layer}), highlight(layer) } */
 (function () {
   "use strict";
@@ -19,6 +21,8 @@
     land50: "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-50m.json",
     land: "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json",
     india: "/static/geo/india_world.json",
+    maplibre: "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js",
+    maplibreCss: "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css",
   };
   const LAYERS = [
     ["quakes", "EARTHQUAKES", "Q"], ["disasters", "GDACS ALERTS", "G"], ["events", "NATURAL EVENTS", "E"],
@@ -69,6 +73,14 @@
     });
     return loaded[url];
   }
+  function loadCSS(url) {
+    if (!loaded[url]) loaded[url] = new Promise((ok, bad) => {
+      const l = document.createElement("link"); l.rel = "stylesheet"; l.href = url; l.crossOrigin = "anonymous";
+      l.onload = ok; l.onerror = () => { delete loaded[url]; l.remove(); bad(new Error("load failed: " + url)); };
+      document.head.appendChild(l);
+    });
+    return loaded[url];
+  }
   async function getJSON(url) { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error(url + " " + r.status); return r.json(); }
   const cssVar = (n, d) => (getComputedStyle(document.body).getPropertyValue(n).trim() || d);
 
@@ -93,6 +105,7 @@
         <button type="button" role="tab" data-mode="2d" class="on" aria-selected="true">2D TACTICAL</button>
         <button type="button" role="tab" data-mode="3d" aria-selected="false">3D GLOBE</button>
         <button type="button" role="tab" data-mode="orbit" aria-selected="false">ORBITAL</button>
+        <button type="button" role="tab" data-mode="sat" aria-selected="false" title="Satellite imagery, 3D terrain and 3D city (MapLibre GL)">SATELLITE</button>
       </div>
       <div class="gm-chips">
         <button type="button" class="gm-chip" id="gm-kp" title="NOAA SWPC planetary K-index">Kp —</button>
@@ -109,6 +122,7 @@
       <div class="gm-stage" id="gm-stage">
         <canvas class="gm-cv" id="gm-cv" aria-label="World map of live events" role="img"></canvas>
         <div class="gm-globe" id="gm-globe" hidden></div>
+        <div class="gm-satv" id="gm-satv" hidden></div>
         <div class="gm-tip" id="gm-tip" hidden></div>
         <div class="gm-card" id="gm-card" hidden></div>
         <div class="gm-msg" id="gm-msg">loading world geometry…</div>
@@ -166,7 +180,7 @@
     store("layers", S.on);
     if (k === "flights" && S.on.flights) pollFlights();
     if (k === "satellites" && S.on.satellites && !S.sats) pollSats();
-    renderLayers(); invalidate(true); if (G) syncGlobe();
+    renderLayers(); invalidate(true); syncViews();
   });
 
   // ───────── data
@@ -192,7 +206,7 @@
       }
       prepAurora();
       renderLayers(); renderKp(); renderTicker(); renderHist(); renderBadge(); invalidate(true);
-      if (G) syncGlobe();
+      syncViews();
       const pend = Object.values(d.layers).some(l => l.status === "pending");
       if (pend) setTimeout(pollSummary, 5000);
     } catch (e) {
@@ -247,7 +261,7 @@
     if (lat == null) return;
     if (!S.op || S.op.lat !== lat || S.op.lon !== lon) {
       S.op = { lat, lon, how, p: proj ? proj([lon, lat]) : null };
-      invalidate(true); if (G) syncGlobe();
+      invalidate(true); syncViews();
     }
   }
 
@@ -351,6 +365,7 @@
     const cw = Math.min(MAX_W, Math.max(0, Math.floor(stage.clientWidth)));
     const ch = Math.min(MAX_H, Math.max(0, Math.floor(stage.clientHeight)));
     if (!cw || !ch) return;
+    if (M && S.mode === "sat") { try { M.resize(); } catch (e) { /* map gone */ } }
     DPR = Math.min(2, window.devicePixelRatio || 1);
     if (cw === W && ch === H && cv.width === Math.round(W * DPR)) return;
     W = cw; H = ch;
@@ -501,7 +516,7 @@
       const p = proj([lon, lat]); fl.x[n] = p ? p[0] : NaN; fl.y[n] = p ? p[1] : NaN;
     }
     fl.dt = dtBase;
-    if (G && S.mode !== "2d" && !force) syncGlobeFlights();
+    if (G && isGlobe() && !force) syncGlobeFlights();
   }
 
   // ───────── satellites (SGP4 via satellite.js, propagated client-side)
@@ -530,7 +545,7 @@
         const q = satAt(iss.rec, new Date(+date + m * 60000)); if (q) S.issTrack.push([q.lon, q.lat, q.alt, m]);
       }
     }
-    if (G && S.mode !== "2d") syncGlobeSats();
+    if (G && isGlobe()) syncGlobeSats();
   }
 
   // ───────── 2D draw
@@ -792,7 +807,7 @@
         <dl>${row("FROM", esc(S.op.how))}${row(`WITHIN ${NEAR_KM} KM`, nearCount() + " event(s)")}</dl>
         <p class="gm-nosrc">SOURCE · this browser / this machine (location; no web page)</p>`;
     }
-    openCard(h); invalidate();
+    openCard(h); invalidate(); satSel();
   }
   function srcKey(i) {
     const id = String(i.id || ""); const p = id.split(":")[0].replace("-zone", "");
@@ -802,7 +817,7 @@
     card.innerHTML = `<button type="button" class="gm-x" aria-label="Close">✕</button>${h}`;
     card.hidden = false;
   }
-  function closeCard() { card.hidden = true; S.selected = null; invalidate(); if (G) syncGlobeRings(); }
+  function closeCard() { card.hidden = true; S.selected = null; invalidate(); if (G) syncGlobeRings(); satSel(); }
   card.addEventListener("click", e => { if (e.target.closest(".gm-x")) closeCard(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !card.hidden) closeCard(); });
   function nearCount() { return S.op ? items().filter(i => km(S.op.lat, S.op.lon, i.lat, i.lon) <= NEAR_KM).length : 0; }
@@ -825,7 +840,8 @@
   $("#gm-kp").addEventListener("click", () => { api.highlight("space"); showSpaceCard(); });
 
   // ───────── view control
-  function zoomTo(lat, lon, k, ms) {
+  function zoomTo(lat, lon, k, ms, satZ) {
+    if (S.mode === "sat") { satFly(lat, lon, satZ != null ? satZ : Math.min(17, Math.log2(Math.max(1, k)) + 2), ms); return; }
     if (S.mode !== "2d") { if (G) G.pointOfView({ lat, lng: lon, altitude: S.mode === "orbit" ? 2.6 : 1.4 }, ms || 1000); return; }
     const p = proj && proj([lon, lat]); if (!p || !zoomer) return;
     const t = d3.zoomIdentity.translate(W / 2 - k * p[0], H / 2 - k * p[1]).scale(k);
@@ -841,11 +857,17 @@
   $("#gm-reset").addEventListener("click", () => {
     S.near = false; $("#gm-near").classList.remove("on"); closeCard();
     if (S.mode === "2d" && zoomer) d3.select(cv).transition().duration(reduced ? 0 : 700).call(zoomer.transform, d3.zoomIdentity);
+    else if (S.mode === "sat") satReset();
     else if (G) G.pointOfView({ lat: 20, lng: S.op ? S.op.lon : 0, altitude: S.mode === "orbit" ? 3.4 : 1.75 }, 900);
   });
   // ───────── saved places (GET/POST/DELETE /api/globalmap/places · operator bookmarks, server-side)
   let places = null, placesErr = "", placeEdit = null;
   function viewNow() {
+    if (S.mode === "sat") {
+      if (!M) return null;
+      const c = M.getCenter();
+      return { lat: c.lat, lon: c.lng, zoom: Math.max(1, Math.min(24, 2 ** (M.getZoom() - 2))) };
+    }
     if (S.mode !== "2d") {
       const pv = G && G.pointOfView ? G.pointOfView() : null;
       return pv ? { lat: pv.lat, lon: pv.lng, zoom: 4 } : null;
@@ -908,7 +930,7 @@
         Object.keys(S.on).forEach(k => { if (k in p.layers) S.on[k] = !!p.layers[k]; });
         store("layers", S.on); renderLayers(); invalidate(true);
         if (S.on.flights) pollFlights(); if (S.on.satellites) pollSats();
-        if (G) syncGlobe();
+        syncViews();
       }
       zoomTo(+p.lat, +p.lon, +p.zoom || 4);
     } else if (d.plRen) { placeEdit = d.plRen; showPlaces(); const i = $("#gm-pl-edit"); if (i) { i.focus(); i.select(); } }
@@ -934,12 +956,7 @@
   // another tab changed the saved places: main broadcasts {"type":"sync","topic":"globalmap"}
   window.addEventListener("bucs:sync", e => { if (e && e.detail && e.detail.topic === "globalmap") loadPlaces(); });
 
-  $("#gm-full").addEventListener("click", () => {
-    const on = document.fullscreenElement === mount || mount.classList.contains("gm-fs");
-    if (on) { if (document.fullscreenElement) document.exitFullscreen(); mount.classList.remove("gm-fs"); }
-    else if (mount.requestFullscreen) mount.requestFullscreen().catch(() => mount.classList.add("gm-fs"));
-    else mount.classList.add("gm-fs");
-  });
+  $("#gm-full").addEventListener("click", () => toggleFull());
   document.addEventListener("fullscreenchange", scheduleResize);
 
   // ───────── timeline (24 h replay)
@@ -957,7 +974,7 @@
     $("#gm-range").value = S.replay == null ? 0 : min;
     $("#gm-live").classList.toggle("on", S.replay == null);
     $("#gm-tlabel").textContent = S.replay == null ? "LIVE" : `${utc(nowS() + min * 60).slice(5)} · −${Math.floor(-min / 60)}h${String(-min % 60).padStart(2, "0")} · replay (aircraft hidden: no history)`;
-    updateSats(); invalidate(true); if (G) syncGlobe();
+    updateSats(); invalidate(true); syncViews();
   }
   $("#gm-range").addEventListener("input", e => { stopPlay(); setReplay(+e.target.value); });
   $("#gm-live").addEventListener("click", () => { stopPlay(); setReplay(0); });
@@ -1014,7 +1031,7 @@
     tip.hidden = false; tip.style.left = "12px"; tip.style.top = "12px";
   }
   function syncGlobe() {
-    if (!G || S.mode === "2d") return;
+    if (!G || !isGlobe()) return;
     const pts = items().map(i => ({
       lat: i.lat, lon: i.lon, o: { kind: "item", it: i },
       col: i.layer === "outages" ? LAYER_COLOR.outages : SEV[i.severity],
@@ -1087,10 +1104,17 @@
   async function setMode(m) {
     if (m === S.mode) return;
     S.mode = m;
-    if (["2d", "3d", "orbit"].includes(m)) store("mode", m);   // view pref: restored on reload
+    if (["2d", "3d", "orbit", "sat"].includes(m)) store("mode", m);   // view pref: restored on reload
     mount.querySelectorAll(".gm-modes button").forEach(b => { const on = b.dataset.mode === m; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
     root.dataset.mode = m;
     hideTip();
+    if (m !== "sat") { satv.hidden = true; satVis(false); }
+    if (m === "sat") {
+      cv.hidden = true; $("#gm-globe").hidden = true; satv.hidden = false;
+      if (G) G.pauseAnimation();
+      await openSat();
+      return;
+    }
     if (m === "2d") {
       $("#gm-globe").hidden = true; cv.hidden = false;
       if (G) G.pauseAnimation();
@@ -1110,8 +1134,357 @@
     }
   }
   mount.querySelector(".gm-modes").addEventListener("click", e => { const b = e.target.closest("button[data-mode]"); if (b) setMode(b.dataset.mode); });
-  setInterval(() => { if (G && S.mode !== "2d" && S.visible) { updateSats(); syncGlobePaths(); tickClock(); } }, 2000);
+  setInterval(() => { if (G && isGlobe() && S.visible) { updateSats(); syncGlobePaths(); tickClock(); } }, 2000);
   setInterval(() => { if (G && S.mode === "3d" && S.visible) { updateFlights(); } }, 10000);
+
+  // ───────── SATELLITE view (MapLibre GL, lazy + pinned; loaded only when this view is picked)
+  // Imagery is archival (capture dates vary by place) — it is always labelled "not a live feed".
+  // The live layers drawn on top are the same items/flights/satellites the other views use.
+  function isGlobe() { return S.mode === "3d" || S.mode === "orbit"; }
+  function syncViews() { if (G) syncGlobe(); if (M && S.mode === "sat") syncSat(); }
+  const SAT_MODES = [["sat", "SATELLITE"], ["hybrid", "HYBRID"], ["terrain", "3D TERRAIN"], ["city", "3D CITY"], ["night", "NIGHT"]];
+  const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+  const ATTR = {
+    esri: "Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+    esriRef: "Boundaries, places &amp; transportation © Esri",
+    terrain: "Terrain: Mapzen / AWS Open Data",
+    ofm: "© OpenFreeMap © OpenMapTiles © OpenStreetMap contributors",
+    night: "Night lights: NASA Earth Observatory · VIIRS Black Marble 2016 via NASA GIBS",
+  };
+  const SAT_LABEL = {
+    sat: "SATELLITE IMAGERY · NOT A LIVE FEED · Esri World Imagery, capture dates vary",
+    hybrid: "SATELLITE IMAGERY + Esri labels · NOT A LIVE FEED · capture dates vary",
+    terrain: "SATELLITE IMAGERY on AWS Terrarium elevation ×1.3 · NOT A LIVE FEED",
+    city: "SATELLITE IMAGERY + OpenStreetMap building heights (zoom ≥ 13) · NOT A LIVE FEED",
+    night: "NIGHT LIGHTS · NASA Black Marble 2016 annual composite (VIIRS) · NOT A LIVE FEED · max detail zoom 8",
+  };
+  const SAT_3D = { terrain: 1, city: 1 };
+  const TERRAIN_MAXZ = 12, TERRAIN_FLYZ = 10.5;
+  const SAT_SKY = { "sky-color": "#04162a", "horizon-color": "#1d4f73", "fog-color": "#0a2236",
+    "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.5, "fog-ground-blend": 0.35, "atmosphere-blend": 0.8 };
+  let M = null, satInit = null, satPending = null, satTileErr = "", orbitOn = false, orbitRaf = 0, orbitLast = 0, dash = null;
+  let satMode = SAT_MODES.some(x => x[0] === store("satmode")) ? store("satmode") : "sat";
+  const satObjs = [];
+  const satv = $("#gm-satv");
+  satv.innerHTML = `
+    <div class="gm-sat-map" id="gm-sat-map"></div>
+    <div class="gm-sat-top">
+      <div class="gm-sat-modes" role="tablist" aria-label="Satellite map mode">${SAT_MODES.map(([k, l]) =>
+        `<button type="button" role="tab" data-sm="${k}" aria-selected="${k === satMode}" class="${k === satMode ? "on" : ""}">${l}</button>`).join("")}</div>
+      <div class="gm-sat-label" id="gm-sat-label">${esc(SAT_LABEL[satMode])}</div>
+      <div class="gm-sat-info" id="gm-sat-info" hidden></div>
+    </div>
+    <div class="gm-sat-ctl" role="toolbar" aria-label="Satellite map controls">
+      <button type="button" class="gm-btn" data-sa="in" title="Zoom in" aria-label="Zoom in">+</button>
+      <button type="button" class="gm-btn" data-sa="out" title="Zoom out" aria-label="Zoom out">−</button>
+      <button type="button" class="gm-btn" data-sa="north" title="Reset bearing (north up)" aria-label="Reset bearing"><span class="gm-compass" id="gm-compass">➤</span></button>
+      <button type="button" class="gm-btn" data-sa="track" title="Fly to this dashboard's own location (from /api/geo)">◎ TRACK THIS DASHBOARD</button>
+      <button type="button" class="gm-btn" data-sa="orbit" aria-pressed="false" title="Slow cinematic auto-rotate (stops when you drag)">⟳ ORBIT</button>
+      <button type="button" class="gm-btn" data-sa="fs" title="Full screen (Esc to exit)">⛶ FULLSCREEN</button>
+    </div>
+    <div class="gm-sat-err" id="gm-sat-err" hidden></div>`;
+
+  function satStyle() {
+    const ras = (tiles, attribution, maxzoom) => ({ type: "raster", tiles, tileSize: 256, maxzoom, attribution });
+    return { version: 8,
+      sources: {
+        esri: ras([ESRI + "World_Imagery/MapServer/tile/{z}/{y}/{x}"], ATTR.esri, 19),
+        esriPlaces: ras([ESRI + "Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"], ATTR.esriRef, 19),
+        esriRoads: ras([ESRI + "Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"], ATTR.esriRef, 19),
+        night: ras(["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png"], ATTR.night, 8),
+        dem: { type: "raster-dem", tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+          encoding: "terrarium", tileSize: 256, maxzoom: 15, attribution: ATTR.terrain },
+      },
+      sky: SAT_SKY,
+      layers: [
+        { id: "b-bg", type: "background", paint: { "background-color": "#020a12" } },
+        { id: "b-esri", type: "raster", source: "esri", layout: { visibility: "none" } },
+        { id: "b-night", type: "raster", source: "night", layout: { visibility: "none" } },
+        { id: "b-roads", type: "raster", source: "esriRoads", layout: { visibility: "none" }, paint: { "raster-opacity": 0.75 } },
+        { id: "b-places", type: "raster", source: "esriPlaces", layout: { visibility: "none" } },
+      ] };
+  }
+  const fc = features => ({ type: "FeatureCollection", features });
+  const pt = (lon, lat, properties) => ({ type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties: properties || {} });
+  function setData(id, feats) { const s = M && M.getSource(id); if (s) s.setData(fc(feats)); }
+  function addOverlays() {
+    for (const id of ["gm-poly", "gm-trk", "gm-fl", "gm-sats", "gm-ev", "gm-dash", "gm-sel"]) M.addSource(id, { type: "geojson", data: fc([]) });
+    M.addLayer({ id: "o-poly", type: "fill", source: "gm-poly", paint: { "fill-color": ["get", "c"], "fill-opacity": 0.2 } });
+    M.addLayer({ id: "o-poly-l", type: "line", source: "gm-poly", paint: { "line-color": ["get", "c"], "line-width": 1, "line-opacity": 0.8 } });
+    M.addLayer({ id: "o-trk", type: "line", source: "gm-trk", paint: { "line-color": "#ffffff", "line-opacity": 0.55, "line-width": 1.2, "line-dasharray": [3, 2] } });
+    M.addLayer({ id: "o-fl", type: "circle", source: "gm-fl", paint: { "circle-color": LAYER_COLOR.flights, "circle-opacity": 0.8,
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 1.4, 6, 2.6, 10, 4] } });
+    M.addLayer({ id: "o-sats", type: "circle", source: "gm-sats", paint: { "circle-color": ["get", "c"], "circle-radius": ["get", "r"],
+      "circle-stroke-color": "rgba(0,0,0,0.6)", "circle-stroke-width": 0.6 } });
+    M.addLayer({ id: "o-dash-h", type: "circle", source: "gm-dash", paint: { "circle-color": "rgba(0,217,255,0.10)", "circle-radius": 26,
+      "circle-stroke-color": "rgba(0,217,255,0.6)", "circle-stroke-width": 1, "circle-pitch-alignment": "map" } });
+    M.addLayer({ id: "o-ev", type: "circle", source: "gm-ev", paint: { "circle-color": ["get", "c"], "circle-radius": ["get", "r"],
+      "circle-opacity": ["get", "o"], "circle-stroke-color": ["get", "s"], "circle-stroke-width": ["get", "w"] } });
+    M.addLayer({ id: "o-dash", type: "circle", source: "gm-dash", paint: { "circle-color": "#00d9ff", "circle-radius": 5,
+      "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
+    M.addLayer({ id: "o-sel", type: "circle", source: "gm-sel", paint: { "circle-color": "rgba(0,0,0,0)", "circle-radius": 13,
+      "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
+  }
+  function ensureBuildings() {
+    if (M.getSource("ofm")) return;
+    M.addSource("ofm", { type: "vector", url: "https://tiles.openfreemap.org/planet", attribution: ATTR.ofm });
+    M.addLayer({ id: "b-bld", type: "fill-extrusion", source: "ofm", "source-layer": "building", minzoom: 13, layout: { visibility: "none" },
+      paint: {
+        "fill-extrusion-color": ["interpolate", ["linear"], ["coalesce", ["get", "render_height"], 0], 0, "#1e3a52", 30, "#3f7aa3", 120, "#8fdcff"],
+        "fill-extrusion-height": ["coalesce", ["get", "render_height"], 0],
+        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+        "fill-extrusion-opacity": 0.85 } }, "o-poly");
+  }
+  function syncSat() {
+    if (!M || !M._gmReady) return;
+    satObjs.length = 0;
+    const ev = [], poly = [];
+    for (const i of items()) {
+      if (!isFinite(i.lat) || !isFinite(i.lon)) continue;
+      const n = satObjs.push({ kind: "item", it: i }) - 1;
+      ev.push(pt(i.lon, i.lat, { k: "i", n, c: LAYER_COLOR[i.layer] || "#ffffff", o: i.stale ? 0.5 : 0.92,
+        r: i.layer === "quakes" ? 3 + Math.max(0, (i.mag || 2.5) - 2.5) * 2 : 5,
+        s: i.severity >= 4 ? "#ffffff" : SEV[i.severity] || "#000", w: i.severity >= 3 ? 1.6 : 0.8 }));
+      if (i.poly && S.on.wxalerts) poly.push({ type: "Feature", properties: { c: SEV[i.severity] },
+        geometry: { type: "MultiPolygon", coordinates: i.poly.map(r => [r]) } });
+    }
+    if (S.on.fleet && S.fleet) ev.push(pt(S.fleet.lon, S.fleet.lat, { k: "i", n: satObjs.push({ kind: "fleet" }) - 1, c: S.accent, o: 1, r: 6, s: "#ffffff", w: 1.4 }));
+    if (S.op) ev.push(pt(S.op.lon, S.op.lat, { k: "i", n: satObjs.push({ kind: "op" }) - 1, c: "#ffffff", o: 1, r: 4, s: S.accent, w: 2 }));
+    setData("gm-ev", ev); setData("gm-poly", poly);
+    syncSatFlights(); syncSatSats(); satSel();
+  }
+  function syncSatFlights() {
+    if (!M || !M._gmReady) return;
+    const f = [];
+    if (S.on.flights && S.fl && S.replay == null)
+      for (let n = 0; n < S.fl.n; n++) { const la = S.fl.lat[n], lo = S.fl.lon[n]; if (la === la && lo === lo) f.push(pt(lo, la, { k: "f", n })); }
+    setData("gm-fl", f);
+  }
+  function syncSatSats() {
+    if (!M || !M._gmReady) return;
+    const f = [], segs = [];
+    if (S.on.satellites) {
+      for (const q of S.satPos) f.push(pt(q.lon, q.lat, { k: "s", n: q.s.id, c: q.iss ? "#ffffff" : LAYER_COLOR.satellites, r: q.iss ? 5 : 2.4 }));
+      let cur = [], prev = null;
+      for (const [lo, la] of S.issTrack) {                 // split the ground track at the antimeridian
+        if (prev != null && Math.abs(lo - prev) > 180) { if (cur.length > 1) segs.push(cur); cur = []; }
+        cur.push([lo, la]); prev = lo;
+      }
+      if (cur.length > 1) segs.push(cur);
+    }
+    setData("gm-sats", f);
+    setData("gm-trk", segs.length ? [{ type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: segs } }] : []);
+  }
+  function satSel() {
+    if (!M || !M._gmReady) return;
+    const s = S.selected; let p = null;
+    if (s && s.kind === "item") p = [s.it.lon, s.it.lat];
+    else if (s && s.kind === "flight" && S.fl) p = [S.fl.lon[s.n], S.fl.lat[s.n]];
+    else if (s && s.kind === "sat") { const q = S.satPos.find(q => q.s.id === s.id); if (q) p = [q.lon, q.lat]; }
+    else if (s && s.kind === "fleet" && S.fleet) p = [S.fleet.lon, S.fleet.lat];
+    else if (s && s.kind === "op" && S.op) p = [S.op.lon, S.op.lat];
+    setData("gm-sel", p && isFinite(p[0]) && isFinite(p[1]) ? [pt(p[0], p[1])] : []);
+  }
+  const SAT_HIT = ["o-ev", "o-sats", "o-fl"];
+  function satHit(point) {
+    const b = [[point.x - 6, point.y - 6], [point.x + 6, point.y + 6]];
+    const fs = M.queryRenderedFeatures(b, { layers: SAT_HIT.filter(l => M.getLayer(l)) });
+    for (const layer of SAT_HIT) {                         // events first, then satellites, then aircraft
+      const f = fs.find(x => x.layer.id === layer); if (!f) continue;
+      const pr = f.properties;
+      if (pr.k === "i") return satObjs[pr.n] || null;
+      if (pr.k === "s") return { kind: "sat", id: pr.n };
+      if (pr.k === "f" && S.flights && S.flights.rows[pr.n]) return { kind: "flight", n: pr.n };
+    }
+    return null;
+  }
+  let satInfoKind = "";
+  function satInfo(t, kind) { const el = $("#gm-sat-info"); el.innerHTML = t || ""; el.hidden = !t; satInfoKind = t ? kind || "" : ""; }
+  function satLabel() {
+    $("#gm-sat-label").textContent = SAT_LABEL[satMode] + (satTileErr ? ` · some tiles failed (${satTileErr})` : "");
+  }
+
+  async function initSat() {
+    const probe = document.createElement("canvas");
+    if (!(probe.getContext("webgl2") || probe.getContext("webgl"))) throw new Error("WebGL is disabled or unsupported in this browser");
+    await Promise.all([loadCSS(CDN.maplibreCss).catch(() => null), loadScript(CDN.maplibre)]);
+    if (!window.maplibregl || !maplibregl.Map) throw new Error("MapLibre GL did not initialise");
+    const c = satPending || (S.op ? { lat: S.op.lat, lon: S.op.lon, z: 3 } : { lat: 20, lon: 0, z: 1.4 });
+    const map = new maplibregl.Map({ container: $("#gm-sat-map"), style: satStyle(), center: [c.lon, c.lat], zoom: c.z,
+      maxZoom: 19, maxPitch: 72, attributionControl: false, fadeDuration: 150, cooperativeGestures: false });
+    M = map;                                                // (satFail removes it if loading fails)
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+    map.on("error", e => {                                  // tile/network errors: say so, never fake a tile
+      const src = (e && e.sourceId) || "";
+      const name = { esri: "Esri imagery", esriPlaces: "Esri labels", esriRoads: "Esri roads", night: "NASA GIBS", dem: "AWS terrain", ofm: "OpenFreeMap" }[src] || src;
+      if (name && !satTileErr.includes(name)) { satTileErr = satTileErr ? satTileErr + ", " + name : name; satLabel(); }
+    });
+    await new Promise((ok, bad) => {
+      let waited = 0;                                       // count only time the page is actually shown:
+      const t = setInterval(() => {                         // background tabs don't render, so don't fail there
+        if (!document.hidden) waited++;
+        if (waited > 25) { clearInterval(t); bad(new Error("map did not load within 25 s")); }
+      }, 1000);
+      map.once("load", () => { clearInterval(t); ok(); });
+    });
+    addOverlays();
+    map.on("click", e => { const o = satHit(e.point); if (o) select(o); else closeCard(); });
+    let hovRaf = 0;
+    map.on("mousemove", e => {
+      if (hovRaf) return;
+      hovRaf = requestAnimationFrame(() => { hovRaf = 0; const o = satHit(e.point); map.getCanvas().style.cursor = o ? "pointer" : ""; showTip(o, e.point.x, e.point.y); });
+    });
+    map.on("mouseout", hideTip);
+    map.on("rotate", compass); map.on("pitch", compass);
+    const cont = map.getCanvasContainer();
+    for (const ev of ["pointerdown", "wheel", "touchstart"]) cont.addEventListener(ev, () => { if (orbitOn) setOrbit(false); }, { passive: true });
+    map.getCanvas().addEventListener("webglcontextlost", () => satFail(new Error("WebGL context lost")));
+    M._gmReady = true;
+    const at = map.getContainer().querySelector(".maplibregl-ctrl-attrib");
+    if (at) at.classList.remove("maplibregl-compact-show");  // start collapsed: (i) opens the full credits
+    applySatMode(satMode, satPending || satMode !== "city" ? false : undefined);
+    syncSat();
+    if (satPending) { const p = satPending; satPending = null; satFly(p.lat, p.lon, p.z, 0); }
+  }
+  async function openSat() {
+    $("#gm-sat-err").hidden = true;
+    try {
+      if (!satInit) { msg.textContent = "loading satellite engine…"; satInit = initSat(); }
+      await satInit;
+      msg.textContent = "";
+      if (S.mode !== "sat") return;
+      M.resize(); syncSat(); satVis(S.visible);
+    } catch (e) { satFail(e); }
+  }
+  function satFail(e) {
+    msg.textContent = "";
+    satInit = null; setOrbit(false);
+    if (M) { try { M.remove(); } catch (x) { /* already gone */ } M = null; }
+    $("#gm-sat-map").innerHTML = "";
+    const el = $("#gm-sat-err");
+    el.innerHTML = `<b>SATELLITE VIEW UNAVAILABLE</b><span>${esc(e && e.message || e)}</span>
+      <span>Needs WebGL and the MapLibre CDN (unpkg.com). 2D TACTICAL, 3D GLOBE and ORBITAL still work.</span>
+      <button type="button" class="gm-btn" data-sa="retry">RETRY</button>`;
+    el.hidden = false;
+    store("mode", "2d");                                    // a reload won't land on a broken view
+  }
+  function applySatMode(m, fly) {
+    satMode = m; store("satmode", m);
+    if (satInfoKind === "hint") satInfo("");
+    satv.querySelectorAll("[data-sm]").forEach(b => { const on = b.dataset.sm === m; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
+    satLabel();
+    if (!M || !M._gmReady) return;
+    const vis = (id, on) => { if (M.getLayer(id)) M.setLayoutProperty(id, "visibility", on ? "visible" : "none"); };
+    if (m === "city") ensureBuildings();
+    vis("b-esri", m !== "night"); vis("b-night", m === "night");
+    vis("b-places", m === "hybrid"); vis("b-roads", m === "hybrid"); vis("b-bld", m === "city");
+    try { M.setTerrain(m === "terrain" ? { source: "dem", exaggeration: 1.3 } : null); } catch (e) { /* terrain unsupported */ }
+    // MapLibre 4 places the camera relative to sea level: zoomed in close over high ground (Andes,
+    // Himalaya) a pitched camera ends up inside the mountain, so 3D terrain stops at a safe zoom
+    M.setMaxZoom(m === "terrain" ? TERRAIN_MAXZ : 19);
+    if (fly === false) { if (SAT_3D[m]) M.jumpTo({ pitch: 60 }); return; }
+    const z = M.getZoom(), c = M.getCenter();
+    const to = { pitch: SAT_3D[m] ? 60 : 0, duration: reduced ? 0 : 1400, essential: true };
+    if (m === "city" && z < 13) {
+      const home = z >= 9 ? { lat: c.lat, lon: c.lng } : dash || S.op || { lat: c.lat, lon: c.lng };
+      Object.assign(to, { center: [home.lon, home.lat], zoom: 15.5, bearing: -20 });
+      satInfo(z >= 9 ? "" : `3D CITY · flying to ${esc(dash ? dash.place : "your approximate location")} — buildings render from zoom 13`, "hint");
+    } else if (m === "terrain" && z < 3) Object.assign(to, { zoom: 4 });
+    M.flyTo(to);
+  }
+  function satFly(lat, lon, z, ms) {
+    if (!M || !M._gmReady) { satPending = { lat, lon, z }; return; }
+    setOrbit(false);
+    if (satMode === "terrain") z = Math.min(z, TERRAIN_FLYZ);
+    const o = { center: [lon, lat], zoom: z, pitch: SAT_3D[satMode] ? 60 : 0, essential: true, speed: 1.3, curve: 1.45 };
+    if (reduced || ms === 0) o.duration = 0; else if (ms) o.duration = Math.max(ms, 1800);   // a present-but-undefined duration breaks flyTo
+    M.flyTo(o);
+  }
+  function satReset() {
+    if (!M) return;
+    setOrbit(false);
+    M.flyTo({ center: [S.op ? S.op.lon : 0, 20], zoom: 1.4, bearing: 0, pitch: 0, essential: true, duration: reduced ? 0 : 1200 });
+  }
+  function compass() {
+    const c = $("#gm-compass"); if (!c || !M) return;
+    c.style.transform = `rotateX(${M.getPitch() * 0.6}deg) rotate(${-90 - M.getBearing()}deg)`;
+  }
+  async function trackDashboard() {
+    let g = null;
+    try { g = await getJSON("/api/geo"); } catch (e) { /* reported below */ }
+    if (!g || g.lat == null || !isFinite(+g.lat) || !isFinite(+g.lon)) { satInfo("◎ dashboard location unavailable (/api/geo returned no position)"); return; }
+    const place = [g.city, g.region, g.country].filter(Boolean).join(", ") || ll(+g.lat, +g.lon);
+    const how = g.source === "ip-geo" ? "IP-based, city-level · approximate (public-IP lookup of this host)"
+      : g.source === "default" ? "configured default city · NOT measured (IP lookup failed)" : "source: " + (g.source || "unknown");
+    dash = { lat: +g.lat, lon: +g.lon, place, how };
+    setData("gm-dash", [pt(dash.lon, dash.lat)]);
+    satInfo(`◎ <b>${esc(place)}</b> · ${esc(how)}`);
+    satFly(dash.lat, dash.lon, g.source === "ip-geo" ? 10.5 : 9);   // city-level zoom: no false street precision
+  }
+  function setOrbit(on) {
+    orbitOn = !!on;
+    const b = satv.querySelector('[data-sa="orbit"]');
+    if (b) { b.classList.toggle("on", orbitOn); b.setAttribute("aria-pressed", orbitOn); }
+    if (orbitRaf) { cancelAnimationFrame(orbitRaf); orbitRaf = 0; }
+    orbitLast = 0;
+    if (orbitOn && M) {
+      if (M.getPitch() < 45) M.easeTo({ pitch: 55, duration: reduced ? 0 : 1600 });
+      orbitRaf = requestAnimationFrame(orbitStep);
+    }
+  }
+  function orbitStep(ts) {
+    orbitRaf = 0;
+    if (!orbitOn || !M || !S.visible || S.mode !== "sat") return;
+    const dt = orbitLast ? Math.min(100, ts - orbitLast) : 16; orbitLast = ts;
+    if (!M.isEasing || !M.isEasing()) M.setBearing((M.getBearing() + dt * (reduced ? 0.0015 : 0.005)) % 360);   // ≈5°/s
+    orbitRaf = requestAnimationFrame(orbitStep);
+  }
+  function satVis(v) {                                      // panel off-screen / tab hidden: stop the orbit loop
+    if (!v || S.mode !== "sat") { if (orbitRaf) cancelAnimationFrame(orbitRaf); orbitRaf = 0; orbitLast = 0; return; }
+    if (orbitOn && !orbitRaf && M) orbitRaf = requestAnimationFrame(orbitStep);
+  }
+  // Fullscreen API on the whole map panel; CSS fallback (.gm-fs) when the API is missing, refused,
+  // or silently ignored (embedded webviews leave the promise pending)
+  function toggleFull() {
+    const on = document.fullscreenElement === mount || mount.classList.contains("gm-fs");
+    if (on) {
+      if (document.fullscreenElement === mount) document.exitFullscreen().catch(() => {});
+      mount.classList.remove("gm-fs"); fsLabel(); scheduleResize(); return;
+    }
+    const fb = () => { if (document.fullscreenElement !== mount && !mount.classList.contains("gm-fs")) { mount.classList.add("gm-fs"); fsLabel(); scheduleResize(); } };
+    if (!mount.requestFullscreen) return fb();
+    try { const p = mount.requestFullscreen(); if (p && p.catch) p.catch(fb); } catch (e) { return fb(); }
+    setTimeout(fb, 700);
+  }
+  function fsLabel() {
+    const on = document.fullscreenElement === mount || mount.classList.contains("gm-fs");
+    const b = satv.querySelector('[data-sa="fs"]'); if (b) b.textContent = on ? "✕ EXIT FULLSCREEN" : "⛶ FULLSCREEN";
+  }
+  document.addEventListener("fullscreenchange", fsLabel);
+  // CSS-fallback full screen has no browser Esc handling: exit it here (an open detail card closes first)
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && mount.classList.contains("gm-fs") && card.hidden) { mount.classList.remove("gm-fs"); fsLabel(); scheduleResize(); }
+  }, true);
+  satv.addEventListener("click", e => {
+    const m = e.target.closest("[data-sm]");
+    if (m) { applySatMode(m.dataset.sm); return; }
+    const b = e.target.closest("[data-sa]"); if (!b) return;
+    const a = b.dataset.sa;
+    if (a === "retry") { openSat(); return; }
+    if (a === "fs") { toggleFull(); return; }
+    if (a === "track") { trackDashboard(); return; }
+    if (!M) return;
+    if (a === "in") M.zoomIn(); else if (a === "out") M.zoomOut();
+    else if (a === "north") { setOrbit(false); M.easeTo({ bearing: 0, pitch: SAT_3D[satMode] ? 60 : 0, duration: reduced ? 0 : 600 }); }
+    else if (a === "orbit") setOrbit(!orbitOn);
+  });
+  let satTick = 0;
+  setInterval(() => {
+    if (!M || S.mode !== "sat" || !S.visible) return;
+    satTick++;
+    updateSats(); syncSatSats(); satSel(); tickClock();
+    if (satTick % 5 === 0) { updateFlights(true); syncSatFlights(); }
+  }, 2000);
 
   // ───────── clock / footer / visibility
   function tickClock() {
@@ -1132,8 +1505,8 @@
     if (!document.hidden) { pollSummary(); pollFlights(); }
   });
   function onVis() {
-    if (S.visible) { kickLoop(); if (G && S.mode !== "2d") G.resumeAnimation(); }
-    else { if (raf) cancelAnimationFrame(raf); raf = 0; if (G) G.pauseAnimation(); }
+    if (S.visible) { kickLoop(); if (G && isGlobe()) G.resumeAnimation(); satVis(true); }
+    else { if (raf) cancelAnimationFrame(raf); raf = 0; if (G) G.pauseAnimation(); satVis(false); }
   }
   if ("ResizeObserver" in window) new ResizeObserver(() => { scheduleResize(); scheduleHist(); }).observe(stage);
   else window.addEventListener("resize", scheduleResize);
@@ -1158,9 +1531,9 @@
       const r = mount.getBoundingClientRect();
       if (r.bottom < 0 || r.top > innerHeight) mount.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
       if (S.replay != null) setReplay(0);
-      if (isFinite(lat) && isFinite(lon)) zoomTo(lat, lon, 4.5);
+      if (isFinite(lat) && isFinite(lon)) zoomTo(lat, lon, 4.5, undefined, 12);
       if (it) select({ kind: "item", it }); else if (known) api.highlight(o.layer);
-      if (G) syncGlobe();
+      syncViews();
       return !!it || (isFinite(lat) && isFinite(lon));
     },
     highlight(layer) {
@@ -1180,7 +1553,10 @@
       for (let i = 0; i < n; i++) { draw(performance.now() + i * 33); tot += S.frameMs; mx = Math.max(mx, S.frameMs); }
       return { rebuild: first, steadyAvgMs: +(tot / n).toFixed(2), steadyMaxMs: +mx.toFixed(2), flights: S.fl ? S.fl.n : 0, sats: S.satPos.length, items: items().length, W, H, k: T.k };
     },
-    get state() { return { mode: S.mode, layers: Object.assign({}, S.on), frameMs: S.frameMs, landMs: S.landMs, ovlMs: S.ovlMs, replay: S.replay }; },
+    _satMap() { return M; },  // diagnostics: the MapLibre instance (null until SATELLITE has loaded)
+    get state() { return { mode: S.mode, layers: Object.assign({}, S.on), frameMs: S.frameMs, landMs: S.landMs, ovlMs: S.ovlMs, replay: S.replay,
+      sat: M && M._gmReady ? { mode: satMode, lat: +M.getCenter().lat.toFixed(4), lon: +M.getCenter().lng.toFixed(4), zoom: +M.getZoom().toFixed(2),
+        pitch: Math.round(M.getPitch()), bearing: Math.round(M.getBearing()), orbit: orbitOn } : null }; },
   };
   window.GlobalMap = api;
 
@@ -1194,7 +1570,7 @@
     pollFlights(); pollSats();
     renderHist(); invalidate(true);
     const m = store("mode");                       // remembered 2D / 3D / ORBITAL view
-    if (m === "3d" || m === "orbit") setMode(m);
+    if (m === "3d" || m === "orbit" || m === "sat") setMode(m);
   })();
   setInterval(pollSummary, 60000);
   setInterval(pollFlights, 60000);

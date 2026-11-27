@@ -78,7 +78,7 @@ setInterval(tickOps, 1000); tickOps();
 const themeBtns = document.querySelectorAll(".theme-btn");
 themeBtns.forEach(b => b.addEventListener("click", () => {
   const t = b.dataset.theme;
-  document.body.classList.remove("theme-jarvis", "theme-stark", "theme-stealth");
+  document.body.classList.remove("theme-jarvis", "theme-stark", "theme-stealth", "theme-doom");
   document.body.classList.add("theme-" + t);
   themeBtns.forEach(x => x.classList.toggle("active", x === b));
   try { localStorage.setItem("avengers-theme", t); } catch (e) {}
@@ -86,8 +86,8 @@ themeBtns.forEach(b => b.addEventListener("click", () => {
 function applySavedTheme() {
   try {
     const saved = localStorage.getItem("avengers-theme");
-    if (saved && /^(jarvis|stark|stealth)$/.test(saved)) {
-      document.body.classList.remove("theme-jarvis","theme-stark","theme-stealth");
+    if (saved && /^(jarvis|stark|stealth|doom)$/.test(saved)) {
+      document.body.classList.remove("theme-jarvis","theme-stark","theme-stealth","theme-doom");
       document.body.classList.add("theme-" + saved);
       themeBtns.forEach(x => x.classList.toggle("active", x.dataset.theme === saved));
     }
@@ -497,24 +497,48 @@ setTimeout(() => CommandConsole.refreshLatency(), 3000); setInterval(() => Comma
 
 // ═══ CONVERSATION MODE · one agent, no wake word, quiet background ═══
 var ConversationMode = {
-  set(on) {
+  hf: { agent: "jarvis", asleep: false, idle_sleep_min: 10 },
+  set(on, hf) {
     const b = document.getElementById("conv-toggle"); if (!b) return;
+    if (hf) this.hf = { ...this.hf, ...hf };
+    this.on = !!on;
     b.setAttribute("aria-pressed", on ? "true" : "false");
-    const st = on ? "ON" : "OFF";
-    b.innerHTML = `<span class="cv-full">CONVERSATION · ${st}</span><span class="cv-short">CONV · ${st}</span>`;
+    const who = String(this.hf.agent || "jarvis").toUpperCase();
+    const st = on ? (this.hf.asleep ? "PAUSED" : who) : "OFF";
+    b.innerHTML = `<span class="cv-full">HANDS-FREE · ${escapeHTML(st)}</span><span class="cv-short">HF · ${escapeHTML(st)}</span>`;
+    b.classList.toggle("hf-paused", !!(on && this.hf.asleep));
+    b.title = on ? `Hands-free conversation: just talk — no wake word. Talking to ${who}. Say another agent's name first ("Doom, …", "Cap, …") to switch; say "go quiet" to pause${this.hf.idle_sleep_min ? `; pauses itself after ${this.hf.idle_sleep_min} min of silence` : ""}. Click to turn hands-free off (wake words for every agent).`
+                 : "Hands-free is OFF: start each request with a wake phrase (Hey Jarvis, Hey Cap, Hey Doom…). Click to turn hands-free on.";
     const sub = document.getElementById("voice-sublabel");
-    if (sub) sub.textContent = on ? 'say "jarvis…", then just talk' : "";
+    if (sub) sub.innerHTML = !on ? "" : this.hf.asleep
+      ? `hands-free paused · say an agent's name · <button type="button" class="hf-link" data-hf-wake>RESUME</button>`
+      : `hands-free · talking to <b>${escapeHTML(who)}</b> · name another agent to switch`;
   },
-  async load() { try { this.set((await (await fetch("/api/conversation")).json()).on); } catch (e) {} },
+  async load() { try { const d = await (await fetch("/api/conversation")).json(); this.set(d.on, d.handsfree); } catch (e) {} },
+  async patch(body) {
+    try {
+      const d = await (await fetch("/api/conversation", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json();
+      if (d.ok === false) { logEvent(`<span class="tag">[voice]</span> ${escapeHTML(d.error || "not changed")}`, "warn"); return d; }
+      this.set(d.on, d.handsfree); return d;
+    } catch (e) { logEvent(`<span class="tag">[voice]</span> not changed: ${escapeHTML(e.message)}`, "warn"); return { ok: false }; }
+  },
   async toggle() {
     const b = document.getElementById("conv-toggle"); const on = b.getAttribute("aria-pressed") !== "true";
     this.set(on);
-    try { this.set((await (await fetch("/api/conversation", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on }) })).json()).on); }
-    catch (e) { logEvent(`<span class="tag">[voice]</span> conversation mode not changed: ${escapeHTML(e.message)}`, "warn"); return this.load(); }
-    logEvent(`<span class="tag">[voice]</span> conversation mode ${on ? "ON — just talk to JARVIS; background voices muted (still shown here)" : "OFF — wake words + all agent voices"}`);
+    const d = await this.patch({ on });
+    if (d.ok === false) return this.load();
+    logEvent(`<span class="tag">[voice]</span> hands-free ${on ? `ON — just talk, no wake word (talking to ${escapeHTML(String(this.hf.agent).toUpperCase())}); background voices muted (still shown here)` : "OFF — wake words for every agent + all agent voices"}`);
   },
 };
-document.addEventListener("click", e => { if (e.target && e.target.closest && e.target.closest("#conv-toggle")) ConversationMode.toggle(); });
+document.addEventListener("click", e => {
+  if (!e.target || !e.target.closest) return;
+  if (e.target.closest("#conv-toggle")) ConversationMode.toggle();
+  if (e.target.closest("[data-hf-wake]")) ConversationMode.patch({ asleep: false });
+  const t = e.target.closest("[data-hf-talk]");
+  if (t) ConversationMode.patch({ on: true, agent: t.dataset.hfTalk, asleep: false }).then(d => {
+    if (d && d.ok !== false) logEvent(`<span class="tag">[voice]</span> hands-free → ${escapeHTML(t.dataset.hfTalk.toUpperCase())} · just talk`);
+  });
+});
 setTimeout(() => ConversationMode.load(), 500);
 
 
@@ -2869,10 +2893,13 @@ function openVoiceEngineModal() {
       <div class="mb-stat"><span class="lbl">STT MODEL</span><span class="val">WHISPER SMALL</span></div>
     </div>
     <div class="mb-list">
-      <div class="mb-row">Wake phrases: Hey Jarvis · Hey Stark/Tony · Hey Cap/Captain · Hey Widow/Natasha · Hey Hawkeye/Clint · Hey Hulk/Bruce · Hey Thor · Hey Vision
-        <div class="mb-row-meta">FUZZY MATCH · INDIAN-ENGLISH BIASED</div></div>
+      <div class="mb-row">Wake phrases: Hey Jarvis · Hey Stark/Tony · Hey Cap/Captain · Hey Widow/Natasha · Hey Hawkeye/Clint · Hey Hulk/Bruce · Hey Thor · Hey Vision · Hey Doom
+        <div class="mb-row-meta">FUZZY MATCH · INDIAN-ENGLISH BIASED · NOT NEEDED IN HANDS-FREE MODE</div></div>
+      <div class="mb-row">Hands-free: just talk — every sentence goes to the agent you're talking to. Start with a name to switch ("Doom, scan my network"). "Stop" interrupts; "go quiet" pauses; a name resumes.
+        <div class="mb-row-meta">AUTO-PAUSE AFTER <input type="number" id="hf-idle" min="0" max="240" value="${ConversationMode.hf.idle_sleep_min ?? 10}" style="width:4rem"/> MIN OF SILENCE (0 = NEVER) · <button class="hf-link" type="button" id="hf-idle-save">SAVE</button></div></div>
       <div class="mb-row"><button class="quick-btn" id="tts-test-btn" style="width:auto;padding:.45rem .9rem">RUN SPEAKER TEST</button></div>
     </div>`);
+  $("#hf-idle-save")?.addEventListener("click", () => ConversationMode.patch({ idle_sleep_min: +($("#hf-idle")?.value || 0) }));
   $("#tts-test-btn")?.addEventListener("click", () => {
     fetch("/api/speak", { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ text: "Voice engine test. All channels operational, sir." }) }).catch(() => {});
@@ -2889,7 +2916,7 @@ async function openAgentModal(name) {
     const a = (d.agents || []).find(x => x.name === name);
     if (!a) throw new Error("agent not found");
     $("#modal-title").textContent = a.codename;
-    $("#modal-sub").textContent = a.role.toUpperCase();
+    $("#modal-sub").innerHTML = `${escapeHTML(a.role.toUpperCase())} <button type="button" class="hf-link hf-talk" data-hf-talk="${escapeHTML(a.name)}" title="Talk to ${escapeHTML(a.codename)} hands-free — no wake word">🎙 TALK HANDS-FREE</button>`;
     const hist = (a.history || []).slice(-4).reverse().map(h =>
       `<div class="mb-row">${escapeHTML((h.a || "").slice(0, 160))}
         <div class="mb-row-meta">${new Date(h.ts * 1000).toTimeString().slice(0, 5)} · RE: ${escapeHTML((h.q || "").slice(0, 60))}</div></div>`).join("");
@@ -3526,7 +3553,7 @@ function handle(msg) {
       applyNetSnapshot(msg);
       break;
     case "conversation":
-      ConversationMode.set(!!msg.on);
+      ConversationMode.set(!!msg.on, null);
       break;
     case "dev":
     case "dev-open":
@@ -3612,7 +3639,9 @@ function handle(msg) {
       if (msg.event === "speak")      { setVoiceState("speaking"); setPill("#sp-voice", "SPEAKING", "ok"); logEvent(`<span class="tag">[voice]</span> ◉ ${escapeHTML(msg.text || "")}`); }
       if (msg.event === "idle")       { setVoiceState("idle"); setPill("#sp-voice", "READY", "ok"); }
       if (msg.event === "engaged")    OrbEngage.on(msg.seconds);
-      if (msg.event === "unrouted")   setHeard(msg.text, "no wake word — start with “Hey Jarvis…” or double-clap");
+      if (msg.event === "unrouted")   setHeard(msg.text, msg.hint || "no wake word — start with “Hey Jarvis…” or double-clap");
+      if (msg.event === "handsfree")  { ConversationMode.set(ConversationMode.on !== false, msg);
+                                        if (msg.note) logEvent(`<span class="tag">[voice]</span> hands-free · ${escapeHTML(msg.note)}`); }
       if (msg.event === "summon")     { JarvisSummon.open(); logEvent(`<span class="tag">[voice]</span> 👏👏 double clap — JARVIS summoned`); }
       if (msg.event === "heard")      JarvisSummon.heard(msg.text);
       if (msg.event === "processing") JarvisSummon.state("THINKING");

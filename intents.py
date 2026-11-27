@@ -532,6 +532,9 @@ ROUTES = [
     ("captain", r"\b(schedule|meeting|calendar|brief(ing)?|remind|plan my|agenda|today's plan)\b"),
     ("stark",   r"\b(cpu|process|system|disk|code|script|automate|performance|laptop|computer|windows|driver|bug)\b"),
     ("hulk",    r"\b(memory|ram|gpu|compute|heavy|model|cluster|benchmark)\b"),
+    ("doom",    r"\b(cyber|hack(ed|er|ers|ing)?|breach(ed|es)?|malware|ransomware|phishing|scam|vulnerab\w*|cves?|"
+                r"exploit\w*|firewall|exposure|attack surface|harden\w*|security (posture|scan|audit|score)|"
+                r"intrusion|threat hunt\w*|sitrep|global (situation|awareness))\b"),
     ("widow",   r"\b(research|investigate|intel|news|threat|security|risk|who is|what happened)\b"),
     ("hawkeye", r"\b(monitor|watch|anomal|alert|vitals|spike)\b"),
     ("thor",    r"\b(announce|email|mail|message|draft|write to|tell everyone)\b"),

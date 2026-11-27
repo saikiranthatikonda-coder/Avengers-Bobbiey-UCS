@@ -29,6 +29,8 @@
       d: "The voice of the system: spoken alerts and the four-tier emergency broadcast, from info to emergency." },
     { n: "VISION", role: "Synthesizer", c: "#e879f9", wake: "“Hey Vision …”",
       d: "Connects the dots: reads every panel and every agent, and surfaces the single observation that matters right now." },
+    { n: "DOOM", role: "Cyber defense & global awareness", c: "#2bd46f", wake: "“Hey Doom …” · or just talk, hands-free",
+      d: "The team's strongest security mind: hunts threats, scans your exposure and CVEs, proposes hardening for your approval, and keeps watch over the world's disasters, outages and space weather." },
   ];
   const roster = $("#roster"), detail = $("#agent-detail");
   if (roster && detail) {

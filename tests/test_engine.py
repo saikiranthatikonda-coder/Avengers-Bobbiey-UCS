@@ -335,24 +335,41 @@ class ConversationModeTests(unittest.TestCase):
 
 @unittest.skipUnless(__import__("importlib").util.find_spec("numpy"), "numpy (optional voice dep) not installed")
 class ConversationVoice(unittest.TestCase):
+    """Conversation Mode = HANDS-FREE: no wake word; a leading name switches the agent."""
+    def setUp(self):
+        import tempfile
+        import voice
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        p = mock.patch.object(voice, "HF_FILE", Path(self.tmp.name) / "handsfree.json")   # never the owner's file
+        p.start(); self.addCleanup(p.stop)
+
     def _loop(self):
         import numpy as np
         from voice import VoiceLoop
         engine = mock.Mock(submit=mock.AsyncMock(), summon=mock.AsyncMock(), active={},
                            state={"tts": mock.Mock(speaking=False, conversation_mode=True)})
-        v = VoiceLoop(hub=FakeHub(), brain=None, team={k: mock.Mock() for k in ("jarvis", "stark")})
+        v = VoiceLoop(hub=FakeHub(), brain=None, team={k: mock.Mock() for k in ("jarvis", "stark", "doom", "vision")})
         v.engine = engine
+        v.hf_agent, v.hf_idle_min, v.hf_asleep = "jarvis", 10, False
         return v, engine, np
 
     def _hear(self, v, np, text, n=10):
         with mock.patch("voice.VoiceLoop._transcribe", return_value=text):
             run(v._finish([np.zeros(800, dtype=np.int16)] * n, None, np, 8))
 
-    def test_unaddressed_chatter_is_ignored(self):
+    def test_unaddressed_speech_goes_to_the_active_agent(self):
         v, engine, np = self._loop()
-        self._hear(v, np, "it's going to be ok, honey")
-        engine.submit.assert_not_awaited()
-        self.assertTrue(v.diag[-1]["outcome"].startswith("ignored (not addressed"))
+        self._hear(v, np, "what's the cpu load right now")
+        self.assertEqual(engine.submit.await_args.args[0], "what's the cpu load right now")
+        self.assertEqual(engine.submit.await_args.kwargs["agent"], "jarvis")
+        self.assertEqual(v.diag[-1]["outcome"], "→ jarvis (hands-free)")
+
+    def test_back_to_back_without_wake_word(self):
+        v, engine, np = self._loop()
+        for q in ("open my calendar", "and the weather", "thanks, now check the disk"):
+            self._hear(v, np, q)
+        self.assertEqual(engine.submit.await_count, 3)
 
     def test_name_anywhere_starts_and_is_stripped(self):
         v, engine, np = self._loop()
@@ -360,12 +377,52 @@ class ConversationVoice(unittest.TestCase):
         self.assertEqual(engine.submit.await_args.args[0], "what's the weather like")
         self.assertEqual(engine.submit.await_args.kwargs["agent"], "jarvis")
 
-    def test_engaged_conversation_needs_no_name(self):
+    def test_leading_name_switches_and_sticks(self):
         v, engine, np = self._loop()
-        v._open_followup("jarvis", 20)                       # JARVIS just answered
-        self._hear(v, np, "and how much memory is free")
-        self.assertEqual(engine.submit.await_args.args[0], "and how much memory is free")
-        self.assertEqual(v.diag[-1]["outcome"], "→ jarvis (engaged)")
+        self._hear(v, np, "Doom, scan my network for exposed ports")
+        self.assertEqual(engine.submit.await_args.kwargs["agent"], "doom")
+        self.assertEqual(engine.submit.await_args.args[0], "scan my network for exposed ports")
+        self._hear(v, np, "and what about my router")                  # no name: still DOOM
+        self.assertEqual(engine.submit.await_args.kwargs["agent"], "doom")
+        self._hear(v, np, "hey doctor doom how bad is it")
+        self.assertEqual(engine.submit.await_args.args[0], "how bad is it")
+
+    def test_mid_sentence_name_does_not_switch(self):
+        v, engine, np = self._loop()
+        self._hear(v, np, "tell me about the vision for doomsday marketing")
+        self.assertEqual(engine.submit.await_args.kwargs["agent"], "jarvis")
+
+    def test_pause_and_resume(self):
+        v, engine, np = self._loop()
+        self._hear(v, np, "go quiet")
+        self.assertTrue(v.hf_asleep)
+        self._hear(v, np, "it's going to be ok, honey")                  # room chatter while paused
+        engine.submit.assert_not_awaited()
+        self.assertTrue(v.diag[-1]["outcome"].startswith("ignored (hands-free paused"))
+        self._hear(v, np, "Stark, check the disk")                        # a name resumes + switches
+        self.assertFalse(v.hf_asleep)
+        self.assertEqual(engine.submit.await_args.kwargs["agent"], "stark")
+
+    def test_idle_auto_pause(self):
+        v, engine, np = self._loop()
+        v.hf_last -= 11 * 60                                              # 11 quiet minutes > 10
+        self._hear(v, np, "random chatter in the room")
+        engine.submit.assert_not_awaited()
+        self.assertTrue(v.hf_asleep)
+
+    def test_bare_name_summons(self):
+        v, engine, np = self._loop()
+        self._hear(v, np, "Doom")
+        engine.summon.assert_awaited()
+        self.assertEqual(v.hf_agent, "doom")
+
+    def test_settings_validate_and_persist(self):
+        import voice
+        v, engine, np = self._loop()
+        r = run(v.set_handsfree(agent="doom", idle_sleep_min=999))
+        self.assertEqual((r["agent"], r["idle_sleep_min"]), ("doom", voice.HF_IDLE_MAX))
+        self.assertFalse(run(v.set_handsfree(agent="loki"))["ok"])
+        self.assertEqual(voice._load_handsfree()["agent"], "doom")
 
     def test_low_confidence_segments_are_dropped(self):
         from voice import VoiceLoop

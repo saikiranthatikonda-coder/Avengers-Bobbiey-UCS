@@ -16,13 +16,14 @@ from apscheduler.triggers.interval import IntervalTrigger
 # (agent_key, initial_delay_seconds). Each agent fires every 180 s.
 SPEECH_ROTATION: list[tuple[str, float]] = [
     ("jarvis",   2.0),
-    ("stark",   24.5),
-    ("captain", 47.0),
-    ("widow",   69.5),
-    ("hulk",    92.0),
-    ("vision", 114.5),
-    ("thor",   137.0),
-    ("hawkeye", 159.5),
+    ("stark",   22.0),
+    ("captain", 42.0),
+    ("widow",   62.0),
+    ("hulk",    82.0),
+    ("vision", 102.0),
+    ("thor",   122.0),
+    ("hawkeye", 142.0),
+    ("doom",   162.0),
 ]
 
 CYCLE_SECONDS = 180

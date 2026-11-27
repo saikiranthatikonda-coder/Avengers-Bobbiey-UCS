@@ -194,6 +194,10 @@ async def lifespan(app: FastAPI):
         "productivity": productivity, "orchestrator": orchestrator,
         "knowledge": knowledge, "team_memory": team_memory,
     })
+    try:
+        local_brain.state = state          # DOOM's tick reads the cyber analyst + threat board
+    except Exception:
+        pass
     # Phase 4 · enterprise: audit trail + role-based command session
     state["auth"] = AUTH
     state["audit"] = Audit(hub=hub)
@@ -896,23 +900,45 @@ async def dashboard_ai_performance():
 
 
 class ConversationReq(BaseModel):
-    on: bool
+    on: bool | None = None
+    agent: str | None = None              # hands-free: who you're talking to
+    asleep: bool | None = None            # hands-free: pause / resume listening
+    idle_sleep_min: int | None = None     # hands-free: auto-pause after this many quiet minutes (0 = never)
 
 
 @app.get("/api/conversation")
 async def conversation_get():
     t = state["tts"]
-    return {"on": t.conversation_mode, "agent": "jarvis", "ambient_dropped": t.ambient_dropped}
+    v = state.get("voice")
+    hf = v.handsfree_state() if v is not None and hasattr(v, "handsfree_state") else {
+        "agent": "jarvis", "asleep": False, "idle_sleep_min": 10, "idle_range_min": [0, 240],
+        "agents": sorted((state.get("team") or {}).keys())}
+    return {"on": t.conversation_mode, "mode": "hands-free", "agent": hf["agent"], "handsfree": hf,
+            "voice_running": v is not None, "ambient_dropped": t.ambient_dropped}
 
 
 @app.post("/api/conversation")
 async def conversation_set(req: ConversationReq):
-    """Conversation Mode: talk to JARVIS with no wake word; background agent
-    speech stays on screen only (it was muting the mic ~62% of the time)."""
-    state["tts"].set_conversation_mode(req.on)
-    await _audit("voice.conversation_mode", "on" if req.on else "off")
-    await state["hub"].broadcast({"type": "conversation", "on": req.on})
-    return await conversation_get()
+    """Conversation Mode = HANDS-FREE: talk back-to-back with no wake word. Name an agent once
+    ("Doom, …") to switch; background agent speech stays on screen only."""
+    if not _commander():
+        return {"ok": False, "error": "observer role: switch to COMMANDER to change voice settings"}
+    if req.on is not None:
+        state["tts"].set_conversation_mode(req.on)
+        await _audit("voice.conversation_mode", "on" if req.on else "off")
+        await state["hub"].broadcast({"type": "conversation", "on": req.on})
+    v = state.get("voice")
+    if any(x is not None for x in (req.agent, req.asleep, req.idle_sleep_min)):
+        if v is None or not hasattr(v, "set_handsfree"):
+            return {"ok": False, "error": "voice is not running (start BUCS with voice enabled)"}
+        try:
+            r = await v.set_handsfree(agent=req.agent, asleep=req.asleep, idle_sleep_min=req.idle_sleep_min)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "idle_sleep_min must be a whole number"}
+        if not r.get("ok"):
+            return r
+        await _audit("voice.handsfree", f"agent={r['agent']} asleep={r['asleep']} idle={r['idle_sleep_min']}m")
+    return {"ok": True, **(await conversation_get())}
 
 
 

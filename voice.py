@@ -55,6 +55,11 @@ AGENT_TRIGGERS: list[tuple[str, str]] = [
     ("hey bruce", "hulk"),
     ("hey thor", "thor"),
     ("hey vision", "vision"),
+    ("hey doctor doom", "doom"),
+    ("hey dr doom", "doom"),
+    ("doctor doom", "doom"),
+    ("dr doom", "doom"),
+    ("hey doom", "doom"),
     # bare names
     ("jarvis", "jarvis"),
     ("stark", "stark"),
@@ -64,6 +69,7 @@ AGENT_TRIGGERS: list[tuple[str, str]] = [
     ("hulk", "hulk"),
     ("thor", "thor"),
     ("vision", "vision"),
+    ("doom", "doom"),
 ]
 
 # Wake phrases of custom team members (customagents.py keeps this list in sync: enabled agents
@@ -87,6 +93,29 @@ def match_custom(text: str) -> tuple[str | None, str | None, int]:
     return best[2], best[3] or None, best[0]
 
 
+# Hands-free settings (Conversation Mode): which agent you're talking to and the idle auto-pause.
+HF_FILE = Path(__file__).resolve().parent / ".update" / "handsfree.json"
+HF_IDLE_DEFAULT, HF_IDLE_MAX = 10, 240
+
+
+def _load_handsfree() -> dict:
+    try:
+        d = json.loads(HF_FILE.read_text(encoding="utf-8"))
+        return {"agent": str(d.get("agent") or "jarvis")[:24],
+                "idle_sleep_min": max(0, min(HF_IDLE_MAX, int(d.get("idle_sleep_min", HF_IDLE_DEFAULT))))}
+    except Exception:
+        return {}
+
+
+def _save_handsfree(d: dict) -> None:
+    try:
+        HF_FILE.parent.mkdir(parents=True, exist_ok=True)
+        from atomicio import atomic_write_text
+        atomic_write_text(HF_FILE, json.dumps(d))
+    except Exception:
+        pass
+
+
 # Used by the fuzzy fallback when exact substring matching misses.
 FUZZY_NAMES: dict[str, str] = {
     "jarvis": "jarvis",
@@ -105,7 +134,7 @@ FUZZY_NAMES: dict[str, str] = {
 # Short vocabulary hint. A long, oddly-phrased prompt makes Whisper
 # hallucinate its words into silence/noise, so keep it to names + commands.
 HOTWORDS = ("Jarvis Stark Tony Captain Cap Steve Widow Natasha Hawkeye Clint "
-            "Hulk Banner Bruce Thor Vision CPU memory disk network threat "
+            "Hulk Banner Bruce Thor Vision Doom CPU memory disk network threat "
             "calendar meetings inbox weather news briefing")
 
 INITIAL_PROMPT_LEGACY = (
@@ -179,6 +208,16 @@ class VoiceLoop:
         # utterance goes to this agent without needing a wake word
         self.follow_agent: str | None = None
         self.follow_until = 0.0
+        # HANDS-FREE (Conversation Mode): every utterance goes to the active agent — no wake word.
+        # Naming an agent at the start ("Doom, …", "Hey Cap …") switches to it and it stays active.
+        # "go quiet" / "stop listening" pauses; any agent's name (or "wake up") resumes. After
+        # idle_sleep_min minutes without a request it pauses itself (0 = never), so a room's chatter
+        # is not answered forever.
+        hf = _load_handsfree()
+        self.hf_agent: str = hf.get("agent") or "jarvis"
+        self.hf_idle_min: int = hf.get("idle_sleep_min", HF_IDLE_DEFAULT)
+        self.hf_asleep = False
+        self.hf_last = time.time()
         self.noise_rms = 60.0                    # adaptive room noise floor
         self.clap = ClapDetector() if os.getenv("JARVIS_CLAP", "1") != "0" else None
         self.engine = None                       # realtime.Engine, set by main.py
@@ -461,25 +500,7 @@ class VoiceLoop:
                     await self.engine.summon(ckey, source="voice")
                 return
             if self._conversation():
-                named, rest = self._mentions_jarvis(text)
-                engaged = time.time() < self.follow_until
-                if not (named or engaged):
-                    entry["outcome"] = "ignored (not addressed — say 'Jarvis')"
-                    await self.hub.broadcast({"type": "voice", "event": "unrouted", "text": text,
-                                              "hint": "say “Jarvis …” to start talking"})
-                    await self.hub.broadcast({"type": "voice", "event": "idle"})
-                    return
-                if named and not rest:                       # just "Jarvis"
-                    entry["outcome"] = "summon"
-                    await self.engine.summon("jarvis", source="voice")
-                    self._open_followup("jarvis", self.ENGAGED_S)
-                    return
-                req = rest if named else text.strip()
-                entry["outcome"] = "→ jarvis (" + ("named" if named else "engaged") + ")"
-                await self.hub.broadcast({"type": "voice", "event": "routed",
-                                          "agent": "jarvis", "command": req})
-                await self.engine.submit(req, source="voice", agent="jarvis",
-                                         on_done=lambda c: self._open_followup("jarvis", self.ENGAGED_S))
+                await self._handsfree(text, entry)
                 return
 
         agent_key, command = self._match_agent(text)
@@ -640,6 +661,116 @@ class VoiceLoop:
 
     ENGAGED_S = 20.0
 
+    # ── HANDS-FREE conversation ───────────────────────────────────
+    _HF_LEAD = r"(?:(?:hey|ok|okay|hi|yo|so|and|now|please)\s+)*"
+    _HF_SLEEP = re.compile(r"^(?:go (?:to )?sleep|sleep now|go quiet|be quiet|stop listening|pause listening|"
+                           r"that'?s all|that is all|goodbye|good bye|bye for now)\b")
+    _HF_WAKE = re.compile(r"^(?:wake up|i'?m back|are you there|resume listening)\b")
+
+    @staticmethod
+    def _norm(text: str) -> str:
+        low = re.sub(r"[^\w\s']", " ", (text or "").lower())
+        return re.sub(r"\s+", " ", low).strip()
+
+    def _addressed(self, text: str) -> tuple[str | None, str]:
+        """(agent the utterance OPENS with, the rest) — names mid-sentence ("my vision for…",
+        "the doom of…") never switch agents in hands-free mode."""
+        low = self._norm(text)
+        ckey, crest, cpos = match_custom(text)
+        if ckey and ckey in self.team:
+            lead = re.match(self._HF_LEAD, low)
+            if cpos <= (lead.end() if lead else 0):
+                return ckey, crest or ""
+        aliases = [(t[4:] if t.startswith("hey ") else t, k) for t, k in AGENT_TRIGGERS] + \
+                  [("jervis", "jarvis"), ("javis", "jarvis"), ("jarvas", "jarvis")]
+        for phrase, key in sorted(set(aliases), key=lambda x: -len(x[0])):
+            m = re.match(self._HF_LEAD + re.escape(phrase) + r"(?:'s)?(?!\w)", low)
+            if m and key in self.team:
+                return key, low[m.end():].strip()
+        return None, ""
+
+    async def _handsfree(self, text: str, entry: dict) -> None:
+        now = time.time()
+        if not self.hf_asleep and self.hf_idle_min and now - self.hf_last > self.hf_idle_min * 60:
+            self.hf_asleep = True                               # long silence → pause itself
+            await self._hf_broadcast("auto-paused after silence")
+        key, rest = self._addressed(text)
+        low = self._norm(text)
+        body = rest if key else low
+        if self._HF_SLEEP.match(body):
+            self.hf_asleep = True
+            if key:
+                self.hf_agent = key
+            entry["outcome"] = "hands-free paused"
+            await self._hf_broadcast("paused — say an agent's name to resume")
+            await self._hf_say("Going quiet. Say my name when you need me.")
+            await self.hub.broadcast({"type": "voice", "event": "idle"})
+            return
+        woke = bool(self._HF_WAKE.match(body))
+        if self.hf_asleep and not (key or woke):
+            entry["outcome"] = "ignored (hands-free paused — say an agent's name)"
+            await self.hub.broadcast({"type": "voice", "event": "unrouted", "text": text,
+                                      "hint": "hands-free is paused — say an agent's name to resume"})
+            await self.hub.broadcast({"type": "voice", "event": "idle"})
+            return
+        was_asleep, switched = self.hf_asleep, bool(key and key != self.hf_agent)
+        self.hf_asleep, self.hf_last = False, now
+        if key:
+            self.hf_agent = key
+        agent = self.hf_agent if self.hf_agent in self.team else "jarvis"
+        if switched or was_asleep:
+            _save_handsfree({"agent": self.hf_agent, "idle_sleep_min": self.hf_idle_min})
+            await self._hf_broadcast(f"talking to {agent.upper()}")
+        req = (rest if key else text.strip())
+        if woke and not key:
+            req = re.sub(self._HF_WAKE, "", low).strip()
+        if not req:                                             # just a name / "wake up"
+            entry["outcome"] = f"summon {agent} (hands-free)"
+            await self.engine.summon(agent, source="voice")
+            return
+        entry["outcome"] = f"→ {agent} (hands-free{', named' if key else ''})"
+        await self.hub.broadcast({"type": "voice", "event": "routed", "agent": agent, "command": req})
+        await self.engine.submit(req, source="voice", agent=agent, on_done=lambda c: self._hf_touch())
+
+    def _hf_touch(self) -> None:
+        self.hf_last = time.time()                              # idle timer counts from the last reply
+
+    async def _hf_say(self, line: str) -> None:
+        tts = self.engine.state.get("tts") if self.engine is not None else None
+        try:
+            r = tts.say(line, channel="conversation") if tts is not None else None
+            if asyncio.iscoroutine(r):
+                await r
+        except Exception:
+            pass
+
+    def handsfree_state(self) -> dict:
+        return {"agent": self.hf_agent, "asleep": self.hf_asleep, "idle_sleep_min": self.hf_idle_min,
+                "idle_range_min": [0, HF_IDLE_MAX], "agents": sorted(self.team.keys())}
+
+    async def set_handsfree(self, agent: str | None = None, asleep: bool | None = None,
+                            idle_sleep_min: int | None = None) -> dict:
+        if agent is not None:
+            a = str(agent).lower().strip()
+            if a not in self.team:
+                return {"ok": False, "error": f"unknown agent '{a}'"}
+            self.hf_agent = a
+        if idle_sleep_min is not None:
+            self.hf_idle_min = max(0, min(HF_IDLE_MAX, int(idle_sleep_min)))
+        if asleep is not None:
+            self.hf_asleep = bool(asleep)
+            if not self.hf_asleep:
+                self.hf_last = time.time()
+        _save_handsfree({"agent": self.hf_agent, "idle_sleep_min": self.hf_idle_min})
+        await self._hf_broadcast("updated")
+        return {"ok": True, **self.handsfree_state()}
+
+    async def _hf_broadcast(self, note: str = "") -> None:
+        try:
+            await self.hub.broadcast({"type": "voice", "event": "handsfree", "note": note, **self.handsfree_state()})
+        except Exception:
+            pass
+
 
     @staticmethod
     def _mentions_jarvis(text: str) -> tuple[bool, str]:
@@ -738,8 +869,9 @@ class VoiceLoop:
         #    when it comes earlier in the sentence than the built-in one)
         ckey, ccmd, cpos = match_custom(text)
         for trigger, agent_key in AGENT_TRIGGERS:
-            if trigger in low:
-                idx = low.find(trigger)
+            mt = re.search(rf"(?<!\w){re.escape(trigger)}(?!\w)", low)
+            if mt:
+                idx = mt.start()
                 if ckey and cpos < idx:
                     return ckey, ccmd
                 cmd = low[idx + len(trigger):].strip()
@@ -756,6 +888,8 @@ class VoiceLoop:
             if len(tok) < 3:
                 continue
             for name, agent in FUZZY_NAMES.items():
+                if abs(len(tok) - len(name)) > 1:      # "author" is not "thor", "visionary" not "vision"
+                    continue
                 r = SequenceMatcher(None, tok, name).ratio()
                 if r > best_ratio:
                     best_ratio = r

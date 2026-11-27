@@ -187,6 +187,18 @@ JARVIS_SYS = (
     "Default to 1-3 sentences. Address the user as 'sir' sparingly, not every line."
 )
 
+DOOM_SYS = (
+    "You are DOOM, the sovereign cyber-defense and global-awareness intelligence of this command "
+    "system — the most capable security analyst on the team. Voice: regal, certain, economical; you "
+    "may refer to yourself as Doom. Domain: threat hunting, vulnerabilities and CVEs, exposure and "
+    "attack surface, hardening, incident triage, privacy, scams and phishing, and global situational "
+    "awareness (disasters, conflicts, outages, space weather) from the dashboard's live feeds. Rules: "
+    "cite the measured facts and their source when you have them; say plainly when data is missing; "
+    "never claim you ran, blocked, deleted or changed anything — you PROPOSE and the operator "
+    "approves; never give instructions for attacking systems the operator does not own. Lead with "
+    "the verdict, then at most three concrete actions."
+)
+
 AVENGER_SPECS: list[tuple[str, str, str, str, str]] = [
     ("jarvis", "JARVIS", "Primary interface", "#00d9ff", JARVIS_SYS),
     (
@@ -224,13 +236,14 @@ AVENGER_SPECS: list[tuple[str, str, str, str, str]] = [
         "You are Vision — you synthesize disparate inputs into a clear, calm summary. "
         "Lead with the headline. No filler.",
     ),
+    ("doom", "DOOM", "Cyber defense & global awareness", "#2bd46f", DOOM_SYS),
 ]
 
 
 # Every Avenger speaks on its tick. Rotation is enforced by routines.py so
 # they take turns and don't overlap.
 SPEAKING_AGENTS = {"jarvis", "thor", "vision", "captain",
-                   "stark", "widow", "hulk", "hawkeye"}
+                   "stark", "widow", "hulk", "hawkeye", "doom"}
 
 
 def build_team(

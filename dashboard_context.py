@@ -877,6 +877,8 @@ async def context_for(state: dict | None, question: str, commander: bool | None 
         if not state:
             return ""
         secs = route(question)
+        if not secs and (meta or {}).get("agent") == "doom":
+            secs = ["secagent", "threats", "disaster"]          # DOOM's standing brief
         if allow is not None:
             secs = [s for s in secs if s in allow]
         if not secs:

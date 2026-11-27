@@ -167,3 +167,43 @@
   color: var(--text); font: inherit; padding: 0.25rem 0.4rem; }
 .gm-pl-in:focus { outline: none; border-color: var(--accent); }
 .gm-pl-new { margin-top: 0.3rem; }
+
+/* SATELLITE view (MapLibre GL, lazy) */
+.gm-satv { position: absolute; inset: 0; z-index: 1; background: #020a12; }
+.gm-satv[hidden] { display: none; }
+.gm-satv > .gm-sat-map { position: absolute; inset: 0; width: 100%; height: 100%; }  /* beats maplibre's .maplibregl-map{position:relative} */
+.gm-sat-map .maplibregl-canvas { outline: none; }
+.gm[data-mode="sat"] .gm-stage::after { background: none; box-shadow: inset 0 0 28px rgba(0,0,0,0.5); }
+.gm-sat-top { position: absolute; top: 0.45rem; left: 0.45rem; right: 0.45rem; display: flex; flex-direction: column; align-items: flex-start;
+  gap: 0.3rem; pointer-events: none; z-index: 2; }
+.gm-sat-top > * { pointer-events: auto; max-width: min(100%, 560px); }
+.gm-sat-modes { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--panel-edge-bright, rgba(0,217,255,0.4)); border-radius: 4px;
+  overflow: hidden; background: var(--gm-glass); backdrop-filter: blur(6px); }
+.gm-sat-modes button { background: transparent; border: 0; padding: 0.28rem 0.55rem; font-family: var(--font-display); font-size: 0.5rem;
+  letter-spacing: 0.14em; color: var(--text-dim); transition: background .2s, color .2s; }
+.gm-sat-modes button + button { border-left: 1px solid var(--panel-edge); }
+.gm-sat-modes button.on { color: var(--bg, #02060d); background: var(--accent); }
+.gm-sat-modes button:not(.on):hover { color: var(--accent); }
+.gm-sat-label, .gm-sat-info { font-family: var(--font-mono); font-size: 0.6rem; color: #e8f6ff; background: rgba(0,0,0,0.6);
+  border-left: 2px solid var(--gm-med); border-radius: 2px; padding: 0.15rem 0.4rem; text-shadow: 0 1px 2px #000; }
+.gm-sat-info { border-left-color: var(--accent); }
+.gm-sat-info[hidden] { display: none; }
+.gm-sat-info b { color: var(--accent); font-weight: 600; }
+.gm-sat-ctl { position: absolute; left: 0.45rem; bottom: 1.35rem; display: flex; flex-wrap: wrap; gap: 0.25rem; z-index: 2; max-width: calc(100% - 7rem); }
+.gm-sat-ctl .gm-btn { background: var(--gm-glass); backdrop-filter: blur(6px); color: var(--text); min-width: 1.7rem; font-size: 0.52rem; }
+.gm-sat-ctl .gm-btn[data-sa="in"], .gm-sat-ctl .gm-btn[data-sa="out"] { font-family: var(--font-mono); font-size: 0.85rem; padding: 0 0.45rem; line-height: 1.2; }
+.gm-compass { display: inline-block; color: var(--gm-crit); transform: rotate(-90deg); transition: transform .1s linear; font-size: 0.7rem; }
+.gm-sat-err { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem;
+  text-align: center; padding: 1rem; z-index: 3; background: rgba(2,10,18,0.92); font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-dim); }
+.gm-sat-err[hidden] { display: none; }
+.gm-sat-err b { font-family: var(--font-display); font-size: 0.6rem; letter-spacing: 0.2em; color: var(--gm-crit); }
+.gm-satv .maplibregl-ctrl-attrib { font-size: 10px; background: rgba(0,0,0,0.6); color: #cfe; }
+.gm-satv .maplibregl-ctrl-attrib a { color: #9fe3ff; }
+.gm-satv .maplibregl-ctrl-attrib.maplibregl-compact { min-height: 20px; }
+.gm[data-mode="sat"] .gm-foot { right: 7rem; }
+@media (max-width: 560px) {
+  .gm-sat-modes button { padding: 0.26rem 0.38rem; font-size: 0.44rem; letter-spacing: 0.08em; }
+  .gm-sat-ctl { bottom: 0.4rem; max-width: calc(100% - 3rem); }
+  .gm-sat-ctl .gm-btn { font-size: 0.46rem; }
+  .gm-sat-label { font-size: 0.54rem; }
+}

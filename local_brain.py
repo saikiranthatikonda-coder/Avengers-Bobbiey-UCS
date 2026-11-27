@@ -51,6 +51,7 @@ class LocalBrain:
     def __init__(self, sysmon=None, news=None) -> None:
         self.sysmon = sysmon
         self.news = news
+        self.state: dict | None = None        # bound by main.py (DOOM reads secagent / threats)
         self._stark_step = 0
         self._widow_step = 0
         self._hulk_step = 0
@@ -67,6 +68,7 @@ class LocalBrain:
             "hulk":    self._hulk,
             "thor":    self._thor,
             "vision":  self._vision,
+            "doom":    self._doom,
         }.get(agent, self._jarvis)
         # telemetry-quoting agents must not read 0% before the first sample
         if agent in ("stark", "hulk", "hawkeye") and "cpu" not in self._m():
@@ -84,6 +86,38 @@ class LocalBrain:
         return list(self.news.recent) if self.news else []
 
     # ── per-agent voices ──────────────────────────────────────
+    def _doom(self, prompt: str) -> str:
+        """Measured posture only: the cyber analyst's score / findings and the threat board."""
+        st = self.state or {}
+        lines = []
+        sa = st.get("secagent")
+        if sa is not None:
+            try:
+                s = sa.snapshot()
+                c = s.get("counts") or {}
+                hi = int(c.get("critical", 0)) + int(c.get("high", 0))
+                if s.get("last_scan", {}).get("full") or s.get("last_scan", {}).get("light"):
+                    lines.append(f"Posture {s.get('score')} of 100"
+                                 + (f", {hi} high-severity findings await your judgement." if hi
+                                    else ". No high-severity findings. Doom is satisfied — for now."))
+                else:
+                    lines.append("The first security scan has not finished. Doom is patient.")
+            except Exception:
+                pass
+        th = st.get("threats")
+        if th is not None:
+            try:
+                t = th.snapshot()
+                n = len([e for e in (t.get("events") or []) if e.get("stage") not in ("resolved", "acknowledged")])
+                if n:
+                    lines.append(f"{n} open threat events on the board.")
+            except Exception:
+                pass
+        if not lines:
+            return random.choice(["Doom keeps watch. The perimeter is quiet.",
+                                  "Security feeds are still warming up. Doom waits."])
+        return " ".join(lines)
+
     def _jarvis(self, prompt: str) -> str:
         m = self._m()
         cpu, mem = m.get("cpu", 0), m.get("mem", 0)

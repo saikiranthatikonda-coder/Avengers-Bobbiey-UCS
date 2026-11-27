@@ -5,6 +5,39 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-27 — v8.4.0 · DOOM, hands-free conversation, satellite map, immersive website
+- **feat: DOOM joins the team.** A ninth built-in agent for cyber defense and global awareness:
+  - Handles threat hunting, CVEs, exposure, hardening, phishing and scams, and global situations.
+  - Cyber requests ("was I hacked?", "any CVEs?", "sitrep") are now routed to DOOM. Research and news stay with Black Widow.
+  - DOOM always receives the Cyber Analyst, threat board and disaster facts, and its background reports quote only measured posture.
+  - It proposes; you approve. It never claims to have run, blocked or changed anything.
+  - Wake phrases: "Hey Doom", "Doctor Doom", "Dr Doom".
+- **feat: HANDS-FREE conversation** (replaces Conversation Mode):
+  - Just talk, back to back, with no wake word. Every sentence goes to the agent you are talking to.
+  - Start a sentence with a name ("Doom, …", "Cap, …") to switch; that agent stays active. A name mid-sentence never switches.
+  - "Stop" interrupts. "Go quiet" pauses, and any agent's name resumes.
+  - Pauses itself after 10 minutes of silence. The delay can be set from 0 to 240 minutes, where 0 means never.
+  - The header button shows who you are talking to, and every agent's card has a 🎙 TALK HANDS-FREE button.
+  - Changing these settings requires the commander role.
+- **fix:** agent names now match only as whole words. For example, "author" no longer wakes Thor, and "doomsday" no longer wakes Doom.
+- **feat: GLOBAL ACTIVITY MAP · SATELLITE view** with five modes:
+  - Satellite and Hybrid (Esri World Imagery).
+  - 3D Terrain (AWS Terrarium elevation).
+  - 3D City (OpenFreeMap extruded buildings).
+  - Night (NASA Black Marble).
+  - Live layers are plotted on top, alongside ◎ TRACK THIS DASHBOARD (honest IP-based accuracy), orbit, and fullscreen.
+  - Imagery is labelled "not a live feed".
+- **feat: camera fullscreen.** Use the ⛶ button, double-click, or F. The fullscreen view shows a clock and the camera label; Esc exits.
+- **feat: DOOMSDAY theme and Easter eggs:**
+  - A fourth theme (⬢ iron & emerald).
+  - A countdown on DOOM's card to Dec 18, 2026.
+  - Hidden extras to find: try the Konami code, or type "assemble" or "doom".
+- **Website:**
+  - The background is now an immersive 3D satellite flight that zooms from space toward a demo location, or toward your own after you click "📍 Fly to my location". Your location stays in your browser.
+  - New sections: the Doomsday launch countdown, DOOM, hands-free conversation, and a preview of the satellite map.
+  - The site now says nine agents, includes Easter eggs, and adds a trademark notice.
+- **Tests:** a new test file for DOOM and nine new hands-free conversation tests. The existing tests were updated for the nine-agent roster.
+
 ## 2026-11-25 — v8.3.1 · Remaining edit abilities in the feature sections
 - **Devices:** you can now edit a device after adding it. Change its name, room/group and connection settings from its detail view (✎ EDIT).
   - A password or token left blank stays as stored; it is only replaced if you type a new one.
