@@ -1,13 +1,14 @@
 {
   "kind": "bucs-release",
-  "version": "8.4.0",
+  "version": "8.5.0",
   "date": "2026-11-27",
-  "commit": "e97b2b4",
+  "commit": "1fe395c",
   "notes": [
-    "DOOM cyber-defense agent, hands-free conversation (no wake word), satellite Global Activity Map with 3D terrain/city/night modes, camera fullscreen, Doomsday theme and easter eggs."
+    "Voice dictation: a mic in the command bar turns speech into editable text — local, private, multilingual",
+    "Global map LIVE mode: newest satellite frame, live radar and nearby webcams, each with its capture time"
   ],
-  "url": "releases/bucs-8.4.0.zip",
-  "sha256": "4f8d76a29421c6b88bc0d0712a8fdd58bf7b100fe8360752e0de0bfdfec42f31",
-  "size": 938879,
-  "sig": "Frb-VH7hzfrbYDL-1xqWLKPN6_Pj1N6NMHTH5gTUa4aWiA2nr8cDmgL857nlU-lrK_jw4kWVhCvuNUzeUT1hBw"
+  "url": "releases/bucs-8.5.0.zip",
+  "sha256": "e7d629aedeec054126774a14b2c835d261442c8639671b1fbd8b3712d6b9a90b",
+  "size": 966868,
+  "sig": "wsZPiynpYX1prz8p0VS5VvpZBIF3nAxplMbSEf9-_-T-LcIqkrUPwuih4uajN-ASRlhgePZoCI6i-UR69bC7AA"
 }
