@@ -1,15 +1,15 @@
 {
   "kind": "bucs-release",
-  "version": "8.6.0",
+  "version": "8.8.0",
   "date": "2026-11-27",
-  "commit": "65af20b",
+  "commit": "5a8e388",
   "notes": [
-    "Agents see your screen and drive the dashboard by voice: map modes, places, theme, camera",
-    "One shared memory of you for every agent; mute all agents; separate hands-free switch",
-    "Map: My Location in every view, TODAY / TOPO / DARK modes"
+    "Immersive India and Telangana satellite maps with nine modes (incl. LIVE), live weather, air quality, alerts and aircraft at every state and district",
+    "Disaster Response real-time tracking map: storm tracks, heatmap, time windows, follow-new, tour",
+    "BOB joins as the 10th agent; DOOM gate on self-written code; Privacy Shield; MapLibre 6.4.1 and python-dotenv 1.2.2 security upgrades"
   ],
-  "url": "releases/bucs-8.6.0.zip",
-  "sha256": "0d7fa149e91528c2b90ec27f9725ca91a0748cfa4b276e2e724147b9444be6ad",
-  "size": 982121,
-  "sig": "erQIb3x5w3WfgSluxTy5O_0B-j_6j60AFcCi0WZFvHpdYecUVvzclk1wvcNErWG5gpNgayj930Hd3gJ9EYz9AA"
+  "url": "releases/bucs-8.8.0.zip",
+  "sha256": "a254a87b28a12556d4810cf5871f984280da63d107d81c8039ffc6901f173ee8",
+  "size": 1070537,
+  "sig": "BIp13LzKC_6BuxvUMwtVS8lQDQUkRu7zEoxmKk2vIb9u0ByPjle94LKitemcZNHyF6i4z4EofHAYCXCZrkBoCA"
 }
