@@ -493,7 +493,7 @@ TRANSITIONS = {
     "sandboxing": {"awaiting_approval", "sandbox_failed", "failed"},
     "sandbox_failed": {"sandboxing", "proposing", "dismissed"},
     "awaiting_approval": {"deploying", "rejected"},
-    "deploying": {"evaluating", "failed"},
+    "deploying": {"evaluating", "failed", "awaiting_approval"},   # back to approval: DOOM/BOB gate held it (v8.7)
     "evaluating": {"kept", "regressed", "reverting"},
     "regressed": {"reverting", "kept"},
     "kept": {"reverting"},

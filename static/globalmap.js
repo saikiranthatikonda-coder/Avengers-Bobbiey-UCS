@@ -21,8 +21,9 @@
     land50: "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-50m.json",
     land: "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json",
     india: "/static/geo/india_world.json",
-    maplibre: "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js",
-    maplibreCss: "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css",
+    // 6.4.1: fixes GHSA-jrc7-96c5-q579 (attribution sanitizer bypass). ES-module only → loaded with import()
+    maplibre: "https://unpkg.com/maplibre-gl@6.4.1/dist/maplibre-gl.mjs",
+    maplibreCss: "https://unpkg.com/maplibre-gl@6.4.1/dist/maplibre-gl.css",
   };
   const LAYERS = [
     ["quakes", "EARTHQUAKES", "Q"], ["disasters", "GDACS ALERTS", "G"], ["events", "NATURAL EVENTS", "E"],
@@ -1376,7 +1377,8 @@
   async function initSat() {
     const probe = document.createElement("canvas");
     if (!(probe.getContext("webgl2") || probe.getContext("webgl"))) throw new Error("WebGL is disabled or unsupported in this browser");
-    await Promise.all([loadCSS(CDN.maplibreCss).catch(() => null), loadScript(CDN.maplibre)]);
+    await Promise.all([loadCSS(CDN.maplibreCss).catch(() => null),
+      window.maplibregl ? null : import(CDN.maplibre).then(m => { window.maplibregl = m.default && m.default.Map ? m.default : m; })]);
     if (!window.maplibregl || !maplibregl.Map) throw new Error("MapLibre GL did not initialise");
     const c = satPending || (S.op ? { lat: S.op.lat, lon: S.op.lon, z: 3 } : { lat: 20, lon: 0, z: 1.4 });
     const map = new maplibregl.Map({ container: $("#gm-sat-map"), style: satStyle(), center: [c.lon, c.lat], zoom: c.z,

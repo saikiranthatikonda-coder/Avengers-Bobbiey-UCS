@@ -5,7 +5,7 @@ uvicorn[standard]==0.34.0
 httpx==0.28.1
 psutil==6.1.1
 apscheduler==3.11.0
-python-dotenv==1.0.1
+python-dotenv==1.2.2      # GHSA-mf9w-mj56-hr94 (set_key symlink overwrite) fixed in 1.2.2; BUCS uses only load_dotenv
 pydantic==2.10.4
 pyttsx3==2.98; sys_platform == "win32"
 google-api-python-client

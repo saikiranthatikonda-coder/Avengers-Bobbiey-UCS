@@ -30,7 +30,9 @@
     { n: "VISION", role: "Synthesizer", c: "#e879f9", wake: "“Hey Vision …”",
       d: "Connects the dots: reads every panel and every agent, and surfaces the single observation that matters right now." },
     { n: "DOOM", role: "Cyber defense & global awareness", c: "#2bd46f", wake: "“Hey Doom …” · or just talk, hands-free",
-      d: "The team's strongest security mind: hunts threats, scans your exposure and CVEs, proposes hardening for your approval, and keeps watch over the world's disasters, outages and space weather." },
+      d: "The team's strongest security mind: hunts threats, scans your exposure and CVEs, proves what leaves your machine with the Privacy Shield, scans every self-written code change before it can deploy, and keeps watch over the world's disasters, outages and space weather." },
+    { n: "BOB", role: "Supreme orchestrator · Bobbiey", c: "#f2c14e", wake: "“Hey Bob …” · “Bobbiey …”",
+      d: "Bobbiey's own AI counterpart, above the team: oversees every agent, the self-development loop and DOOM's verdicts, and is the only agent that can sign a system-level change, always together with your approval." },
   ];
   const roster = $("#roster"), detail = $("#agent-detail");
   if (roster && detail) {
@@ -47,7 +49,7 @@
       btns.forEach((b, k) => b.setAttribute("aria-pressed", k === i ? "true" : "false"));
       const a = AGENTS[i];
       detail.style.setProperty("--c", a.c);
-      detail.innerHTML = `<div class="ad-tag">AGENT ${String(i + 1).padStart(2, "0")} / 08</div>
+      detail.innerHTML = `<div class="ad-tag">AGENT ${String(i + 1).padStart(2, "0")} / ${String(AGENTS.length).padStart(2, "0")}</div>
         <h3>${a.n}</h3><div class="ad-role">${a.role}</div><p>${a.d}</p>
         <div class="ad-wake"><span>WAKE WORD</span>${a.wake}</div>`;
     };

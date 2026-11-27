@@ -5,24 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AVENGERS · STARK INDUSTRIES × BOBBIEY</title>
   <!-- ?v= busts stale browser caches on release; bump alongside the roadmap version -->
-  <link rel="stylesheet" href="/static/style.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/disaster.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/devices.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/secagent.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/computeruse.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/phone.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/evolution.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/agentos.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/customagents.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/openintel.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/globalmap.css?v=8.6.0" />
-  <link rel="stylesheet" href="/static/dictation.css?v=8.6.0" />
+  <link rel="stylesheet" href="/static/style.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/disaster.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/devices.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/secagent.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/computeruse.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/phone.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/evolution.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/agentos.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/customagents.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/openintel.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/globalmap.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/dictation.css?v=8.8.0" />
+  <link rel="stylesheet" href="/static/immersivemap.css?v=8.8.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 </head>
 <body class="theme-jarvis">
   <div class="bg-grid"></div>
@@ -1140,6 +1141,8 @@
   <section class="feature-row" id="devices-mount"></section>
   <!-- CYBER ANALYST (secagent.py · static/secagent.js) -->
   <section class="feature-row" id="secagent-mount"></section>
+  <!-- PRIVACY SHIELD · DOOM (privacyshield.py · static/privacy.js) -->
+  <section class="feature-row" id="privacy-mount"></section>
   <!-- SELF-HEALING · watchdog checks, repairs, AI diagnosis (selfheal.py) -->
   <section class="heal-row">
     <div class="bs-card" id="heal-card">
@@ -1602,21 +1605,24 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=8.6.0"></script>
-  <script src="/static/core_edit.js?v=8.6.0"></script>
-  <script src="/static/disaster.js?v=8.6.0"></script>
-  <script src="/static/devices.js?v=8.6.0"></script>
-  <script src="/static/secagent.js?v=8.6.0"></script>
-  <script src="/static/computeruse.js?v=8.6.0"></script>
-  <script src="/static/phone.js?v=8.6.0"></script>
-  <script src="/static/evolution.js?v=8.6.0"></script>
-  <script src="/static/agentos.js?v=8.6.0"></script>
-  <script src="/static/customagents.js?v=8.6.0"></script>
-  <script src="/static/openintel.js?v=8.6.0"></script>
-  <script src="/static/globalmap.js?v=8.6.0"></script>
-  <script src="/static/doom.js?v=8.6.0"></script>
-  <script src="/static/camfs.js?v=8.6.0" defer></script>
-  <script src="/static/dictation.js?v=8.6.0" defer></script>
-  <script src="/static/agentlink.js?v=8.6.0" defer></script>
+  <script src="/static/app.js?v=8.8.0"></script>
+  <script src="/static/core_edit.js?v=8.8.0"></script>
+  <script src="/static/immersivemap.js?v=8.8.0"></script>
+  <script src="/static/disaster.js?v=8.8.0"></script>
+  <script src="/static/devices.js?v=8.8.0"></script>
+  <script src="/static/secagent.js?v=8.8.0"></script>
+  <script src="/static/computeruse.js?v=8.8.0"></script>
+  <script src="/static/phone.js?v=8.8.0"></script>
+  <script src="/static/evolution.js?v=8.8.0"></script>
+  <script src="/static/agentos.js?v=8.8.0"></script>
+  <script src="/static/customagents.js?v=8.8.0"></script>
+  <script src="/static/openintel.js?v=8.8.0"></script>
+  <script src="/static/globalmap.js?v=8.8.0"></script>
+  <script src="/static/regionmap.js?v=8.8.0"></script>
+  <script src="/static/doom.js?v=8.8.0"></script>
+  <script src="/static/camfs.js?v=8.8.0" defer></script>
+  <script src="/static/dictation.js?v=8.8.0" defer></script>
+  <script src="/static/agentlink.js?v=8.8.0" defer></script>
+  <script src="/static/privacy.js?v=8.8.0" defer></script>
 </body>
 </html>

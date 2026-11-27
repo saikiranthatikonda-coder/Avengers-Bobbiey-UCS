@@ -16,8 +16,9 @@
   /* ───────── providers: swap here ───────── */
   const PROVIDERS = {
     maplibre: {
-      js: "https://unpkg.com/maplibre-gl@5.7.0/dist/maplibre-gl.js",
-      css: "https://unpkg.com/maplibre-gl@5.7.0/dist/maplibre-gl.css",
+      // 6.4.1 fixes GHSA-jrc7-96c5-q579; ES-module only, so it is loaded with import()
+      js: "https://unpkg.com/maplibre-gl@6.4.1/dist/maplibre-gl.mjs",
+      css: "https://unpkg.com/maplibre-gl@6.4.1/dist/maplibre-gl.css",
     },
     imagery: {
       tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
@@ -165,11 +166,11 @@
     const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; l.crossOrigin = "anonymous"; document.head.appendChild(l);
   }
   function loadJS(src) {
-    return new Promise((ok, bad) => {
-      const s = document.createElement("script"); s.src = src; s.async = true; s.crossOrigin = "anonymous";
-      s.onload = () => (window.maplibregl ? ok(window.maplibregl) : bad(new Error("maplibre missing")));
-      s.onerror = () => bad(new Error("maplibre failed to load"));
-      document.head.appendChild(s);
+    return import(src).then((m) => {
+      const ml = m.default && m.default.Map ? m.default : m;
+      if (!ml || !ml.Map) throw new Error("maplibre missing");
+      window.maplibregl = ml;
+      return ml;
     });
   }
 

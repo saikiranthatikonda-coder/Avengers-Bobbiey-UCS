@@ -69,6 +69,7 @@ class LocalBrain:
             "thor":    self._thor,
             "vision":  self._vision,
             "doom":    self._doom,
+            "bob":     self._bob,
         }.get(agent, self._jarvis)
         # telemetry-quoting agents must not read 0% before the first sample
         if agent in ("stark", "hulk", "hawkeye") and "cpu" not in self._m():
@@ -86,6 +87,35 @@ class LocalBrain:
         return list(self.news.recent) if self.news else []
 
     # ── per-agent voices ──────────────────────────────────────
+    def _bob(self, prompt: str) -> str:
+        """The orchestrator's picture: team size, approvals waiting on the commander, DOOM's posture."""
+        st = self.state or {}
+        lines = []
+        team = st.get("team") or {}
+        if team:
+            busy = [k for k, a in team.items() if getattr(a, "status", "idle") not in ("idle", "standby")]
+            lines.append(f"{len(team)} agents on the team" + (f", {len(busy)} working" if busy else ", all on watch") + ".")
+        evo = st.get("evolution")
+        if evo is not None:
+            try:
+                waiting = [i for i in evo.backlog.items.values() if i.get("stage") == "awaiting_approval"]
+                if waiting:
+                    lines.append(f"{len(waiting)} self-improvement change{'s' if len(waiting) > 1 else ''} await your approval; "
+                                 "DOOM scans each one before I sign.")
+            except Exception:
+                pass
+        sa = st.get("secagent")
+        if sa is not None:
+            try:
+                s = sa.snapshot()
+                if s.get("score") is not None:
+                    lines.append(f"DOOM's posture reads {s.get('score')} of 100.")
+            except Exception:
+                pass
+        if not lines:
+            return "BOB here. The team is assembled; nothing needs your decision right now."
+        return "BOB here. " + " ".join(lines)
+
     def _doom(self, prompt: str) -> str:
         """Measured posture only: the cyber analyst's score / findings and the threat board."""
         st = self.state or {}

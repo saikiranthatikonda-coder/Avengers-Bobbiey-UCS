@@ -129,7 +129,7 @@ class Validation(Base):
         self.assertEqual(res["agent"]["id"], "nova")
         self.assertIn("nova", state["team"])
         self.assertTrue(state["team"]["nova"].snapshot()["custom"])
-        self.assertEqual(len(state["team"]), 10)          # 9 built-ins (incl. DOOM) + Nova
+        self.assertEqual(len(state["team"]), 11)          # 10 built-ins (incl. DOOM, BOB) + Nova
         self.assertTrue(reg.save({**NOVA, "id": "nova", "role": "Intel desk"})["ok"])
         self.assertEqual(state["team"]["nova"].role, "Intel desk")
         dup = reg.duplicate("nova")

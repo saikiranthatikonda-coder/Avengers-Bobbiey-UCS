@@ -5,6 +5,64 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-27 — v8.8.0 · Immersive INDIA, TELANGANA and DISASTER RESPONSE maps (and the first release of v8.7.0)
+v8.7.0 below was finished but never published on its own. It ships in this release.
+- **feat: immersive INDIA and TELANGANA maps.** The two side maps beside the global activity map are now full MapLibre satellite maps.
+  - They have the same nine imagery modes as the global map: SATELLITE, HYBRID, 3D TERRAIN, 3D CITY, NIGHT, TODAY, TOPO, DARK and ◉ LIVE (the newest geostationary frame plus rain radar, each with its capture time).
+  - They show the official boundaries: 36 states/UTs and 33 Telangana districts. `tools/geo_lonlat.py` converts the existing projected outlines exactly; the result is `static/geo/india_ts_ll.json`.
+  - **Live info points:** every state and district carries the current Open-Meteo weather and CAMS air quality, measured at the polygon's geometric centre and labelled that way. India also has 14 metro cities. The data comes from one batched request, cached for 10 minutes (weather) and 30 minutes (air).
+  - **Live choropleth:** colour the map by TEMP, RAIN, AIR, WIND or ALERTS. Hover a region for its value; click it for a live card with weather, air quality and the active alerts inside its border.
+  - **Hazards inside the boundary:** USGS, GDACS, NASA EONET and NDMA SACHET alerts, found by point-in-polygon on the official outline, plus events near it. High and critical alerts pulse.
+  - **✈ Aircraft overhead** from the OpenSky data the global map already fetches, with no extra API call.
+  - **▶ TOUR:** a cinematic fly-through with the live card at each stop. Extremes readout (hottest, coolest, worst air, wettest, alerts) with fly-to buttons. Orbit, tilt and fullscreen.
+  - **Fallback:** the classic SVG maps remain when WebGL or the CDN is unavailable.
+  - Backend: `regionmap.py`, `GET /api/regionmap/{india|telangana}`.
+- **feat: DISASTER RESPONSE tracking map.** The equirectangular SVG map is now an immersive MapLibre map (DARK by default, with eight imagery modes including ◉ LIVE radar over storms).
+  - Severity-sized events, with pulsing rings on high and critical ones.
+  - **Storm, cyclone and volcano tracks** from NASA EONET (the disaster feed now keeps each event's path).
+  - Density **HEAT** map, **6 H / 24 H / 3 D / ALL** time windows, and a near-me radius ring.
+  - **◉ FOLLOW NEW** flies to each new high-severity event as it arrives. Also ◎ ME, ⚠ WORST and ▶ TOUR, plus a live tracking line showing totals, tracks, the newest event and the count of new events since the page opened.
+  - Clicking a list item flies the map to it. The existing filters dim the map too.
+- **feat: voice and agents drive the new maps.**
+  - Example commands: "switch the Telangana map to live", "show air quality on the India map", "tour Telangana", "show aircraft over India", "switch the disaster map to night lights".
+  - A new `regions` dashboard-context section lets every agent answer "which Telangana district is hottest?" or "how is Warangal?" from the live map data.
+- **engine:** `static/immersivemap.js` is one shared map engine for all three maps. It loads lazily when the map scrolls into view.
+- **fix:** MapLibre's stylesheet made the map container `position: relative`, collapsing it, and `[hidden]` overlays with `display: flex` stayed visible. Both are now guarded.
+- **Website:** new INDIA · TELANGANA live state grids and DISASTER RESPONSE tracking-map cards.
+- **Tests:** `tests/test_v88.py` (9).
+
+## 2026-11-27 — v8.7.0 · BOB joins as the 10th agent, DOOM's Privacy Shield and self-development guard, security hardening
+- **feat: BOB (Bobbiey), the supreme orchestrator and 10th agent.** BOB is the commander's own AI counterpart and sits above the team.
+  - Oversees every agent, the recursive self-development loop and DOOM's security verdicts.
+  - The only agent that may sign off a system-level change, and only together with the commander's approval.
+  - Wake words: "Hey Bob", "Bobbiey". Questions about approvals, oversight and team status are routed to BOB.
+  - Has a standing brief (self-development, cyber analyst, missions), a local measured briefing, a speaking slot and orchestrator patrols.
+- **feat: DOOM GATE.** DOOM scans every self-written code change before it can deploy, in both the evolution loop and engineering mode. The scan is static analysis of the exact bytes and only judges the lines being added.
+  - **BLOCK:** touching private files, embedding credentials, `eval`/`exec`, `shell=True`/`os.system`, unsafe deserialisation, disabled TLS verification, or recursive deletes.
+  - **REVIEW:** security-perimeter code, new outbound hosts, new subprocess calls, or widened CORS.
+  - BOB never signs a BLOCK, and signs a REVIEW only with the commander's explicit acknowledgement.
+  - In engineering mode, a blocked change is reverted automatically.
+  - The evolution panel shows DOOM's verdict and BOB's sign-off.
+- **feat: PRIVACY SHIELD**, a new DOOM panel where everything is measured on this PC:
+  - Every remote host the BUCS process is connected to, live, labelled by the hostname BUCS itself requested. Unknown hosts are flagged UNLABELLED.
+  - Private files on disk (names and sizes only), each checked against git's ignore rules.
+  - Where AI prompts go (local or cloud).
+  - Remote-access state.
+  - A privacy score with each deduction explained.
+  - DOOM answers "who is BUCS talking to?" and "privacy report" from this data, and every agent can read it.
+- **security:**
+  - Upgraded **MapLibre GL to 6.4.1** in both the dashboard and the website (GHSA-jrc7-96c5-q579, attribution XSS). It is now loaded as an ES module, and all nine satellite modes were verified.
+  - Upgraded **python-dotenv to 1.2.2** (GHSA-mf9w-mj56-hr94; BUCS only used `load_dotenv`, so it was not exposed).
+  - **Pinned** the floating CDN versions (d3, topojson-client, world-atlas) to exact releases, to close a supply-chain risk.
+  - Dashboard facts given to the agents are now explicitly marked as **data, not instructions**, as a prompt-injection guard.
+  - Integration audit: the loopback-only perimeter, password-gated remote access, and CSRF and DNS-rebinding guards were confirmed for every state-changing endpoint. An OSV audit found 0 known vulnerabilities in the remaining dependencies.
+- **Website:**
+  - **Ten agents** throughout: BOB in the roster, the hero stats and the command core.
+  - DOOM's Privacy Shield and self-development guard cards.
+  - "DOOM scans · BOB signs · you approve."
+- **CI:** a new `Publish website (Netlify)` workflow deploys `docs/` to avengers-bobbiey.netlify.app on every push, once the `NETLIFY_AUTH_TOKEN` repository secret is added. Until then it skips cleanly.
+- **Tests:** `tests/test_v87.py` (15). It caught and fixed a path-normalisation bug that would have let the gate miss `.env` and `.update/`.
+
 ## 2026-11-27 — v8.6.0 · Agents see and drive the dashboard, shared memory, voice modes, more map modes
 - **Agents see your screen.** The open dashboard reports each panel's title and visible text, plus the map view, mode and selection, the theme and any open dialog.
   - Agents read this through a new "On screen now" section, so "what does the world clocks panel say?" is answered from what's displayed.

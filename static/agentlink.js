@@ -75,6 +75,17 @@
         showMap(); const r = await GM.myLocation(); log(r ? `map → your location (${esc(r.how)})` : "map → location unavailable", r ? "" : "warn");
       } else if (m.action === "map-fly" && GM && GM.flyToPlace) {
         showMap(); const r = await GM.flyToPlace(m.q); log(r ? `map → ${esc(r.name)}, ${esc(r.country || "")}` : `map → couldn't find “${esc(m.q)}”`, r ? "" : "warn");
+      } else if (/^region-(mode|metric|tour|air)$/.test(m.action || "")) {
+        // v8.8 · INDIA / TELANGANA / DISASTER immersive maps (regionmap.js, disaster.js)
+        const reg = m.region === "india" || m.region === "telangana" ? m.region : "disaster";
+        const panel = reg === "disaster" ? $("#disaster-mount") : $(reg === "india" ? ".india-panel" : ".telangana-panel");
+        if (panel) panel.scrollIntoView({ behavior: "smooth", block: "center" });
+        const RM = window.RegionMaps, DM = window.DisasterMap;
+        let ok = false;
+        if (reg === "disaster") ok = !!(DM && (m.action === "region-mode" ? DM.mode(m.mode) : m.action === "region-tour" ? DM.tour() : false));
+        else if (RM) ok = m.action === "region-mode" ? RM.mode(reg, m.mode) : m.action === "region-metric" ? RM.metric(reg, m.metric)
+          : m.action === "region-tour" ? RM.tour(reg, true) : RM.air(reg, true);
+        log(`${reg} map → ${esc(m.mode || m.metric || m.action.slice(7))}${ok ? "" : " (map still loading — try again in a moment)"}`, ok ? "" : "warn");
       } else if (m.action === "theme") {
         const b = document.querySelector(`.theme-btn[data-theme="${CSS.escape(m.theme || "")}"]`); if (b) b.click();
       } else if (m.action === "camfs" && window.CamFS) {

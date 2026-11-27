@@ -216,7 +216,7 @@ class FakeDev:
               "tests": {"ok": ok}, "boot": {"ok": True}, "reason": "" if ok else "unit tests failed"}
         return {"ok": True, "sandbox": sb, "patch": {"id": "sb1", "files": {"app.py": {"new": "eA==", "orig_sha": None}}} if ok else None}
 
-    async def deploy_patch(self, patch, approved_by=""):
+    async def deploy_patch(self, patch, approved_by="", acknowledged=False):
         self.calls.append("deploy")
         self.job = {"id": patch["id"], "stage": "applied"}
         return {"ok": True, "id": patch["id"], "changed": ["app.py"], "tests": {"ok": True}, "backup_dir": "b", "hashes": {}}

@@ -60,6 +60,9 @@ AGENT_TRIGGERS: list[tuple[str, str]] = [
     ("doctor doom", "doom"),
     ("dr doom", "doom"),
     ("hey doom", "doom"),
+    ("hey bobbiey", "bob"),
+    ("hey bobby", "bob"),
+    ("hey bob", "bob"),
     # bare names
     ("jarvis", "jarvis"),
     ("stark", "stark"),
@@ -70,6 +73,8 @@ AGENT_TRIGGERS: list[tuple[str, str]] = [
     ("thor", "thor"),
     ("vision", "vision"),
     ("doom", "doom"),
+    ("bobbiey", "bob"),
+    ("bob", "bob"),
 ]
 
 # Wake phrases of custom team members (customagents.py keeps this list in sync: enabled agents
@@ -143,7 +148,7 @@ FUZZY_NAMES: dict[str, str] = {
 # Short vocabulary hint. A long, oddly-phrased prompt makes Whisper
 # hallucinate its words into silence/noise, so keep it to names + commands.
 HOTWORDS = ("Jarvis Stark Tony Captain Cap Steve Widow Natasha Hawkeye Clint "
-            "Hulk Banner Bruce Thor Vision Doom CPU memory disk network threat "
+            "Hulk Banner Bruce Thor Vision Doom Bob Bobbiey CPU memory disk network threat "
             "calendar meetings inbox weather news briefing")
 
 INITIAL_PROMPT_LEGACY = (

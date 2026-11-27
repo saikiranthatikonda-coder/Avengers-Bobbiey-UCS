@@ -785,7 +785,7 @@ class Evolution:
         xs = self.signals.values("errors:total", since, until)
         return sum(xs) / max((until - since) / 3600, 1 / 60) if xs else None
 
-    async def approve(self, iid: str, by: str) -> dict:
+    async def approve(self, iid: str, by: str, acknowledged: bool = False) -> dict:
         it = self.backlog.items.get(iid)
         if it is None:
             return {"ok": False, "error": "unknown item"}
@@ -811,7 +811,18 @@ class Evolution:
         win = self.settings["eval_window_min"] * 60
         baseline = self._metric_value(it.get("metric"), now - 2 * win, now)
         err_base = self._errors_rate(now - 2 * win, now)
-        r = await self.state["dev"].deploy_patch(patch, approved_by=by)
+        r = await self.state["dev"].deploy_patch(patch, approved_by=by, acknowledged=acknowledged)
+        if r.get("doom"):
+            it["doom"] = r["doom"]
+        if not r.get("ok") and r.get("doom"):                  # DOOM/BOB said no: back to awaiting approval
+            it.pop("approval", None)
+            try:
+                core.transition(it, "awaiting_approval", r.get("error", "")[:200])
+            except core.TransitionError:
+                pass
+            self.save()
+            await self._broadcast("item", id=iid, stage=it["stage"])
+            return {"ok": False, "error": r.get("error"), "doom": r["doom"], "needs_ack": r.get("needs_ack", False)}
         if not r.get("ok"):
             core.transition(it, "failed", "deploy refused: " + str(r.get("error")))
             it["error"] = scrub(r.get("error"), 300)
@@ -1263,7 +1274,12 @@ def build_router(ctx) -> APIRouter:
 
     @r.post("/api/evolution/items/{iid}/approve")
     async def item_approve(iid: str, request: Request):
-        return await code_action(request, lambda: evo.approve(iid[:16], by()))
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        ack = bool(isinstance(body, dict) and body.get("acknowledged"))
+        return await code_action(request, lambda: evo.approve(iid[:16], by(), acknowledged=ack))
 
     @r.post("/api/evolution/items/{iid}/revert")
     async def item_revert(iid: str, request: Request, req: ReasonReq | None = None):

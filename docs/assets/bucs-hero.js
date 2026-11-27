@@ -1,6 +1,6 @@
 /* BUCS hero: the COMMAND CORE — "the interface between AI and humans", drawn flat so it never
    competes with the 3D globe in the page background.
-   You sit at the centre; the nine agents orbit you. Commands pulse out from you to an agent,
+   You sit at the centre; the ten agents orbit you. Commands pulse out from you to an agent,
    answers pulse back, and agents hand work to each other (JARVIS delegates, DOOM ↔ Widow on
    threats…). Hover or tap an agent for its role. An illustration — not live data.
    Plain 2D canvas, no libraries. Pauses off-screen and in background tabs; a single still frame
@@ -16,8 +16,9 @@
     ["HAWKEYE", "Vitals monitor", "#a78bfa"], ["HULK", "Heavy compute", "#22c55e"],
     ["THOR", "Announcements", "#facc15"], ["VISION", "Synthesizer", "#e879f9"],
     ["DOOM", "Cyber defense & global awareness", "#2bd46f"],
+    ["BOB", "Supreme orchestrator · Bobbiey", "#f2c14e"],
   ];
-  const HANDOFF = [[0, 2], [0, 3], [8, 3], [0, 8], [4, 8], [1, 6], [7, 0], [5, 7], [2, 4]];
+  const HANDOFF = [[0, 2], [0, 3], [8, 3], [0, 8], [4, 8], [1, 6], [7, 0], [5, 7], [2, 4], [9, 8], [9, 0], [8, 9]];
   const canvas = document.createElement("canvas");
   canvas.className = "hero-core-canvas";
   canvas.setAttribute("aria-hidden", "true");

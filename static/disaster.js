@@ -82,7 +82,22 @@
           <canvas class="dis-land-cv" id="dis-land" width="${W * 2}" height="${H * 2}" aria-hidden="true"></canvas>
           <svg class="dis-map" id="dis-map" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="World map of current physical events: click a point for detail"></svg>
           <div class="dis-map-loc" id="dis-loc"></div>
+          <div class="dis-imm" id="dis-imm"></div>
         </div>
+        <div class="dim-bar" id="dim-bar" hidden role="toolbar" aria-label="Disaster map tracking">
+          <span class="dim-lab">WINDOW</span>
+          <button type="button" data-dw="6">6H</button><button type="button" data-dw="24">24H</button>
+          <button type="button" data-dw="72">3D</button><button type="button" data-dw="0">ALL</button>
+          <span class="dim-lab">LAYERS</span>
+          <button type="button" data-dl="heat" title="Event density heatmap">HEAT</button>
+          <button type="button" data-dl="tracks" title="Storm, cyclone and volcano paths from NASA EONET">TRACKS</button>
+          <button type="button" data-dl="follow" title="Fly to every new high-severity event as it arrives">◉ FOLLOW NEW</button>
+          <span class="dim-lab">GO</span>
+          <button type="button" data-dg="me" title="Fly to your location and near-me radius">◎ ME</button>
+          <button type="button" data-dg="worst" title="Fly to the most severe event in view">⚠ WORST</button>
+          <button type="button" data-dg="tour" title="Fly through the high-severity events one by one">▶ TOUR</button>
+        </div>
+        <div class="dim-feed" id="dim-feed" hidden></div>
         <div class="dis-legend">
           <span><i class="sev-crit"></i>CRITICAL</span><span><i class="sev-high"></i>HIGH</span>
           <span><i class="sev-med"></i>MEDIUM</span><span><i class="sev-low"></i>LOW</span>
@@ -143,7 +158,7 @@
     let feat = null;
     try {
       if (typeof topojson !== "undefined") {
-        const w = await (await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json")).json();
+        const w = await (await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json")).json();
         feat = topojson.feature(w, w.objects.land);
       }
     } catch (e) { feat = null; }
@@ -191,7 +206,130 @@
 ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString() + " km from you" : ""} · click for detail</title></g>`;
     }
     svg.innerHTML = html;
+    renderImm();
   }
+
+  // ── immersive tracking map (static/immersivemap.js; the SVG above stays as the fallback) ──
+  const SEV_HEX = ["#6b94b4", "#4dd2ff", "#ffd84d", "#ff8c42", "#ff3b5c"];
+  let imm = null, immPulses = [], immSeen = null, immNew = 0;
+  const dimPref = { win: +(pref("imm.win") || 0), heat: !!pref("imm.heat"), tracks: pref("imm.tracks") !== false, follow: !!pref("imm.follow") };
+  function circlePoly(lat, lon, km) {
+    const ring = [], d = km / 6371, la = lat * Math.PI / 180, lo = lon * Math.PI / 180;
+    for (let k = 0; k <= 72; k++) {
+      const b = k / 72 * 2 * Math.PI;
+      const la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(b));
+      const lo2 = lo + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2));
+      ring.push([lo2 * 180 / Math.PI, la2 * 180 / Math.PI]);
+    }
+    return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } };
+  }
+  function immItems() {
+    if (!data) return [];
+    const now = Date.now() / 1000, cut = dimPref.win ? now - dimPref.win * 3600 : 0;
+    return data.items.filter(i => i.category === "physical" && i.lat != null && i.lon != null &&
+      (!cut || !i.time || i.time >= cut || (i.until && i.until >= now)));
+  }
+  function dimBar() {
+    const bar = document.getElementById("dim-bar"); if (!bar) return;
+    bar.querySelectorAll("[data-dw]").forEach(b => b.classList.toggle("on", +b.dataset.dw === dimPref.win));
+    bar.querySelectorAll("[data-dl]").forEach(b => { const on = !!dimPref[b.dataset.dl]; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+  }
+  function renderImm() {
+    if (!imm || !imm.ready || !data) return;
+    const M = imm.map, shown = new Set(filtered().map(i => i.id)), its = immItems();
+    const feats = its.slice().sort((a, b) => a.severity - b.severity).map(i => ({ type: "Feature",
+      properties: { id: i.id, sev: i.severity, c: SEV_HEX[i.severity], dim: shown.has(i.id) ? 0 : 1, near: i.near ? 1 : 0, w: 0.4 + i.severity * 0.4 },
+      geometry: { type: "Point", coordinates: [i.lon, i.lat] } }));
+    M.getSource("dis-ev").setData({ type: "FeatureCollection", features: feats });
+    const tracks = its.filter(i => Array.isArray(i.track) && i.track.length > 1).map(i => ({ type: "Feature",
+      properties: { c: SEV_HEX[i.severity], id: i.id }, geometry: { type: "LineString", coordinates: i.track.map(t => [t[1], t[0]]) } }));
+    M.getSource("dis-tracks").setData({ type: "FeatureCollection", features: dimPref.tracks ? tracks : [] });
+    const loc = data.location;
+    M.getSource("dis-near").setData({ type: "FeatureCollection", features: loc ? [circlePoly(loc.lat, loc.lon, data.near_km)] : [] });
+    M.getSource("dis-you").setData({ type: "FeatureCollection", features: loc ? [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [loc.lon, loc.lat] } }] : [] });
+    M.setLayoutProperty("dis-heat", "visibility", dimPref.heat ? "visible" : "none");
+    immPulses.forEach(m => m.remove()); immPulses = [];
+    for (const i of its.filter(x => x.severity >= 3 && shown.has(x.id)).slice(0, 40)) {
+      const el = document.createElement("div"); el.className = "dim-pulse"; el.style.setProperty("--c", SEV_HEX[i.severity]);
+      immPulses.push(new maplibregl.Marker({ element: el }).setLngLat([i.lon, i.lat]).addTo(M));
+    }
+    // new-arrival tracking: anything not present on the previous refresh
+    const fresh = immSeen ? its.filter(i => !immSeen.has(i.id)) : [];
+    immSeen = new Set(its.map(i => i.id));
+    immNew += fresh.length;
+    const worst = fresh.filter(i => i.severity >= 3).sort((a, b) => b.severity - a.severity)[0];
+    if (worst && dimPref.follow) immFocus(worst);
+    const newest = its.filter(i => i.time).sort((a, b) => b.time - a.time)[0];
+    const feed = document.getElementById("dim-feed");
+    feed.hidden = false;
+    feed.innerHTML = `TRACKING <b>${its.length}</b> physical events${dimPref.win ? ` from the last ${dimPref.win} h` : ""} · <b>${its.filter(i => i.severity >= 3).length}</b> high/critical` +
+      (tracks.length ? ` · <b>${tracks.length}</b> storm/volcano tracks` : "") +
+      (newest ? ` · newest: <b>${esc(fix(newest.title).slice(0, 70))}</b> (${esc(ago(newest.time))})` : "") +
+      (immNew ? ` <span class="dim-new">+${immNew} NEW SINCE OPEN</span>` : "") + ` · refreshes every minute`;
+  }
+  function immTip(i) {
+    if (!imm || !imm.ready) return;
+    const u = safeUrl(i.link);
+    imm.popup([i.lon, i.lat], `<div class="rm-card"><div class="rm-card-k" style="color:${SEV_HEX[i.severity]}">${esc(i.sev_label)} · ${esc(String(i.type).toUpperCase())}${i.near ? " · NEAR YOU" : ""}</div>
+      <div class="rm-card-t">${esc(fix(i.title))}</div><div class="rm-card-s">${esc(fix(i.detail || ""))}</div>
+      <div class="rm-card-s">${esc(i.source)} · ${esc(ago(i.time))}${i.distance_km != null ? " · " + i.distance_km.toLocaleString() + " km from you" : ""}${Array.isArray(i.track) && i.track.length > 1 ? ` · track of ${i.track.length} fixes` : ""}</div>
+      <div class="rm-card-act"><button type="button" data-imm-open="${esc(i.id)}">FULL DETAIL</button>${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">SOURCE ↗</a>` : ""}</div></div>`);
+  }
+  function immFocus(i) { if (imm && imm.ready && i && i.lat != null) { imm.flyTo(i.lat, i.lon, Math.max(4, Math.min(7, imm.map.getZoom() + 2)), { pitch: 35 }); immTip(i); } }
+  function initImm() {
+    const host = document.getElementById("dis-imm"), box = document.querySelector("#disaster-mount .dis-mapbox"), bar = document.getElementById("dim-bar");
+    if (!host || !box || !window.ImmersiveMap) return;
+    box.classList.add("dis-imm-on");
+    imm = window.ImmersiveMap.create(host, { key: "dis", mode: "dark", modes: ["dark", "sat", "hybrid", "terrain", "night", "today", "topo", "live"],
+      home: { lat: 18, lon: 40, zoom: 1.15 }, minZoom: 0.6, maxZoom: 14, compact: true,
+      onFail: () => { box.classList.remove("dis-imm-on"); host.hidden = true; bar.hidden = true; } });
+    imm.on("ready", M => {
+      const fc = { type: "FeatureCollection", features: [] };
+      for (const id of ["dis-ev", "dis-tracks", "dis-near", "dis-you"]) M.addSource(id, { type: "geojson", data: fc });
+      M.addLayer({ id: "dis-heat", type: "heatmap", source: "dis-ev", layout: { visibility: "none" }, paint: {
+        "heatmap-weight": ["get", "w"], "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 14, 6, 34], "heatmap-intensity": 0.9, "heatmap-opacity": 0.75,
+        "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,0,0)", 0.2, "#1e5a8a", 0.45, "#ffd84d", 0.7, "#ff8c42", 1, "#ff3b5c"] } });
+      M.addLayer({ id: "dis-near", type: "fill", source: "dis-near", paint: { "fill-color": "#00d9ff", "fill-opacity": 0.07 } });
+      M.addLayer({ id: "dis-near-l", type: "line", source: "dis-near", paint: { "line-color": "#00d9ff", "line-opacity": 0.6, "line-width": 1.2, "line-dasharray": [3, 2] } });
+      M.addLayer({ id: "dis-tracks", type: "line", source: "dis-tracks", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "c"], "line-width": 2, "line-opacity": 0.85, "line-dasharray": [2, 1.2] } });
+      M.addLayer({ id: "dis-ev", type: "circle", source: "dis-ev", paint: {
+        "circle-color": ["get", "c"], "circle-opacity": ["case", ["==", ["get", "dim"], 1], 0.25, 0.92],
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, ["+", 2.5, ["*", ["get", "sev"], 1.1]], 6, ["+", 5, ["*", ["get", "sev"], 2]]],
+        "circle-stroke-color": ["case", ["==", ["get", "near"], 1], "#00e5ff", "rgba(255,255,255,0.85)"], "circle-stroke-width": ["case", ["==", ["get", "near"], 1], 2, 0.8] } });
+      M.addLayer({ id: "dis-you", type: "circle", source: "dis-you", paint: { "circle-color": "#00d9ff", "circle-radius": 5, "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
+      const hit = e => { const f = e.features && e.features[0]; const i = f && data && data.items.find(x => x.id === f.properties.id); if (i) immTip(i); };
+      for (const l of ["dis-ev", "dis-tracks"]) {
+        M.on("click", l, hit);
+        M.on("mouseenter", l, () => { M.getCanvas().style.cursor = "pointer"; });
+        M.on("mouseleave", l, () => { M.getCanvas().style.cursor = ""; });
+      }
+      bar.hidden = false;
+      dimBar(); renderImm();
+    });
+    host.addEventListener("click", e => { const b = e.target.closest("[data-imm-open]"); if (b) openEvent(b.dataset.immOpen); });
+    bar.addEventListener("click", e => {
+      const w = e.target.closest("[data-dw]"), l = e.target.closest("[data-dl]"), g = e.target.closest("[data-dg]");
+      if (w) { dimPref.win = +w.dataset.dw; pref("imm.win", dimPref.win); }
+      if (l) { const k = l.dataset.dl; dimPref[k] = !dimPref[k]; pref("imm." + k, dimPref[k]); }
+      if (g && imm && imm.ready && data) {
+        const ok = new Set(filtered().map(i => i.id)), its = immItems().filter(i => ok.has(i.id));
+        if (g.dataset.dg === "me" && data.location) imm.flyTo(data.location.lat, data.location.lon, Math.max(3, 8 - Math.log2(Math.max(50, data.near_km) / 50)), { pitch: 0 });
+        if (g.dataset.dg === "worst") { const top = its.slice().sort((a, b) => b.severity - a.severity || (b.time || 0) - (a.time || 0))[0]; if (top) immFocus(top); }
+        if (g.dataset.dg === "tour") {
+          const stops = its.filter(i => i.severity >= 2).sort((a, b) => b.severity - a.severity).slice(0, 15);
+          imm.tour(stops.map(i => ({ lat: i.lat, lon: i.lon, zoom: 5.5, onArrive: () => immTip(i) })), { dwell: 5500 });
+        }
+      }
+      dimBar(); renderImm();
+    });
+  }
+  initImm();
+  // voice / agent control (agentlink.js "region-*" UI actions)
+  window.DisasterMap = {
+    mode(m) { if (!imm || !imm.ready) return false; imm.setMode(m); return true; },
+    tour() { const b = document.querySelector('#dim-bar [data-dg="tour"]'); if (!b || !imm || !imm.ready) return false; b.click(); return true; },
+    state() { return imm ? imm.state() : null; },
+  };
 
   // ── filtering ─────────────────────────────────────────
   function filtered() {
@@ -356,6 +494,7 @@ ${esc(i.source)}${i.distance_km != null ? " · " + i.distance_km.toLocaleString(
   function openEvent(id) {
     const i = data && data.items.find(x => x.id === id);
     if (!i) return;
+    immFocus(i);
     const u = safeUrl(i.link);
     const all = data.preparedness_all || {};
     const html = `<div class="mb-grid">

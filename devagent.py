@@ -296,9 +296,34 @@ class DevAgent:
                 await self._audit("dev.refused", "touched " + ", ".join(forbidden[:5]))
                 self._close()
                 return {"ok": False, "error": "the change touched protected areas (" + ", ".join(forbidden[:5]) + ") and was reverted"}
+            # v8.7 · DOOM reviews what the engineering agent actually wrote (added lines vs HEAD)
+            try:
+                import doomgate
+                new, old = {}, {}
+                for f in changed:
+                    p = ROOT / f
+                    new[f] = p.read_text(encoding="utf-8", errors="replace") if p.is_file() else None
+                    try:
+                        old[f] = _git("show", f"HEAD:{f.replace(chr(92), '/')}")
+                    except Exception:
+                        old[f] = ""
+                verdict = doomgate.scan_patch({f: (t if t is not None else {"op": "delete", "new": None}) for f, t in new.items()}, old)
+            except Exception as e:
+                verdict = {"verdict": "review", "block": [], "review": [f"scan error: {type(e).__name__}"], "summary": "DOOM could not scan this change."}
+            job["doom"] = verdict
+            if verdict.get("verdict") == "block":
+                job["stage"] = "applied"
+                await asyncio.to_thread(self._revert, job)
+                job.update(stage="refused", tests={"ok": False, "summary": verdict["summary"]})
+                await self._emit("refused", forbidden=verdict.get("block", []), doom=verdict)
+                await self._audit("dev.doomgate", "BLOCK · reverted · " + "; ".join(verdict.get("block", [])[:3]))
+                self._close()
+                return {"ok": False, "error": verdict["summary"] + " The change was reverted.", "doom": verdict}
             await self._emit("testing", changed=changed)
             tests = await self._tests()
             job.update(stage="applied", tests=tests, diffstat=_git("diff", "--stat", "--", *changed)[-1500:] if changed else "")
+            if (job.get("doom") or {}).get("verdict") == "review":
+                await self._emit("doom-review", doom=job["doom"])      # KEEP needs the commander to read DOOM's flags
             await self._emit("applied", changed=changed, tests=tests, result=result, restored=restored,
                              diffstat=job["diffstat"])
             await self._audit("dev.applied", f"{len(changed)} files · tests {'pass' if tests['ok'] else 'FAIL'}")
@@ -481,7 +506,7 @@ class DevAgent:
             await self._audit("dev.sandboxed", f"{sid} ok={res['ok']} {res.get('reason', '')[:80]}")
             return {"ok": True, "sandbox": res, "patch": patch}
 
-    async def deploy_patch(self, patch: dict, approved_by: str = "commander") -> dict:
+    async def deploy_patch(self, patch: dict, approved_by: str = "commander", acknowledged: bool = False) -> dict:
         """Write an approved, sandbox-tested patch into the repo, then the existing path (tests →
         stage 'applied' → KEEP · UNDO · SHIP). Refuses stale patches (repo changed since the test)."""
         import base64
@@ -509,6 +534,17 @@ class DevAgent:
             if stale:
                 return {"ok": False, "error": "the code changed since the sandbox test (" + ", ".join(stale[:4]) +
                                               ") — re-run the sandbox", "stale": stale}
+            # v8.7 · DOOM's security verdict on the exact bytes about to be written, then BOB's sign-off
+            import doomgate
+            old = {}
+            for f in files:
+                b = cur(f)
+                old[f] = b.decode("utf-8", "replace") if b else ""
+            verdict = doomgate.scan_patch(files, old)
+            signed, why = doomgate.bob_signoff(verdict, acknowledged)
+            await self._audit("dev.doomgate", f"{patch.get('id', '?')} verdict={verdict['verdict']} signed={signed}")
+            if not signed:
+                return {"ok": False, "error": why, "doom": verdict, "needs_ack": verdict["verdict"] == "review"}
             before = await asyncio.to_thread(_porcelain)
             pid = str(patch.get("id") or uuid.uuid4().hex[:10])
             bdir = ROOT / ".update" / "evolution" / "deploys" / pid

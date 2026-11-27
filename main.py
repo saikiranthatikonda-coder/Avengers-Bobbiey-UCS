@@ -2017,7 +2017,7 @@ def _exit_soon(reason: str) -> None:
 import importlib  # noqa: E402
 
 FEATURE_MODULES = ("disaster", "devices", "secagent", "computeruse", "phone", "evolution", "agentos", "globalmap",
-                   "dashboard_context", "customagents", "openintel", "dictation", "globalmap_live")
+                   "dashboard_context", "customagents", "openintel", "dictation", "globalmap_live", "privacyshield", "regionmap")
 _feature_ctx = {"state": state, "audit": lambda action, detail="": _audit(action, detail),
                 "commander": lambda: _commander(), "host_only": lambda request: _host_only(request)}
 for _name in FEATURE_MODULES:

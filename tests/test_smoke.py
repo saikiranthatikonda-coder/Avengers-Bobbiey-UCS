@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from harness import ROOT, PYTHON, IsolatedServer, copy_app  # noqa: E402
 
 SERVER: IsolatedServer | None = None
-AGENTS = {"jarvis", "captain", "stark", "widow", "hawkeye", "hulk", "thor", "vision", "doom"}
+AGENTS = {"jarvis", "captain", "stark", "widow", "hawkeye", "hulk", "thor", "vision", "doom", "bob"}
 
 
 def setUpModule():

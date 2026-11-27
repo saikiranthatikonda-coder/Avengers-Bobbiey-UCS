@@ -217,6 +217,8 @@
         <span>UNIT TESTS</span><b class="${sb.tests && sb.tests.ok === false ? "bad" : "good"}">${testsLine(sb.tests)}</b>
         <span>BOOT CHECK</span><b class="${sb.boot && sb.boot.ok ? "good" : "bad"}">${bootLine(sb.boot)}</b>
         <span>SANDBOX</span><b>${esc(sb.seconds ?? "?")} s · ${esc(ago(sb.ts))} · isolated copy, nothing deployed</b>
+        ${it.doom ? `<span>DOOM VERDICT</span><b class="${it.doom.verdict === "clear" ? "good" : "bad"}">${esc(String(it.doom.verdict).toUpperCase())} · ${esc(it.doom.summary || "")}${(it.doom.block || []).concat(it.doom.review || []).length ? `<br><small>${esc((it.doom.block || []).concat(it.doom.review || []).slice(0, 6).join(" · "))}</small>` : ""}</b>
+        <span>BOB SIGN-OFF</span><b>${it.doom.verdict === "block" ? "refused — DOOM blocked it" : it.doom.verdict === "review" ? "needs your acknowledgement of DOOM's findings" : "signs on your approval"}</b>` : `<span>DOOM · BOB</span><b>DOOM scans the exact change at deploy time; BOB signs only with your approval</b>`}
       </div>
       <details class="ev-diff-w"><summary>VIEW DIFF</summary><pre class="ev-diff">${diffHTML(sb.diff)}</pre></details>
       ${it.plan ? `<details class="ev-diff-w"><summary>ENGINEERING PLAN</summary><pre class="ev-plan">${esc(it.plan)}</pre></details>` : ""}
@@ -403,7 +405,12 @@
       if (!confirm("Commit and push this change to GitHub via engineering mode?")) return;
     }
     el.disabled = true;
-    const r = await post(`/api/evolution/items/${encodeURIComponent(id)}/${act}`, body);
+    let r = await post(`/api/evolution/items/${encodeURIComponent(id)}/${act}`, body);
+    if (act === "approve" && r.ok === false && r.needs_ack && r.doom) {
+      const list = (r.doom.review || []).slice(0, 8).map(x => "• " + x).join("\n");
+      if (confirm(`DOOM flagged this change for review:\n\n${list}\n\nI have reviewed DOOM's findings. Deploy anyway (BOB signs with your acknowledgement)?`))
+        r = await post(`/api/evolution/items/${encodeURIComponent(id)}/${act}`, { acknowledged: true });
+    }
     if (r.ok === false) log(esc(r.error || "refused"), "warn");
     else log(`${esc(act)}: ${esc(r.stage || "done")}`);
     el.disabled = false; refresh();

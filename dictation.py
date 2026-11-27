@@ -229,7 +229,7 @@ class Dictation:
             return {"ok": True, "text": "", "duration": secs, "note": "no speech detected (the microphone was silent)"}
         if peak < 0.9:
             audio = audio * min(20.0, 0.9 / peak)
-        names = "Jarvis, Stark, Cap, Widow, Hawkeye, Hulk, Thor, Vision, Doom."
+        names = "Jarvis, Stark, Cap, Widow, Hawkeye, Hulk, Thor, Vision, Doom, Bob, Bobbiey."
         prompt = (names + " " + (context or "")[-300:]).strip()
         self.waiting += 1
         try:

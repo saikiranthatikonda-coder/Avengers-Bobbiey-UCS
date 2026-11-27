@@ -213,9 +213,9 @@ async def i_handsfree(ctx, text, low):
 
 
 # ── v8.6 · shared commander memory: "remember that …" / "forget …" ──────────────
-_REMEMBER = re.compile(r"^(?:(?:hey |ok )?(?:jarvis|stark|tony|cap|captain|steve|widow|natasha|hawkeye|clint|hulk|banner|thor|vision|doom|team|guys)[, ]+)?(?:please )?(?:remember|note|keep in mind|don't forget)"
+_REMEMBER = re.compile(r"^(?:(?:hey |ok )?(?:jarvis|stark|tony|cap|captain|steve|widow|natasha|hawkeye|clint|hulk|banner|thor|vision|doom|bob|bobbiey|team|guys)[, ]+)?(?:please )?(?:remember|note|keep in mind|don't forget)"
                        r"(?: that|:)?\s+(?!to\b)(.{4,400}?)[.!]?$", re.I)
-_FORGET = re.compile(r"^(?:(?:hey |ok )?(?:jarvis|stark|tony|cap|captain|steve|widow|natasha|hawkeye|clint|hulk|banner|thor|vision|doom|team|guys)[, ]+)?(?:please )?forget (?:that |the fact that |about )?(.{3,200}?)[.!]?$", re.I)
+_FORGET = re.compile(r"^(?:(?:hey |ok )?(?:jarvis|stark|tony|cap|captain|steve|widow|natasha|hawkeye|clint|hulk|banner|thor|vision|doom|bob|bobbiey|team|guys)[, ]+)?(?:please )?forget (?:that |the fact that |about )?(.{3,200}?)[.!]?$", re.I)
 
 
 async def i_remember(ctx, text, low):
@@ -250,6 +250,43 @@ _MAP_MODES = {"2d": "2d", "tactical": "2d", "2d tactical": "2d", "flat": "2d", "
 _THEMES = {"jarvis": "jarvis", "cyan": "jarvis", "stark": "stark", "red": "stark", "iron man": "stark",
            "stealth": "stealth", "mono": "stealth", "doom": "doom", "doomsday": "doom", "green": "doom"}
 _MAPWORD = r"(?:the )?(?:global |activity |world )*map"
+
+
+_REGION = r"(india|indian|telangana|disaster(?: response)?|hazard|threat)"
+_REGION_KEY = {"india": "india", "indian": "india", "telangana": "telangana"}
+_RM_METRIC = {"temperature": "temp", "temp": "temp", "heat": "temp", "rain": "rain", "rainfall": "rain", "air quality": "aqi",
+              "air": "aqi", "aqi": "aqi", "pollution": "aqi", "wind": "wind", "alerts": "alerts", "hazards": "alerts"}
+
+
+def _region(word: str) -> str:
+    return _REGION_KEY.get(word, "disaster")
+
+
+async def i_region_map(ctx, text, low):
+    """v8.8: the INDIA / TELANGANA / DISASTER immersive maps by voice."""
+    low = low.rstrip(" .!?")
+    m = re.search(rf"\b(?:switch|change|set|turn|put|show)\s+(?:the\s+)?{_REGION}\s+map\s+(?:view\s+)?(?:to|into|on|in)\s+(?:the\s+)?([a-z0-9' ]+?)(?:\s+(?:view|mode))?$", low)
+    if m and m.group(2).strip() in _MAP_MODES and _MAP_MODES[m.group(2).strip()].startswith("sat:"):
+        reg, mode = _region(m.group(1)), _MAP_MODES[m.group(2).strip()].split(":")[1]
+        return _r(f"Switching the {reg} map to {m.group(2).strip()}.", ui=[{"type": "ui", "action": "region-mode", "region": reg, "mode": mode}],
+                  action={"name": "dashboard.region_mode", "target": f"{reg}:{mode}"})
+    m = re.search(rf"\b(?:show|colou?r|paint)\s+(?:me\s+)?(?:the\s+)?(temperature|temp|heat|rainfall|rain|air quality|air|aqi|pollution|wind|alerts|hazards)\s+(?:on|across|over|for)\s+(?:the\s+)?(india|telangana)(?:\s+map)?$", low)
+    if m:
+        reg, met = _region(m.group(2)), _RM_METRIC[m.group(1)]
+        return _r(f"Colouring the {reg.title()} map by live {m.group(1)}.", ui=[{"type": "ui", "action": "region-metric", "region": reg, "metric": met}],
+                  action={"name": "dashboard.region_metric", "target": f"{reg}:{met}"})
+    m = re.search(r"\b(?:tour|fly through|fly over)\s+(?:the\s+)?(india|telangana)(?:\s+map)?\b", low) \
+        or re.search(r"\b(?:start|run|begin)\s+(?:the\s+)?(india|telangana|disaster)\s+(?:map\s+)?tour\b", low)
+    if m:
+        reg = _region(m.group(1))
+        return _r(f"Starting the {reg} fly-through with live readings at each stop.", ui=[{"type": "ui", "action": "region-tour", "region": reg}],
+                  action={"name": "dashboard.region_tour", "target": reg})
+    m = re.search(r"\b(?:show|track)\s+(?:the\s+)?(?:aircraft|planes|flights|air traffic)\s+(?:over|above|in)\s+(india|telangana)\b", low)
+    if m:
+        reg = _region(m.group(1))
+        return _r(f"Showing live aircraft over {reg.title()} from OpenSky.", ui=[{"type": "ui", "action": "region-air", "region": reg}],
+                  action={"name": "dashboard.region_air", "target": reg})
+    return None
 
 
 async def i_ui(ctx, text, low):
@@ -529,6 +566,18 @@ async def i_inbox(ctx, text, low):
     return _r(line, "thor")
 
 
+async def i_privacy(ctx, text, low):
+    if not re.search(r"\b(privacy (report|status|score|check|shield)|who is (bucs|the dashboard|this system|it) "
+                     r"(talking|connected|connecting) to|what (data )?(leaves|is leaving|left) (this|my) (machine|computer|pc)|"
+                     r"is (bucs|anything) (phoning home|sending my data))\b", low):
+        return None
+    ps = ctx.get("privacy")
+    if ps is None:
+        return _r("The Privacy Shield isn't loaded on this install.", "doom")
+    return _r(ps.summary(), "doom", ui=[{"type": "dash-cmd", "target": "privacy"}],
+              action={"name": "privacy.report"})
+
+
 async def i_memory(ctx, text, low):
     mem = ctx.get("memory")
     if mem and re.search(r"\b(what do you know about me|who am i|remember about me|my memory)\b", low):
@@ -638,9 +687,9 @@ async def i_dashboard(ctx, text, low):
 
 # order matters: actions that start with "open" (apps, sites) before dashboard
 # sections, specific questions before broad ones
-HANDLERS = [i_conversation, i_agentvoice, i_handsfree, i_remember, i_computeruse, i_brain, i_dev, i_time, i_ui,
+HANDLERS = [i_conversation, i_agentvoice, i_handsfree, i_remember, i_computeruse, i_brain, i_dev, i_time, i_region_map, i_ui,
             i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
-            i_inbox, i_threats, i_news, i_memory, i_vision, i_missions, i_dashboard]
+            i_inbox, i_threats, i_news, i_privacy, i_memory, i_vision, i_missions, i_dashboard]
 
 
 async def match(ctx: dict, text: str) -> dict | None:
@@ -664,6 +713,8 @@ async def match(ctx: dict, text: str) -> dict | None:
 
 # ── delegation: which specialist owns a free-form request ─────────
 ROUTES = [
+    ("bob",     r"\b(sign[- ]?off|approv(e|al|als)|oversee|supervis\w*|orchestrat\w*|self[- ]?(develop\w*|improv\w*|evol\w*)|"
+                r"evolution|governance|whole team|team (status|report|overview)|system[- ]level|who should handle)\b"),
     ("captain", r"\b(schedule|meeting|calendar|brief(ing)?|remind|plan my|agenda|today's plan)\b"),
     ("stark",   r"\b(cpu|process|system|disk|code|script|automate|performance|laptop|computer|windows|driver|bug)\b"),
     ("hulk",    r"\b(memory|ram|gpu|compute|heavy|model|cluster|benchmark)\b"),

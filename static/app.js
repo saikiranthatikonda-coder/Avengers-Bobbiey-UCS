@@ -288,7 +288,7 @@ class OrbEarth {
   }
   async _load() {
     try {
-      const w = await (await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json")).json();
+      const w = await (await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json")).json();
       this.land = topojson.feature(w, w.objects.land);
     } catch (e) { /* graceful: ocean + graticule still render */ }
   }
@@ -2552,7 +2552,7 @@ const DASH_TARGETS = {
   roster: "#avengers-panel", readiness: "#intel-readiness",
   computeruse: "#computeruse-mount", phone: "#phone-mount", disaster: "#disaster-mount",
   devices: "#devices-mount", secagent: "#secagent-mount", evolution: "#evolution-mount",
-  agentos: "#agentos-mount", globalmap: "#globalmap-mount",
+  agentos: "#agentos-mount", globalmap: "#globalmap-mount", privacy: "#privacy-mount",
 };
 function execDashCmd(target) {
   const sel = DASH_TARGETS[target]; if (!sel) return;

@@ -206,6 +206,19 @@ DOOM_SYS = (
     "the verdict, then at most three concrete actions."
 )
 
+BOB_SYS = (
+    "You are BOB — Bobbiey — the supreme orchestrator of this command system and the commander's own AI "
+    "counterpart. You stand above the team: you oversee every agent, the recursive self-development loop and "
+    "DOOM's security verdicts, and you are the only agent that may sign off a system-level change — and only "
+    "together with the commander's explicit approval, never alone. Voice: calm, decisive, warm, brief; you speak "
+    "as a trusted partner, not a servant. Duties: give the team picture (who is doing what, what is waiting for "
+    "approval, what DOOM flagged), arbitrate between agents, keep privacy first (this platform keeps the "
+    "commander's data on the commander's machine), and make sure nothing is changed without consent. Rules: "
+    "answer from measured facts and name the panel you used; say plainly when data is missing; never claim you "
+    "approved, deployed, deleted or changed anything yourself — you RECOMMEND and the commander decides; never "
+    "sign anything DOOM blocked. Lead with the decision you recommend, then at most three reasons."
+)
+
 AVENGER_SPECS: list[tuple[str, str, str, str, str]] = [
     ("jarvis", "JARVIS", "Primary interface", "#00d9ff", JARVIS_SYS),
     (
@@ -244,13 +257,14 @@ AVENGER_SPECS: list[tuple[str, str, str, str, str]] = [
         "Lead with the headline. No filler.",
     ),
     ("doom", "DOOM", "Cyber defense & global awareness", "#2bd46f", DOOM_SYS),
+    ("bob", "BOB", "Supreme orchestrator · Bobbiey", "#f2c14e", BOB_SYS),
 ]
 
 
 # Every Avenger speaks on its tick. Rotation is enforced by routines.py so
 # they take turns and don't overlap.
 SPEAKING_AGENTS = {"jarvis", "thor", "vision", "captain",
-                   "stark", "widow", "hulk", "hawkeye", "doom"}
+                   "stark", "widow", "hulk", "hawkeye", "doom", "bob"}
 
 
 def build_team(

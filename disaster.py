@@ -251,10 +251,19 @@ def parse_eonet(payload: dict) -> list[dict]:
             cats[0].get("title") or "",
             f"{mag:g} {unit}" if mag is not None else "",
             ", ".join(s.get("id", "") for s in (e.get("sources") or []) if isinstance(s, dict))) if x)
+        # the event's own path (storm/cyclone fixes, volcano or fire re-positions): [lat, lon, ts]
+        track = []
+        for g in geoms[-60:]:
+            c = g.get("coordinates")
+            if g.get("type") == "Point" and isinstance(c, list) and len(c) >= 2:
+                p = _valid_ll(c[1], c[0])
+                if p:
+                    track.append([round(p[0], 3), round(p[1], 3), _iso_ts(g.get("date"))])
         out.append(_item(
             id="eonet:" + str(e.get("id")), category="physical", type=typ, title=title,
             detail=detail, severity=sev, lat=ll[0] if ll else None, lon=ll[1] if ll else None,
-            time=_iso_ts(last.get("date")), source="NASA EONET", link=_eonet_link(e)))
+            time=_iso_ts(last.get("date")), source="NASA EONET", link=_eonet_link(e),
+            track=track if len(track) > 1 else None))
     return out
 
 

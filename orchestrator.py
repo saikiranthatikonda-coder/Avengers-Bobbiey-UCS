@@ -57,6 +57,7 @@ class Orchestrator:
         "vision": "widow",     # synthesis pulls research
         "thor": "captain",
         "doom": "widow",       # cyber defense corroborates with intel
+        "bob": "doom",         # the orchestrator checks security before it recommends
     }
 
     # ── shared context blackboard ─────────────────────────────────
@@ -145,6 +146,7 @@ class Orchestrator:
         ("captain", "Review the day plan",         "Cross-checking agenda against readiness"),
         ("thor",    "Sample the news wire",        "Listening for announcements of note"),
         ("doom",    "Hunt across the perimeter",   "Correlating exposure, threat and global feeds"),
+        ("bob",     "Review the team and approvals", "Checking pending sign-offs and DOOM's verdicts"),
     ]
 
     # ── delegation + lifecycle ────────────────────────────────────

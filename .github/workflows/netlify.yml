@@ -1,0 +1,54 @@
+# Publishes the public website (docs/) to Netlify (avengers-bobbiey.netlify.app) on every push to
+# main that touches it — the same content GitHub Pages serves, so both sites stay identical.
+#
+# One-time setup by the site owner (a Netlify token can only be created by you):
+#   1. Netlify → User settings → Applications → Personal access tokens → New access token
+#   2. GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+#        name: NETLIFY_AUTH_TOKEN     value: <the token>
+# Until the secret exists this workflow skips cleanly (no failure, nothing deployed).
+name: Publish website (Netlify)
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", ".github/workflows/netlify.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: netlify
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: add66c72-7397-4cbc-8556-f95854d56ad5   # public site id (also in site/.netlify/state.json)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Token present?
+        id: tok
+        run: |
+          if [ -z "$NETLIFY_AUTH_TOKEN" ]; then
+            echo "NETLIFY_AUTH_TOKEN is not set — skipping the Netlify deploy (see the comment at the top of this file)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.tok.outputs.ok == 'true'
+        with:
+          node-version: "22"
+
+      - name: Guard website claims
+        if: steps.tok.outputs.ok == 'true'
+        run: python3 -m pip install --quiet httpx cryptography && python3 -m unittest tests.test_site -v
+
+      - name: Deploy docs/ to Netlify (production)
+        if: steps.tok.outputs.ok == 'true'
+        run: npx --yes netlify-cli@27.20.1 deploy --prod --dir=docs --site "$NETLIFY_SITE_ID" --message "github ${GITHUB_SHA::7}"
