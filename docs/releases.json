@@ -1,15 +1,15 @@
 {
   "kind": "bucs-release",
-  "version": "8.5.1",
+  "version": "8.6.0",
   "date": "2026-11-27",
-  "commit": "50c8402",
+  "commit": "65af20b",
   "notes": [
-    "Conversation ON/OFF is back; OFF ignores room talk unless you start with Hey Jarvis",
-    "Command bar fixed: growing text box, mic inside, agent picker on its own row",
-    "Header clock no longer shifts the header"
+    "Agents see your screen and drive the dashboard by voice: map modes, places, theme, camera",
+    "One shared memory of you for every agent; mute all agents; separate hands-free switch",
+    "Map: My Location in every view, TODAY / TOPO / DARK modes"
   ],
-  "url": "releases/bucs-8.5.1.zip",
-  "sha256": "77f7857d07aaf610e92d5fd2ac5051aaa4f537f0911fb00197dafbb2d8087053",
-  "size": 969038,
-  "sig": "6hmOZLUKKGg9jIm1i-7qr7Fj_QUed4xyFfecJoVx147lTHq_OawOL0wCsrAyuPxpgnPOMT89YnBdcEmemNhxBg"
+  "url": "releases/bucs-8.6.0.zip",
+  "sha256": "0d7fa149e91528c2b90ec27f9725ca91a0748cfa4b276e2e724147b9444be6ad",
+  "size": 982121,
+  "sig": "erQIb3x5w3WfgSluxTy5O_0B-j_6j60AFcCi0WZFvHpdYecUVvzclk1wvcNErWG5gpNgayj930Hd3gJ9EYz9AA"
 }
