@@ -1,13 +1,13 @@
 {
   "kind": "bucs-release",
-  "version": "8.3.1",
-  "date": "2026-11-25",
-  "commit": "38ca4ee",
+  "version": "8.4.0",
+  "date": "2026-11-27",
+  "commit": "e97b2b4",
   "notes": [
-    "v8.3.1: edit devices after adding them (name, room, connection; credentials kept unless re-entered); change the Cyber Analyst scan schedule or pause it; save Computer Use tasks as templates and re-use past tasks."
+    "DOOM cyber-defense agent, hands-free conversation (no wake word), satellite Global Activity Map with 3D terrain/city/night modes, camera fullscreen, Doomsday theme and easter eggs."
   ],
-  "url": "releases/bucs-8.3.1.zip",
-  "sha256": "3379b44588bbb7e2885d3edf1951dc44f44bdc6b71bed4be239d831d2d5a993b",
-  "size": 918030,
-  "sig": "lgho5Z3c_vipVGHaeGLesJJIwEnOGoUpMSJjLLSJy7usu_nbg504ZIUdnm6AyYvw_bOmT_NNw0uIusEDfQdIAg"
+  "url": "releases/bucs-8.4.0.zip",
+  "sha256": "4f8d76a29421c6b88bc0d0712a8fdd58bf7b100fe8360752e0de0bfdfec42f31",
+  "size": 938879,
+  "sig": "Frb-VH7hzfrbYDL-1xqWLKPN6_Pj1N6NMHTH5gTUa4aWiA2nr8cDmgL857nlU-lrK_jw4kWVhCvuNUzeUT1hBw"
 }
