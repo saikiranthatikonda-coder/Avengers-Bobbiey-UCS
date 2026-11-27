@@ -5,6 +5,36 @@ were reconstructed from git history. See `git log` for full detail.
 
 ## [Unreleased]
 
+## 2026-11-27 — v8.6.0 · Agents see and drive the dashboard, shared memory, voice modes, more map modes
+- **Agents see your screen.** The open dashboard reports each panel's title and visible text, plus the map view, mode and selection, the theme and any open dialog.
+  - Agents read this through a new "On screen now" section, so "what does the world clocks panel say?" is answered from what's displayed.
+  - Every panel title has a **◇ ASK** chip that asks an agent about that panel.
+  - The report is bounded and scrubbed, and goes only to this BUCS server.
+- **Agents drive the dashboard by voice or chat**, using the same functions as the buttons:
+  - "Switch the map to live satellite / today / topo / dark / 3D globe."
+  - "Show Tokyo on the map" (geocoding by Open-Meteo) and "show me my location."
+  - "Doom theme," "camera full screen" and "scroll down."
+- **One shared memory of the commander.** "Remember that I prefer short answers" is stored once and every agent sees it on every reply. "Forget …" removes it for all of them.
+- **Voice modes are now three separate switches** in a bar under the orb:
+  - **CONVERSATION:** ON means agents listen to the room. OFF means only "Hey Jarvis…" at the start of a sentence reaches them.
+  - **HANDS-FREE:** ON means no wake word is needed. OFF means you say an agent's name.
+  - **AGENT VOICES:** mute every agent; replies stay on screen.
+  - Voice commands: "mute all agents," "unmute agents," "hands-free on/off."
+- **fix:** the long voice status no longer spills across the orb. It lives in the new voice bar.
+- **Computer Use by voice** now understands natural phrasings ("on my computer, open Notepad and type…", "… on my laptop for me"). A spoken confirm, sensitive-step approvals and STOP still apply.
+- **Global Activity Map:**
+  - **📍 MY LOCATION** in every view: exact when the browser shares its position, otherwise the dashboard's city, labelled as such.
+  - New satellite modes:
+    - **TODAY:** NASA's newest daily pass, dated by GIBS, which fades to sharp archive imagery up close.
+    - **TOPO:** a topographic map.
+    - **DARK:** a dark tactical canvas.
+- **Website:**
+  - The "YOU" core is redrawn: a solid hexagon with a crisp label and the caption on its own pill, so nothing overlaps.
+  - The voice section now covers dictation, conversation and hands-free, screen awareness, dashboard control, shared memory and Computer Use by voice.
+  - The map section lists the new modes and the LIVE close-up.
+  - The launch section is removed, and the loader says nine agents.
+- **Tests:** `tests/test_v86.py` (15 tests).
+
 ## 2026-11-27 — v8.5.1 · Conversation ON/OFF, roomier command bar, steady clock, website polish
 - **Conversation ON / OFF is back in the header** (replaces the "HANDS-FREE" label):
   - **ON:** just talk, no wake word.

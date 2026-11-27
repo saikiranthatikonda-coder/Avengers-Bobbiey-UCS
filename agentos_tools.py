@@ -669,11 +669,11 @@ def builtin_tools(state: dict, memory=None, folders_fn=lambda: []) -> list[Tool]
         Tool("dashboard_read", "Read the LIVE state of a BUCS dashboard section (read-only): system, hardware, network, "
              "threats, insights, decisions, missions, productivity, agenda, weather, news, fleet, devices, disaster, "
              "globalmap, secagent (cyber analyst), computeruse, phone, evolution, aicore, selfheal, enterprise, licence, "
-             "brain, roadmap, openintel (air quality, launches, asteroids, ISS, FX, arXiv, HN, CO2, outbreaks, holidays) — or 'auto' to pick from the query. Answer from it and name the section.",
+             "brain, roadmap, screen (what the open dashboard shows right now), openintel (air quality, launches, asteroids, ISS, FX, arXiv, HN, CO2, outbreaks, holidays) — or 'auto' to pick from the query. Answer from it and name the section.",
              S({"section": {**st, "enum": ["auto", "system", "hardware", "network", "threats", "insights", "decisions",
                                             "missions", "productivity", "agenda", "weather", "news", "fleet", "devices",
                                             "disaster", "globalmap", "secagent", "computeruse", "phone", "evolution",
-                                            "aicore", "selfheal", "enterprise", "licence", "brain", "roadmap", "openintel"]},
+                                            "aicore", "selfheal", "enterprise", "licence", "brain", "roadmap", "openintel", "screen"]},
                 "query": {**st, "maxLength": 300}}, ["section"]), "read", dashboard_read),
         Tool("computer_use_task", "Launch a computer-use task on this PC (drives mouse/keyboard). Always needs approval.",
              S({"goal": {**st, "maxLength": 600}}, ["goal"]), "destructive", computer_use,

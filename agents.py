@@ -60,13 +60,20 @@ class Avenger:
 
     def _commander_context(self, prompt: str) -> str:
         """Relevant sections of the operator's private profile (commander_memory.py)."""
+        shared = ""
+        om = COMMANDER.get("operator")                 # operator_memory facts: shared by ALL agents
+        if om is not None:
+            try:
+                shared = om.shared_block()
+            except Exception:
+                shared = ""
         cm = COMMANDER.get("memory")
         if cm is None:
-            return ""
+            return shared
         try:
-            return cm.context_for(prompt)
+            return shared + cm.context_for(prompt)
         except Exception:
-            return ""
+            return shared
 
     def _live_telemetry(self) -> str:
         """Real host metrics for the LLM, so answers cite measured numbers

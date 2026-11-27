@@ -19,6 +19,7 @@ The file lives next to the app and is gitignored — it never leaves the machine
 
 import asyncio
 import json
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -169,6 +170,32 @@ class OperatorMemory:
         }] + self.data["facts"])[:100]
         self.save()
         await self._announce()
+
+    async def remove_facts(self, query: str) -> list[str]:
+        """Remove facts that contain every word of `query` (case-insensitive). Returns what was removed."""
+        words = [w for w in re.findall(r"\w+", (query or "").lower()) if len(w) > 2]
+        if not words:
+            return []
+        keep, gone = [], []
+        for f in self.data["facts"]:
+            (gone if all(w in f["text"].lower() for w in words) else keep).append(f)
+        if gone:
+            self.data["facts"] = keep
+            self.save()
+            await self._announce()
+        return [f["text"] for f in gone]
+
+    def shared_block(self, n: int = 12) -> str:
+        """Prompt prefix: what the WHOLE team knows about the commander (v8.6 shared memory).
+        Every agent receives the same block, so something told to one agent is known to all."""
+        prof = self.data.get("profile") or {}
+        facts = [f["text"] for f in (self.data.get("facts") or [])[:n]]
+        if not facts and not prof.get("name"):
+            return ""
+        head = f"The commander's name is {prof['name']}. " if prof.get("name") else ""
+        body = "; ".join(facts)
+        return ("[SHARED TEAM MEMORY ABOUT THE COMMANDER — every agent sees this same list; use it naturally, "
+                f"never recite it unprompted: {head}{body}]\n")
 
     # ── periodic synthesis: observations → stable facts ──────────
     async def synthesize(self) -> None:

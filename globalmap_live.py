@@ -97,10 +97,13 @@ def pick_sat(lon: float):
 
 
 def _iso(ts: str) -> datetime | None:
-    try:
-        return datetime.strptime(ts.replace(".000Z", "Z"), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-    except Exception:
-        return None
+    ts = (ts or "").replace(".000Z", "Z")
+    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d"):              # sub-daily frames · daily mosaics
+        try:
+            return datetime.strptime(ts, fmt).replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+    return None
 
 
 def latest_from_domain(xml: str) -> str | None:
@@ -269,6 +272,36 @@ class LiveMap:
                 return {**json.loads(hit[1]), "stale": True}
             return {"ok": False, "error": f"RainViewer: {e}"}
 
+    async def today(self) -> dict:
+        """Newest DAILY true-colour mosaic (one polar-orbit pass per day, ~375 m/px): NOAA-20 VIIRS, falling
+        back to MODIS Terra. The date comes from GIBS DescribeDomains — never assumed to be 'today'."""
+        for layer, tms, mz, name in (("VIIRS_NOAA20_CorrectedReflectance_TrueColor", "GoogleMapsCompatible_Level9", 9,
+                                      "NOAA-20 VIIRS true colour"),
+                                     ("MODIS_Terra_CorrectedReflectance_TrueColor", "GoogleMapsCompatible_Level9", 9,
+                                      "Terra MODIS true colour")):
+            ck = f"today:{layer}"
+            hit = self._times.get(ck)
+            t = hit[1] if hit and self.now() - hit[0] < TIME_TTL * 4 else None
+            if not t:
+                try:
+                    end = datetime.fromtimestamp(self.now(), timezone.utc)
+                    start = end - timedelta(days=6)
+                    code, body = await self.get(f"{GIBS}1.0.0/{layer}/default/{tms}/all/"
+                                                f"{start.strftime('%Y-%m-%d')}--{end.strftime('%Y-%m-%d')}.xml")
+                    t = latest_from_domain(body.decode("utf-8", "replace")) if code == 200 else None
+                except Exception:
+                    t = None
+                if t:
+                    t = t[:10]
+                    self._times[ck] = (self.now(), t, "")
+            if t:
+                return {"ok": True, "name": name, "date": t, "maxzoom": mz,
+                        "tiles": [f"{GIBS}{layer}/default/{t}/{tms}/{{z}}/{{y}}/{{x}}.jpg"],
+                        "km_per_px": 0.375 if "VIIRS" in layer else 0.25,
+                        "attribution": f"Daily imagery: {name} · NASA GIBS / Worldview",
+                        "note": "one satellite pass per day: areas pass at different local times; gaps and clouds are real"}
+        return {"ok": False, "error": "NASA GIBS: no recent daily mosaic listed"}
+
     async def live(self, lat: float, lon: float) -> dict:
         sat, rad = await asyncio.gather(self.satellite(lat, lon), self.radar())
         return {"ok": True, "generated": round(self.now()), "lat": lat, "lon": lon,
@@ -353,6 +386,10 @@ def build_router(ctx) -> APIRouter:
         if not c:
             return JSONResponse({"ok": False, "error": "bad coordinates"}, status_code=400)
         return await _engine(ctx).live(*c)
+
+    @r.get("/api/globalmap/today")
+    async def today():
+        return await _engine(ctx).today()
 
     @r.get("/api/globalmap/webcams")
     async def webcams(lat: float, lon: float, radius: int = 30):

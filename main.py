@@ -257,6 +257,7 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(3600)
     license_task = asyncio.create_task(license_loop())
     agents_mod.COMMANDER["memory"] = state["commander"]
+    agents_mod.COMMANDER["operator"] = state.get("memory")      # shared commander facts (v8.6)
     if voice is not None:
         voice.engine = engine
 
@@ -904,6 +905,7 @@ class ConversationReq(BaseModel):
     agent: str | None = None              # hands-free: who you're talking to
     asleep: bool | None = None            # hands-free: pause / resume listening
     idle_sleep_min: int | None = None     # hands-free: auto-pause after this many quiet minutes (0 = never)
+    handsfree: bool | None = None         # hands-free on/off (separate from conversation on/off, v8.6)
 
 
 @app.get("/api/conversation")
@@ -911,9 +913,10 @@ async def conversation_get():
     t = state["tts"]
     v = state.get("voice")
     hf = v.handsfree_state() if v is not None and hasattr(v, "handsfree_state") else {
-        "agent": "jarvis", "asleep": False, "idle_sleep_min": 10, "idle_range_min": [0, 240],
+        "agent": "jarvis", "asleep": False, "idle_sleep_min": 10, "enabled": True, "idle_range_min": [0, 240],
         "agents": sorted((state.get("team") or {}).keys())}
-    return {"on": t.conversation_mode, "mode": "hands-free", "agent": hf["agent"], "handsfree": hf,
+    mode = ("hands-free" if hf.get("enabled", True) else "wake-word") if t.conversation_mode else "strict-wake-phrase"
+    return {"on": t.conversation_mode, "mode": mode, "agent": hf["agent"], "handsfree": hf,
             "voice_running": v is not None, "ambient_dropped": t.ambient_dropped}
 
 
@@ -928,16 +931,18 @@ async def conversation_set(req: ConversationReq):
         await _audit("voice.conversation_mode", "on" if req.on else "off")
         await state["hub"].broadcast({"type": "conversation", "on": req.on})
     v = state.get("voice")
-    if any(x is not None for x in (req.agent, req.asleep, req.idle_sleep_min)):
+    if any(x is not None for x in (req.agent, req.asleep, req.idle_sleep_min, req.handsfree)):
         if v is None or not hasattr(v, "set_handsfree"):
             return {"ok": False, "error": "voice is not running (start BUCS with voice enabled)"}
         try:
-            r = await v.set_handsfree(agent=req.agent, asleep=req.asleep, idle_sleep_min=req.idle_sleep_min)
+            r = await v.set_handsfree(agent=req.agent, asleep=req.asleep, idle_sleep_min=req.idle_sleep_min,
+                                      enabled=req.handsfree)
         except (TypeError, ValueError):
             return {"ok": False, "error": "idle_sleep_min must be a whole number"}
         if not r.get("ok"):
             return r
-        await _audit("voice.handsfree", f"agent={r['agent']} asleep={r['asleep']} idle={r['idle_sleep_min']}m")
+        await _audit("voice.handsfree", f"enabled={r.get('enabled')} agent={r['agent']} asleep={r['asleep']} "
+                                        f"idle={r['idle_sleep_min']}m")
     return {"ok": True, **(await conversation_get())}
 
 

@@ -110,7 +110,8 @@ def _load_handsfree() -> dict:
     try:
         d = json.loads(HF_FILE.read_text(encoding="utf-8"))
         return {"agent": str(d.get("agent") or "jarvis")[:24],
-                "idle_sleep_min": max(0, min(HF_IDLE_MAX, int(d.get("idle_sleep_min", HF_IDLE_DEFAULT))))}
+                "idle_sleep_min": max(0, min(HF_IDLE_MAX, int(d.get("idle_sleep_min", HF_IDLE_DEFAULT)))),
+                "enabled": bool(d.get("enabled", True))}
     except Exception:
         return {}
 
@@ -225,6 +226,11 @@ class VoiceLoop:
         self.hf_agent: str = hf.get("agent") or "jarvis"
         self.hf_idle_min: int = hf.get("idle_sleep_min", HF_IDLE_DEFAULT)
         self.hf_asleep = False
+        # HANDS-FREE (v8.6) is its own switch, separate from Conversation ON/OFF:
+        #   conversation ON  + hands-free ON  → just talk, no wake word
+        #   conversation ON  + hands-free OFF → wake words (a name anywhere) + a short follow-up window
+        #   conversation OFF (either)         → strict: only "Hey <agent> …" at the start of a sentence
+        self.hf_enabled: bool = hf.get("enabled", True)
         self.hf_last = time.time()
         self.noise_rms = 60.0                    # adaptive room noise floor
         self.clap = ClapDetector() if os.getenv("JARVIS_CLAP", "1") != "0" else None
@@ -514,7 +520,7 @@ class VoiceLoop:
                 else:
                     await self.engine.summon(ckey, source="voice")
                 return
-            if self._conversation():
+            if self._conversation() and self.hf_enabled:
                 await self._handsfree(text, entry)
                 return
 
@@ -522,7 +528,11 @@ class VoiceLoop:
         # ("Hey Jarvis …", "OK Doom …") reaches an agent. No name-anywhere matching and no
         # follow-up window, so talking with colleagues in the room is never taken as a task.
         agent_key, command = self._match_agent(text)
-        if time.time() < getattr(self, "summon_until", 0.0) and not (agent_key and self._wake_lead(text)):
+        relaxed = self._conversation()            # conversation ON, hands-free OFF: classic wake-word mode
+        if relaxed:
+            if not agent_key and self.follow_agent and time.time() < self.follow_until:
+                agent_key, command = self.follow_agent, text.strip()     # follow-up after a reply / summon
+        elif time.time() < getattr(self, "summon_until", 0.0) and not (agent_key and self._wake_lead(text)):
             agent_key, command = self.follow_agent, text.strip()     # the operator just summoned this agent
             self.summon_until = 0.0                                     # one sentence only
         elif agent_key and not self._wake_lead(text):
@@ -744,7 +754,7 @@ class VoiceLoop:
             self.hf_agent = key
         agent = self.hf_agent if self.hf_agent in self.team else "jarvis"
         if switched or was_asleep:
-            _save_handsfree({"agent": self.hf_agent, "idle_sleep_min": self.hf_idle_min})
+            _save_handsfree({"agent": self.hf_agent, "idle_sleep_min": self.hf_idle_min, "enabled": self.hf_enabled})
             await self._hf_broadcast(f"talking to {agent.upper()}")
         req = (rest if key else text.strip())
         if woke and not key:
@@ -771,10 +781,14 @@ class VoiceLoop:
 
     def handsfree_state(self) -> dict:
         return {"agent": self.hf_agent, "asleep": self.hf_asleep, "idle_sleep_min": self.hf_idle_min,
-                "idle_range_min": [0, HF_IDLE_MAX], "agents": sorted(self.team.keys())}
+                "enabled": self.hf_enabled, "idle_range_min": [0, HF_IDLE_MAX], "agents": sorted(self.team.keys())}
 
     async def set_handsfree(self, agent: str | None = None, asleep: bool | None = None,
-                            idle_sleep_min: int | None = None) -> dict:
+                            idle_sleep_min: int | None = None, enabled: bool | None = None) -> dict:
+        if enabled is not None:
+            self.hf_enabled = bool(enabled)
+            self.hf_asleep = False
+            self.hf_last = time.time()
         if agent is not None:
             a = str(agent).lower().strip()
             if a not in self.team:
@@ -786,7 +800,7 @@ class VoiceLoop:
             self.hf_asleep = bool(asleep)
             if not self.hf_asleep:
                 self.hf_last = time.time()
-        _save_handsfree({"agent": self.hf_agent, "idle_sleep_min": self.hf_idle_min})
+        _save_handsfree({"agent": self.hf_agent, "idle_sleep_min": self.hf_idle_min, "enabled": self.hf_enabled})
         await self._hf_broadcast("updated")
         return {"ok": True, **self.handsfree_state()}
 

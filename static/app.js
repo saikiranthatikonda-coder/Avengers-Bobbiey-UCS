@@ -509,10 +509,8 @@ var ConversationMode = {
     b.classList.toggle("hf-paused", !!(on && this.hf.asleep));
     b.title = on ? `Conversation ON: just talk — no wake word. Talking to ${who}. Say another agent's name first ("Doom, …", "Cap, …") to switch; say "go quiet" to pause${this.hf.idle_sleep_min ? `; pauses itself after ${this.hf.idle_sleep_min} min of silence` : ""}. Click to turn conversation OFF (e.g. when talking with colleagues).`
                  : "Conversation OFF: agents ignore talk in the room. Only a sentence that STARTS with a wake phrase (Hey Jarvis…, Hey Doom…) reaches them. Click to turn conversation ON.";
-    const sub = document.getElementById("voice-sublabel");
-    if (sub) sub.innerHTML = !on ? `conversation off · agents ignore room talk · start with “Hey Jarvis…” to ask` : this.hf.asleep
-      ? `conversation paused · say an agent's name · <button type="button" class="hf-link" data-hf-wake>RESUME</button>`
-      : `conversation on · talking to <b>${escapeHTML(who)}</b> · name another agent to switch`;
+    // the long status lives in the voice bar under the orb now (agentlink.js) — never inside the orb
+    try { window.AgentLink && window.AgentLink.paintVoice(); } catch (e) {}
   },
   async load() { try { const d = await (await fetch("/api/conversation")).json(); this.set(d.on, d.handsfree); } catch (e) {} },
   async patch(body) {
@@ -3680,6 +3678,9 @@ function handle(msg) {
       break;
     case "dash-cmd":
       execDashCmd(msg.target);
+      break;
+    case "ui":                              // agents drive the dashboard (agentlink.js, v8.6)
+      try { window.AgentLink && window.AgentLink.run(msg); } catch (e) {}
       break;
     case "vision-request":                 // voice "what do you see" → capture a frame
       try { VisionAI.analyze(true); } catch (e) {}

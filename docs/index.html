@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="assets/bucs-immersive.css">
 <style>
 /* ═══════════════════════════════════════════════════════
-   AVENGERS × BOBBIEY · Launch site
+   AVENGERS × BOBBIEY · Website
    ═══════════════════════════════════════════════════════ */
 :root{
   --bg:#04060c; --bg2:#070b14;
@@ -743,21 +743,6 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
   </div>
 </section>
 
-<!-- ═══ LAUNCH · DOOMSDAY PROTOCOL ═══ -->
-<section class="launch" id="launch">
-  <div class="wrap">
-    <div class="launch-card reveal">
-      <div>
-        <div class="launch-k">— DOOMSDAY PROTOCOL</div>
-        <h2>BUCS × <span>the Doomsday era</span></h2>
-        <p>Launching on Product Hunt in the <b>Avengers: Doomsday</b> era. New in this release: DOOM, a sovereign cyber-defense agent, hands-free conversation with the whole team, and the satellite edition of the Global Activity Map.</p>
-        <div class="ph-line2">Keep scrolling: the background flies from orbit down to street level.</div>
-      </div>
-      
-    </div>
-  </div>
-</section>
-
 <!-- ═══ VISION ═══ -->
 <section class="vision" id="vision">
   <div class="wrap">
@@ -890,19 +875,23 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
 <section class="handsfree" id="handsfree">
   <div class="wrap">
     <div class="reveal">
-      <div class="eyebrow">— HANDS-FREE CONVERSATION</div>
-      <h2 class="sect">Just keep talking. <span class="grad">The team keeps up.</span></h2>
-      <p class="sect-sub">Talk to JARVIS, the Avenger agents and DOOM back to back, with no wake word before every sentence. Name an agent once and keep talking to it.</p>
+      <div class="eyebrow">— VOICE · CONVERSATION · CONTROL</div>
+      <h2 class="sect">Talk to the team. <span class="grad">They run the dashboard with you.</span></h2>
+      <p class="sect-sub">Speak back to back with no wake word, or dictate into the command bar. The agents see every panel on your screen, share one memory of you, and can drive the dashboard and your computer when you ask.</p>
     </div>
     <div class="hf-grid">
       <ul class="hf-rules reveal">
-        <li><span class="hf-ic">∞</span><div><b>NO WAKE WORD EACH TIME</b>Once the conversation is open, just speak. Follow-ups go straight through.</div></li>
-        <li><span class="hf-ic">→</span><div><b>NAME AN AGENT ONCE</b>Say “Doom, …” or “Cap, …” and that agent stays on the line until you name another.</div></li>
-        <li><span class="hf-ic">■</span><div><b>SAY “STOP”</b>Interrupts the reply mid-sentence, so you can redirect.</div></li>
-        <li><span class="hf-ic">z</span><div><b>“SLEEP” OR “GO QUIET”</b>Pauses listening. Say “Jarvis” to wake the team again.</div></li>
+        <li><span class="hf-ic">∞</span><div><b>HANDS-FREE</b>Just speak; follow-ups go straight through. Say “Doom, …” or “Cap, …” once and that agent stays on the line.</div></li>
+        <li><span class="hf-ic">⏻</span><div><b>CONVERSATION ON / OFF</b>Talking with colleagues? Turn conversation off and the agents ignore the room until a sentence starts with “Hey Jarvis”.</div></li>
+        <li><span class="hf-ic">🎙</span><div><b>VOICE DICTATION</b>A mic inside the command bar turns speech into editable text: private Whisper on your PC, about 99 languages, optional translation to English.</div></li>
+        <li><span class="hf-ic">◉</span><div><b>THEY SEE YOUR SCREEN</b>Ask about anything a panel shows (“what does world clocks say?”) or tap ◇ ASK on any panel. Answers come from what is on screen, never invented.</div></li>
+        <li><span class="hf-ic">⌘</span><div><b>THEY DRIVE THE DASHBOARD</b>“Switch the map to live satellite.” “Show Tokyo on the map.” “Doom theme.” “Camera full screen.” Done by voice, like your own clicks.</div></li>
+        <li><span class="hf-ic">≡</span><div><b>ONE SHARED MEMORY</b>“Remember that I prefer short answers.” Tell one agent and every agent knows. “Forget …” removes it everywhere.</div></li>
+        <li><span class="hf-ic">⌨</span><div><b>COMPUTER USE BY VOICE</b>“On my computer, open Excel and start a budget sheet.” The agent operates the PC; sensitive steps still wait for your approval, and STOP always works.</div></li>
+        <li><span class="hf-ic">🔇</span><div><b>MUTE THE TEAM</b>One switch, or “mute all agents”: replies stay on screen in silence.</div></li>
       </ul>
       <div class="hf-panel reveal">
-        <div class="hf-head"><span class="cu-live"></span>CONVERSATION MODE<span class="tag">ILLUSTRATIVE</span></div>
+        <div class="hf-head"><span class="cu-live"></span>HANDS-FREE · DASHBOARD CONTROL<span class="tag">ILLUSTRATIVE</span></div>
         <div class="hf-body">
           <div class="hf-l"><span class="who">you</span><span class="t">Jarvis, what's on today?</span></div>
           <div class="hf-l ai" style="--c:#00d9ff"><span class="who">JARVIS</span><span class="t">Two meetings and a dentist call at four.</span></div>
@@ -912,8 +901,11 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
           <div class="hf-l ai" style="--c:#3b82f6"><span class="who">CAPTAIN</span><span class="t">Reminder set for Thursday.</span></div>
           <div class="hf-l"><span class="who">you</span><span class="t">Doom, anything exposed on my network?</span></div>
           <div class="hf-l ai" style="--c:#2bd46f"><span class="who">DOOM</span><span class="t">One service is reachable from every device on the LAN. I have a proposal to restrict it—</span></div>
-          <div class="hf-l"><span class="who">you</span><span class="t">Stop. Show me on screen.</span></div>
-          <div class="hf-l sys" style="--c:#8b7cf8"><span class="who">you</span><span class="t">“go quiet” → listening paused · say “Jarvis” to wake</span></div>
+          <div class="hf-l"><span class="who">you</span><span class="t">Stop. Switch the map to live satellite and show me Mumbai.</span></div>
+          <div class="hf-l ai" style="--c:#00d9ff"><span class="who">JARVIS</span><span class="t">Done. The Meteosat frame is 25 minutes old; heavy cloud over the coast.</span></div>
+          <div class="hf-l"><span class="who">you</span><span class="t">Remember that I'm in Hyderabad on weekdays.</span></div>
+          <div class="hf-l ai" style="--c:#00d9ff"><span class="who">JARVIS</span><span class="t">Noted, and shared with the whole team.</span></div>
+          <div class="hf-l sys" style="--c:#8b7cf8"><span class="who">you</span><span class="t">conversation OFF → colleagues talking · agents wait for “Hey Jarvis”</span></div>
         </div>
         <div class="hf-note">Illustrative conversation: replies depend on your calendar, devices and the model you choose.</div>
       </div>
@@ -1231,17 +1223,20 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
     <div class="reveal">
       <div class="eyebrow">— GLOBAL ACTIVITY MAP · SATELLITE EDITION</div>
       <h2 class="sect">From orbit to your street.<br><span class="grad">One scroll.</span></h2>
-      <p class="sect-sub">The flight behind this page uses the same satellite imagery as the dashboard's new Global Activity Map. In BUCS you switch between five views and stack live layers on top.</p>
+      <p class="sect-sub">The flight behind this page uses the same satellite imagery as the dashboard's Global Activity Map. In BUCS you get nine satellite modes, a ◉ LIVE close-up and 📍 My Location in every view, with live layers stacked on top.</p>
     </div>
     <div class="orb-grid">
       <div class="orb-panel reveal">
-        <div class="gr-t">FIVE VIEWS</div>
+        <div class="gr-t">NINE MODES · ONE LIVE CLOSE-UP</div>
         <div class="orb-modes">
           <div class="orb-mode"><b>SATELLITE</b><span>Esri World Imagery, from the whole planet down to street level.</span></div>
           <div class="orb-mode"><b>HYBRID</b><span>The same imagery with borders, places and labels.</span></div>
           <div class="orb-mode"><b>3D TERRAIN</b><span>Real elevation from the open AWS Terrarium model.</span></div>
           <div class="orb-mode"><b>3D CITY</b><span>Extruded buildings standing on the imagery.</span></div>
           <div class="orb-mode night"><b>NIGHT</b><span>A dark basemap that lets the live layers glow.</span></div>
+          <div class="orb-mode"><b>TODAY</b><span>NASA's newest daily satellite pass, dated, fading to sharp archive imagery up close.</span></div>
+          <div class="orb-mode"><b>TOPO · DARK</b><span>Topographic relief, or a dark tactical canvas.</span></div>
+          <div class="orb-mode live"><b>◉ LIVE</b><span>The newest weather-satellite frame for that region (every 10–15 min), live rain radar and public webcams near you, each with its capture time.</span></div>
         </div>
         <div class="gr-t" style="margin-top:1.2rem">LIVE LAYERS</div>
         <div class="orb-layers"><span>Earthquakes · USGS</span><span>GDACS alerts</span><span>Natural events</span><span>Volcanoes</span><span>Weather alerts</span><span>Internet outages</span><span>Flights · OpenSky</span><span>Satellites · CelesTrak</span><span>Space weather · NOAA</span><span>Day / night</span></div>
@@ -1484,7 +1479,7 @@ h1 .grad,h2 .grad{background:linear-gradient(110deg,#c084fc,#818cf8 30%,#00d9ff 
 (() => {
   const boot = document.getElementById("boot"), log = document.getElementById("boot-log");
   const lines = [
-    "initializing kernel…", "mounting telemetry bus…", "spinning up 8 AI agents…",
+    "initializing kernel…", "mounting telemetry bus…", "spinning up 9 AI agents…",
     "calibrating voice engine…", "linking threat intelligence…", "<b>all systems nominal</b>",
   ];
   let i = 0;

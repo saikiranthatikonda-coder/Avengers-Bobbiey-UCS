@@ -112,6 +112,7 @@
         <span class="gm-chip gm-utc" id="gm-utc">--:--:-- UTC</span>
       </div>
       <div class="gm-actions">
+        <button type="button" class="gm-btn" id="gm-me" title="Fly to your exact location in any view (asks the browser for location; falls back to this dashboard's city from its IP)">📍 MY LOCATION</button>
         <button type="button" class="gm-btn" id="gm-near" title="Focus on your location (${NEAR_KM} km ring)">◎ NEAR ME</button>
         <button type="button" class="gm-btn" id="gm-places" title="Saved places: jump to, save, rename or delete a map view">★ PLACES</button>
         <button type="button" class="gm-btn" id="gm-reset" title="Reset view">⟲</button>
@@ -854,6 +855,56 @@
     S.near = !S.near; $("#gm-near").classList.toggle("on", S.near);
     if (S.near) { zoomTo(S.op.lat, S.op.lon, 5); select({ kind: "op" }); } else invalidate();
   });
+  // 📍 MY LOCATION (v8.6) — every view. Exact when the browser shares its position (the
+  // dashboard runs on localhost, a secure context); otherwise the dashboard's IP-based city,
+  // labelled as such. The position stays in this page.
+  async function myLocation() {
+    const btn = $("#gm-me"); if (btn) btn.classList.add("busy");
+    msg.textContent = "locating…";
+    let pos = null;
+    if (navigator.geolocation && window.isSecureContext) {
+      pos = await new Promise(res => navigator.geolocation.getCurrentPosition(p => res(p), () => res(null),
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }));
+    }
+    let lat, lon, how, acc = null;
+    if (pos) { lat = pos.coords.latitude; lon = pos.coords.longitude; acc = Math.round(pos.coords.accuracy); how = `browser location · ±${acc.toLocaleString()} m`; }
+    else {
+      await locate();
+      if (!S.op) { msg.textContent = "location unavailable (permission declined and no IP location)"; if (btn) btn.classList.remove("busy"); return null; }
+      lat = S.op.lat; lon = S.op.lon; how = `${S.op.how} · city-level (allow location for exact)`;
+    }
+    S.op = { lat, lon, how, acc, p: proj ? proj([lon, lat]) : null };
+    invalidate(true); syncViews();
+    const precise = acc != null && acc < 3000;
+    if (S.mode === "sat") { satFly(lat, lon, precise ? 16.5 : 11); if (M && M._gmReady) setData("gm-dash", [pt(lon, lat)]); }
+    else if (S.mode === "2d") zoomTo(lat, lon, precise ? 48 : 12);
+    else if (G) G.pointOfView({ lat, lng: lon, altitude: precise ? 0.06 : 0.45 }, reduced ? 0 : 1600);
+    select({ kind: "op" });
+    msg.textContent = "📍 " + how;
+    setTimeout(() => { if (msg.textContent.startsWith("📍")) msg.textContent = ""; }, 7000);
+    if (btn) btn.classList.remove("busy");
+    return { lat, lon, how, acc };
+  }
+  $("#gm-me").addEventListener("click", myLocation);
+  // fly to a named place (voice: "show Tokyo on the map") — Open-Meteo geocoding, keyless
+  async function flyToPlace(q) {
+    q = String(q || "").trim(); if (!q) return null;
+    msg.textContent = `finding ${q}…`;
+    try {
+      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&name=${encodeURIComponent(q)}`,
+        { referrerPolicy: "no-referrer", credentials: "omit" });
+      const d = await r.json(), g = d && d.results && d.results[0];
+      if (!g) { msg.textContent = `couldn't find “${q}”`; return null; }
+      const big = /^PCL|^ADM1/.test(g.feature_code || "");
+      const k = big ? 4 : (g.population || 0) > 1e6 ? 14 : 22;
+      if (S.mode === "sat") satFly(g.latitude, g.longitude, big ? 5 : (g.population || 0) > 1e6 ? 10.5 : 12.5);
+      else if (S.mode === "2d") zoomTo(g.latitude, g.longitude, k);
+      else if (G) G.pointOfView({ lat: g.latitude, lng: g.longitude, altitude: big ? 1.0 : 0.25 }, reduced ? 0 : 1600);
+      msg.textContent = `◎ ${[g.name, g.admin1, g.country].filter(Boolean).join(", ")} · geocoding: Open-Meteo`;
+      setTimeout(() => { if (msg.textContent.startsWith("◎")) msg.textContent = ""; }, 7000);
+      return { name: g.name, country: g.country, lat: g.latitude, lon: g.longitude };
+    } catch (e) { msg.textContent = `place search failed (${e.message})`; return null; }
+  }
   $("#gm-reset").addEventListener("click", () => {
     S.near = false; $("#gm-near").classList.remove("on"); closeCard();
     if (S.mode === "2d" && zoomer) d3.select(cv).transition().duration(reduced ? 0 : 700).call(zoomer.transform, d3.zoomIdentity);
@@ -1142,7 +1193,7 @@
   // The live layers drawn on top are the same items/flights/satellites the other views use.
   function isGlobe() { return S.mode === "3d" || S.mode === "orbit"; }
   function syncViews() { if (G) syncGlobe(); if (M && S.mode === "sat") syncSat(); }
-  const SAT_MODES = [["sat", "SATELLITE"], ["hybrid", "HYBRID"], ["terrain", "3D TERRAIN"], ["city", "3D CITY"], ["night", "NIGHT"], ["live", "◉ LIVE"]];
+  const SAT_MODES = [["sat", "SATELLITE"], ["hybrid", "HYBRID"], ["terrain", "3D TERRAIN"], ["city", "3D CITY"], ["night", "NIGHT"], ["today", "TODAY"], ["topo", "TOPO"], ["dark", "DARK"], ["live", "◉ LIVE"]];
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const ATTR = {
     esri: "Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
@@ -1157,6 +1208,9 @@
     terrain: "SATELLITE IMAGERY on AWS Terrarium elevation ×1.3 · NOT A LIVE FEED",
     city: "SATELLITE IMAGERY + OpenStreetMap building heights (zoom ≥ 13) · NOT A LIVE FEED",
     night: "NIGHT LIGHTS · NASA Black Marble 2016 annual composite (VIIRS) · NOT A LIVE FEED · max detail zoom 8",
+    today: "TODAY · NASA daily true-colour pass (NOAA-20 VIIRS, ~375 m/px) · fades to archive imagery when you zoom in close",
+    topo: "TOPOGRAPHIC · Esri World Topographic Map · relief, roads, places",
+    dark: "DARK TACTICAL · Esri dark canvas · live layers stand out",
     live: "◉ LIVE · newest geostationary-satellite frame + radar + nearby webcams, each with its capture time · ground imagery is archival",
   };
   const SAT_3D = { terrain: 1, city: 1 };
@@ -1196,6 +1250,9 @@
         esriPlaces: ras([ESRI + "Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"], ATTR.esriRef, 19),
         esriRoads: ras([ESRI + "Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"], ATTR.esriRef, 19),
         night: ras(["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png"], ATTR.night, 8),
+        topo: ras([ESRI + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}"], "Topographic map © Esri and contributors", 19),
+        dark: ras([ESRI + "Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"], "Dark canvas © Esri, HERE, Garmin, OpenStreetMap contributors", 16),
+        darkRef: ras([ESRI + "Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"], "© Esri", 16),
         dem: { type: "raster-dem", tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
           encoding: "terrarium", tileSize: 256, maxzoom: 15, attribution: ATTR.terrain },
       },
@@ -1204,6 +1261,9 @@
         { id: "b-bg", type: "background", paint: { "background-color": "#020a12" } },
         { id: "b-esri", type: "raster", source: "esri", layout: { visibility: "none" } },
         { id: "b-night", type: "raster", source: "night", layout: { visibility: "none" } },
+        { id: "b-topo", type: "raster", source: "topo", layout: { visibility: "none" } },
+        { id: "b-dark", type: "raster", source: "dark", layout: { visibility: "none" } },
+        { id: "b-darkref", type: "raster", source: "darkRef", layout: { visibility: "none" } },
         { id: "b-roads", type: "raster", source: "esriRoads", layout: { visibility: "none" }, paint: { "raster-opacity": 0.75 } },
         { id: "b-places", type: "raster", source: "esriPlaces", layout: { visibility: "none" } },
       ] };
@@ -1393,8 +1453,10 @@
     if (!M || !M._gmReady) return;
     const vis = (id, on) => { if (M.getLayer(id)) M.setLayoutProperty(id, "visibility", on ? "visible" : "none"); };
     if (m === "city") ensureBuildings();
-    vis("b-esri", m !== "night"); vis("b-night", m === "night");
-    vis("b-places", m === "hybrid" || m === "live"); vis("b-roads", m === "hybrid"); vis("b-bld", m === "city");
+    vis("b-esri", !["night", "topo", "dark"].includes(m)); vis("b-night", m === "night");
+    vis("b-topo", m === "topo"); vis("b-dark", m === "dark"); vis("b-darkref", m === "dark");
+    vis("b-places", m === "hybrid" || m === "live" || m === "today"); vis("b-roads", m === "hybrid"); vis("b-bld", m === "city");
+    if (m === "today") ensureToday(); else vis("b-today", false);
     setLive(m === "live");
     try { M.setTerrain(m === "terrain" ? { source: "dem", exaggeration: 1.3 } : null); } catch (e) { /* terrain unsupported */ }
     // MapLibre 4 places the camera relative to sea level: zoomed in close over high ground (Andes,
@@ -1628,6 +1690,20 @@
     if (M) M.easeTo({ center: [w.lon, w.lat], zoom: Math.max(M.getZoom(), 12), duration: reduced ? 0 : 900 });
   }
   function closePip() { pipEl.hidden = true; pipEl.innerHTML = ""; }
+  // TODAY (v8.6): NASA's newest daily mosaic — a real pass from today/yesterday, dated by GIBS
+  let todayInfo = null;
+  async function ensureToday() {
+    if (!M || !M._gmReady) return;
+    try {
+      if (!todayInfo || Date.now() - todayInfo.at > 30 * 60000) todayInfo = { ...(await getJSON("/api/globalmap/today")), at: Date.now() };
+      if (satMode !== "today") return;
+      if (!todayInfo.ok) { satInfo(`TODAY unavailable · ${esc(todayInfo.error || "?")}`); return; }
+      liveLayer("b-today", "today", todayInfo.tiles, todayInfo.maxzoom, esc(todayInfo.attribution),
+        { "raster-opacity": ["interpolate", ["linear"], ["zoom"], 8.5, 1, 11, 0], "raster-fade-duration": 0 }, "b-roads");
+      M.setLayoutProperty("b-today", "visibility", "visible");
+      satInfo(`<b>TODAY</b> · ${esc(todayInfo.name)} · pass dated <b>${esc(todayInfo.date)}</b> (UTC) · ~${todayInfo.km_per_px * 1000} m per pixel · ${esc(todayInfo.note)}`, "today");
+    } catch (e) { satInfo(`TODAY unavailable · ${esc(e.message)}`); }
+  }
   function setLive(on) {
     const was = liveOn;
     liveOn = !!on;
@@ -1730,7 +1806,30 @@
       for (let i = 0; i < n; i++) { draw(performance.now() + i * 33); tot += S.frameMs; mx = Math.max(mx, S.frameMs); }
       return { rebuild: first, steadyAvgMs: +(tot / n).toFixed(2), steadyMaxMs: +mx.toFixed(2), flights: S.fl ? S.fl.n : 0, sats: S.satPos.length, items: items().length, W, H, k: T.k };
     },
-    _satMap() { return M; },  // diagnostics: the MapLibre instance (null until SATELLITE has loaded)
+    _satMap() { return M; },
+    // v8.6 · remote control (agents, voice) — same functions as the buttons
+    async setView(view, sat) {
+      if (!["2d", "3d", "orbit", "sat"].includes(view)) return false;
+      await setMode(view);
+      if (view === "sat" && sat && SAT_MODES.some(x => x[0] === sat)) {
+        const wait = Date.now();
+        while ((!M || !M._gmReady) && Date.now() - wait < 20000) await new Promise(r => setTimeout(r, 250));
+        applySatMode(sat);
+      }
+      return true;
+    },
+    myLocation() { return myLocation(); },
+    flyToPlace(q) { return flyToPlace(q); },
+    screen() {                                           // what the operator is looking at (for the agents)
+      const d = S.selected ? describe(S.selected) : null;
+      const st = this.state;
+      return { view: S.mode, sat_mode: S.mode === "sat" ? satMode : null, sat: st.sat,
+        layers_on: Object.keys(S.on).filter(k => S.on[k]),
+        selected: d ? { title: String(d.title || "").slice(0, 120), detail: String(d.sub || "").slice(0, 160) } : null,
+        live_satellite: liveOn && live && live.satellite && live.satellite.ok ? { name: live.satellite.name, frame_utc: live.satellite.time } : null,
+        today_pass: satMode === "today" && todayInfo && todayInfo.ok ? todayInfo.date : null,
+        my_location: S.op ? { how: S.op.how } : null };
+    },  // diagnostics: the MapLibre instance (null until SATELLITE has loaded)
     get state() { return { mode: S.mode, layers: Object.assign({}, S.on), frameMs: S.frameMs, landMs: S.landMs, ovlMs: S.ovlMs, replay: S.replay,
       sat: M && M._gmReady ? { mode: satMode, lat: +M.getCenter().lat.toFixed(4), lon: +M.getCenter().lng.toFixed(4), zoom: +M.getZoom().toFixed(2),
         pitch: Math.round(M.getPitch()), bearing: Math.round(M.getBearing()), orbit: orbitOn } : null }; },

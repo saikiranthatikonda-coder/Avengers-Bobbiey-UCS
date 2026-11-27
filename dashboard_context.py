@@ -34,10 +34,17 @@ import sys
 import time
 from datetime import datetime
 
+try:
+    from fastapi import Request          # module level: FastAPI resolves the annotation here
+except Exception:                         # pragma: no cover — tests import this module without FastAPI
+    Request = None
+
 SECTION_BUDGET_S = 1.2           # one section may take at most this long
 TOTAL_BUDGET_S = 2.5             # the whole block never delays a reply longer than this
 SECTION_CHARS = 700              # per-section cap inside the prompt
-BLOCK_CHARS = 2600               # whole block cap (small local models have small contexts)
+BLOCK_CHARS = 3200               # whole block cap (small local models have small contexts)
+SECTION_CAP = {"screen": 1500}   # sections that legitimately need more room (v8.6)
+SCREEN_TTL = 300                 # a screen report older than this is "no dashboard open"
 MAX_SECTIONS = 4                 # sections per question
 CACHE_S = 5.0
 
@@ -699,7 +706,73 @@ async def r_openintel(state, q, cmd):
 
 
 # section key → (title, reader, routing regex)
+# ── v8.6 · the screen itself: what the operator's open dashboard shows right now ─────────
+_STOP = {"the", "and", "for", "what", "whats", "show", "shows", "showing", "this", "that", "with", "are", "is", "how",
+         "about", "panel", "section", "card", "widget", "tell", "me", "my", "on", "in", "of", "any", "there", "now",
+         "can", "you", "does", "say", "says", "see", "screen", "current", "currently", "please", "give", "from"}
+
+
+def _words(t: str) -> set:
+    return {w for w in re.findall(r"[a-z0-9]{3,}", (t or "").lower()) if w not in _STOP}
+
+
+def set_screen(state: dict, report: dict) -> dict:
+    """Store the browser's report of what is on screen (sanitized, bounded)."""
+    panels = []
+    for p in (report.get("panels") or [])[:40]:
+        if not isinstance(p, dict):
+            continue
+        title = scrub_text(str(p.get("title") or ""))[:80].strip()
+        if not title:
+            continue
+        panels.append({"title": title, "visible": bool(p.get("visible")),
+                       "text": scrub_text(re.sub(r"\s+", " ", str(p.get("text") or "")))[:900]})
+    clean = {"ts": time.time(), "panels": panels,
+             "map": sanitize(report.get("map")) if isinstance(report.get("map"), dict) else None,
+             "theme": str(report.get("theme") or "")[:20] or None,
+             "camfs": bool(report.get("camfs")),
+             "modal": scrub_text(str(report.get("modal") or ""))[:120] or None,
+             "scroll": str(report.get("scroll") or "")[:20] or None}
+    state["dashboard_screen"] = clean
+    return clean
+
+
+def screen_match(state: dict, question: str) -> list[dict]:
+    """Panels whose title the question names (e.g. "what does the world clocks panel say")."""
+    sc = (state or {}).get("dashboard_screen")
+    if not sc or time.time() - sc.get("ts", 0) > SCREEN_TTL:
+        return []
+    qw = _words(question)
+    if not qw:
+        return []
+    hits = []
+    for p in sc.get("panels") or []:
+        n = len(qw & _words(p["title"]))
+        if n:
+            hits.append((-n, p))
+    hits.sort(key=lambda x: x[0])
+    return [p for _, p in hits]
+
+
+async def r_screen(state, q, cmd):
+    sc = state.get("dashboard_screen")
+    if not sc or time.time() - sc.get("ts", 0) > SCREEN_TTL:
+        raise Unavailable("no dashboard tab has reported its screen in the last 5 minutes")
+    asked = screen_match(state, q)[:2]
+    vis = [p for p in sc.get("panels") or [] if p.get("visible")]
+    pick = asked or vis[:3]
+    return {"source": "the open dashboard tab (what the operator sees)", "as_of": _ts(sc["ts"]),
+            "visible_panels": [p["title"] for p in vis][:12],
+            "map": sc.get("map"), "theme": sc.get("theme"), "camera_fullscreen": sc.get("camfs") or None,
+            "open_dialog": sc.get("modal"),
+            "panel_text": {p["title"]: p["text"][:560 if len(pick) > 1 else 1000] for p in pick}}
+
+
 SECTIONS: dict[str, tuple[str, object, str]] = {
+    "screen": ("On screen now", r_screen,
+               r"\b(on (my|the) screen|i'?m (looking at|seeing|viewing|watching)|this (panel|section|view|map|chart|card|graph)|"
+               r"visible|shown|showing|displayed|in front of me|selected|highlighted|which (panel|view|mode)|"
+               r"(map|satellite) (view|mode)|what view|panels?|widgets?)\b"),
     "system": ("System metrics & processes", r_system,
                r"\b(cpu|processor|ram|memory usage|disk|storage|telemetry|vitals|system (load|status|health)|"
                r"process(es)?|what'?s running|using (the most|most)|hogging|uptime|battery|my (pc|computer|laptop|machine))\b"),
@@ -857,7 +930,8 @@ def render_block(entries: list[dict], limit: int = BLOCK_CHARS) -> str:
     per = max(250, min(SECTION_CHARS, (limit - len(head)) // max(1, len(entries))))
     for e in entries:
         if e.get("ok"):
-            line = f"• {e['title']} (source: {e.get('source')}; as of {e.get('as_of')}): {_compact(e, per)}"
+            cap = max(per, SECTION_CAP.get(e.get("section"), 0)) if len(entries) <= 2 else per
+            line = f"• {e['title']} (source: {e.get('source')}; as of {e.get('as_of')}): {_compact(e, cap)}"
         else:
             line = f"• {e['title']}: UNAVAILABLE — {e.get('unavailable')}"
         if used + len(line) + 1 > limit:
@@ -877,6 +951,10 @@ async def context_for(state: dict | None, question: str, commander: bool | None 
         if not state:
             return ""
         secs = route(question)
+        # v8.6: a question that names a panel on the open dashboard ("what does world clocks say")
+        # is answered from what that panel actually shows, even when no reader keyword matched
+        if "screen" not in secs and screen_match(state, question) and (_ASKY.search(question or "") or "?" in (question or "")):
+            secs = (secs + ["screen"])[:MAX_SECTIONS]
         if not secs and (meta or {}).get("agent") == "doom":
             secs = ["secagent", "threats", "disaster"]          # DOOM's standing brief
         if allow is not None:
@@ -940,6 +1018,22 @@ def build_router(ctx):
     @r.get("/api/dashboard/context/read/{section}")
     async def dc_read(section: str, q: str = ""):
         return await read_section(st, section, q[:500], ctx["commander"]())
+
+    @r.post("/api/dashboard/screen")
+    async def dc_screen(request: Request):
+        """The open dashboard tab reports what it shows (panels + their visible text, map view, theme).
+        Read-only for the agents; nothing here performs an action. Bounded and scrubbed."""
+        try:
+            raw = await request.body()
+            if len(raw) > 120_000:
+                return {"ok": False, "error": "screen report too large"}
+            body = json.loads(raw or b"{}")
+        except Exception:
+            return {"ok": False, "error": "bad JSON"}
+        if not isinstance(body, dict):
+            return {"ok": False, "error": "bad report"}
+        sc = set_screen(st, body)
+        return {"ok": True, "panels": len(sc["panels"])}
 
     @r.get("/api/dashboard/context/last")
     async def dc_last():

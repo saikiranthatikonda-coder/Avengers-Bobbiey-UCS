@@ -71,6 +71,12 @@ _CU_START = (
                r"(?:computer|pc|laptop|desktop|screen|mouse(?: and keyboard)?)\s+(?:to|and)\s+(.{3,600}?)[.!]?$", re.I),
     re.compile(r"^(?:(?:hey |ok )?jarvis[, ]+)?(?:start (?:a )?)?computer[- ]use(?: task)?[:,]?\s+(?:to\s+)?(.{3,600}?)[.!]?$",
                re.I),
+    # v8.6 · more natural voice phrasings: "on my computer, open notepad and type hello",
+    # "open excel and make a budget sheet on my laptop for me"
+    re.compile(r"^(?:(?:hey |ok )?\w+[, ]+)?(?:can you |please |could you )?on (?:my|the|this) (?:computer|pc|laptop|desktop)[, ]+"
+               r"(.{3,600}?)[.!?]?$", re.I),
+    re.compile(r"^(?:(?:hey |ok )?\w+[, ]+)?(?:can you |please |could you )?(.{3,600}?) on (?:my|the|this) "
+               r"(?:computer|pc|laptop|desktop|screen) for me[.!?]?$", re.I),
 )
 _CU_STATUS = re.compile(r"\b(status of (?:the |my )?computer[- ]use|computer[- ]use (?:task )?(?:status|progress)|"
                         r"what(?:'s| is) (?:the )?computer[- ]use (?:task )?doing|how(?:'s| is) (?:the )?computer[- ]use"
@@ -158,6 +164,134 @@ async def i_computeruse(ctx, text, low):
     return _r(f"I'll use the computer to {goal[:200].rstrip('.')}. Sensitive steps will still pause for your "
               "approval and STOP always works. Say confirm to start, or no to cancel.",
               action={"name": "computeruse.request", "target": goal[:80]})
+
+
+# ── v8.6 · voice settings by voice: mute all agents, hands-free on/off ──────────
+_MUTE_AG = re.compile(r"\b(mute|silence|quiet) (all )?(the |my )?(agents?|avengers|team|agent voices?|voices of the agents)\b")
+_UNMUTE_AG = re.compile(r"\b(unmute|un-mute) (all )?(the |my )?(agents?|avengers|team|agent voices?)\b|"
+                        r"\bagent voices? (back )?on\b|\bturn (the )?agent voices? (back )?on\b")
+
+
+async def i_agentvoice(ctx, text, low):
+    tts = ctx.get("tts")
+    if tts is None or not hasattr(tts, "set_muted"):
+        return None
+    if _UNMUTE_AG.search(low):
+        tts.set_muted(False)
+        if ctx.get("hub"):
+            await ctx["hub"].broadcast({"type": "audio", **tts.audio_state()})
+        return _r("Agent voices are back on, sir.", action={"name": "voice.agents_muted", "target": "off"})
+    if _MUTE_AG.search(low):
+        if ctx.get("hub"):
+            await ctx["hub"].broadcast({"type": "log", "level": "info", "msg": "agent voices muted — replies stay on screen"})
+        tts.set_muted(True)
+        if ctx.get("hub"):
+            await ctx["hub"].broadcast({"type": "audio", **tts.audio_state()})
+        return _r("Agent voices muted. Replies will stay on screen.", action={"name": "voice.agents_muted", "target": "on"})
+    return None
+
+
+_HF = re.compile(r"\b(?:(turn|switch|set) )?hands[- ]?free(?: mode)? (on|off|enable|disable)\b|"
+                 r"\b(turn|switch) (on|off) (?:the )?hands[- ]?free\b|\b(enable|disable) (?:the )?hands[- ]?free\b")
+
+
+async def i_handsfree(ctx, text, low):
+    m = _HF.search(low)
+    if not m:
+        return None
+    word = next(g for g in (m.group(2), m.group(4), m.group(5)) if g)
+    on = word in ("on", "enable")
+    v = ctx.get("voice")
+    if v is None or not hasattr(v, "set_handsfree"):
+        return _r("Voice isn't running on this install, so there is no hands-free to switch, sir.")
+    if (ctx.get("rbac") or {}).get("role", "commander") != "commander":
+        return _r("Changing voice settings needs the commander role, sir.")
+    await v.set_handsfree(enabled=on)
+    return _r("Hands-free on. Just talk, no wake word needed." if on else
+              "Hands-free off. Start with an agent's name when you need one.",
+              action={"name": "voice.handsfree", "target": "on" if on else "off"})
+
+
+# ── v8.6 · shared commander memory: "remember that …" / "forget …" ──────────────
+_REMEMBER = re.compile(r"^(?:(?:hey |ok )?(?:jarvis|stark|tony|cap|captain|steve|widow|natasha|hawkeye|clint|hulk|banner|thor|vision|doom|team|guys)[, ]+)?(?:please )?(?:remember|note|keep in mind|don't forget)"
+                       r"(?: that|:)?\s+(?!to\b)(.{4,400}?)[.!]?$", re.I)
+_FORGET = re.compile(r"^(?:(?:hey |ok )?(?:jarvis|stark|tony|cap|captain|steve|widow|natasha|hawkeye|clint|hulk|banner|thor|vision|doom|team|guys)[, ]+)?(?:please )?forget (?:that |the fact that |about )?(.{3,200}?)[.!]?$", re.I)
+
+
+async def i_remember(ctx, text, low):
+    mem = ctx.get("memory")
+    if mem is None or not hasattr(mem, "add_fact"):
+        return None
+    clean = re.sub(r"\s+", " ", text).strip()
+    m = _FORGET.match(clean)
+    if m and hasattr(mem, "remove_facts"):
+        gone = await mem.remove_facts(m.group(1))
+        return _r(f"Done. The whole team has forgotten: {'; '.join(gone)[:240]}." if gone
+                  else "Nothing in the team's memory matched that, sir.",
+                  action={"name": "memory.forget", "target": m.group(1)[:60], "ok": bool(gone)})
+    m = _REMEMBER.match(clean)
+    if not m:
+        return None
+    fact = m.group(1).strip()
+    fact = fact[:1].upper() + fact[1:]
+    if re.search(r"\b(i|i'm|i've|i'd|my|me|mine)\b", fact, re.I):      # first person → keep the commander's words
+        fact = f'Commander said: "{fact}"'
+    cmd = _current_cmd()
+    await mem.add_fact(fact, source=getattr(cmd, "source", None) or "chat")
+    return _r(f"Noted, and shared with the whole team: {fact}.", action={"name": "memory.remember", "target": fact[:60]})
+
+
+# ── v8.6 · drive the dashboard by voice / chat (the UI acts like the operator's own clicks) ──
+_MAP_MODES = {"2d": "2d", "tactical": "2d", "2d tactical": "2d", "flat": "2d", "3d": "3d", "globe": "3d", "3d globe": "3d", "orbital": "orbit", "orbit": "orbit",
+              "satellite": "sat:sat", "hybrid": "sat:hybrid", "terrain": "sat:terrain", "3d terrain": "sat:terrain",
+              "city": "sat:city", "3d city": "sat:city", "night": "sat:night", "night lights": "sat:night",
+              "live": "sat:live", "live satellite": "sat:live", "today": "sat:today", "today's imagery": "sat:today",
+              "topo": "sat:topo", "topographic": "sat:topo", "dark": "sat:dark", "dark tactical": "sat:dark"}
+_THEMES = {"jarvis": "jarvis", "cyan": "jarvis", "stark": "stark", "red": "stark", "iron man": "stark",
+           "stealth": "stealth", "mono": "stealth", "doom": "doom", "doomsday": "doom", "green": "doom"}
+_MAPWORD = r"(?:the )?(?:global |activity |world )*map"
+
+
+async def i_ui(ctx, text, low):
+    # map view / mode: "switch the map to satellite", "show the live satellite view", "map to 3d globe"
+    m = re.search(rf"\b(?:switch|change|set|turn|put)\s+{_MAPWORD}\s+(?:view\s+)?(?:to|into|on)\s+(?:the\s+)?([a-z0-9' ]+?)(?:\s+(?:view|mode))?$", low) \
+        or re.search(rf"\b(?:show|open|give me)\s+(?:me\s+)?(?:the\s+)?([a-z0-9' ]+?)\s+(?:view|mode)\s+(?:of|on)\s+{_MAPWORD}$", low) \
+        or re.search(rf"\b(?:show|open)\s+(?:me\s+)?(?:the\s+)?([a-z0-9' ]+?)\s+{_MAPWORD}$", low)
+    if m and m.group(1).strip() in _MAP_MODES:
+        mode = _MAP_MODES[m.group(1).strip()]
+        return _r(f"Switching the map to {m.group(1).strip()} view.", ui=[{"type": "ui", "action": "map-mode", "mode": mode}],
+                  action={"name": "dashboard.map_mode", "target": mode})
+    # my location on the map
+    if re.search(rf"\b(?:show|take me to|go to|fly to|zoom (?:in )?to|find)\s+(?:me\s+)?my (?:location|position|place|house|home)\b", low) \
+            or re.search(r"\bwhere am i\b.*\bmap\b|\bmap\b.*\bwhere am i\b", low):
+        return _r("Flying the map to your location.", ui=[{"type": "ui", "action": "map-locate"}],
+                  action={"name": "dashboard.map_locate"})
+    # fly to a place: "show Tokyo on the map", "fly to Paris", "zoom the map to Hyderabad"
+    m = re.search(rf"\b(?:show|find|locate)\s+(?:me\s+)?(.{{2,60}}?)\s+on\s+{_MAPWORD}$", low) \
+        or re.search(rf"\b(?:fly|zoom|take the map|move the map|pan)\s+(?:in\s+)?(?:the map\s+)?to\s+(.{{2,60}}?)(?:\s+on\s+{_MAPWORD})?$", low)
+    if m:
+        place = m.group(1).strip(" .?!")
+        if place and place not in ("my location", "me"):
+            return _r(f"Flying the map to {place}.", ui=[{"type": "ui", "action": "map-fly", "q": place}],
+                      action={"name": "dashboard.map_fly", "target": place[:60]})
+    # theme
+    m = re.search(r"\b(?:switch|change|set|use)\s+(?:the\s+)?(?:dashboard\s+)?(?:theme|colou?rs?|skin)\s+to\s+([a-z ]+?)(?:\s+theme)?$", low) \
+        or re.search(r"\b(?:switch to|use|activate)\s+(?:the\s+)?([a-z ]+?)\s+theme$", low)
+    if m and m.group(1).strip() in _THEMES:
+        th = _THEMES[m.group(1).strip()]
+        return _r(f"{th.title()} theme on.", ui=[{"type": "ui", "action": "theme", "theme": th}],
+                  action={"name": "dashboard.theme", "target": th})
+    # camera full screen
+    if re.search(r"\b(?:camera|webcam|video feed)\b.*\bfull ?screen\b|\bfull ?screen\b.*\b(?:camera|webcam)\b", low):
+        off = bool(re.search(r"\b(exit|leave|close|stop)\b", low))
+        return _r("Leaving full screen." if off else "Camera full screen.",
+                  ui=[{"type": "ui", "action": "camfs", "on": not off}], action={"name": "dashboard.camfs"})
+    # scrolling
+    m = re.search(r"^(?:please )?(?:scroll|page) (up|down)\b|^(?:go|scroll|jump) (?:back )?to (?:the )?(top|bottom)\b", low)
+    if m:
+        where = m.group(1) or m.group(2)
+        return _r("Scrolling.", ui=[{"type": "ui", "action": "scroll", "to": where}], action={"name": "dashboard.scroll", "target": where})
+    return None
 
 
 _BRAIN_ALIASES = {"claude": "claude", "claude cli": "claude", "claude code": "claude", "cloud": "claude",
@@ -504,7 +638,8 @@ async def i_dashboard(ctx, text, low):
 
 # order matters: actions that start with "open" (apps, sites) before dashboard
 # sections, specific questions before broad ones
-HANDLERS = [i_conversation, i_computeruse, i_brain, i_dev, i_time, i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
+HANDLERS = [i_conversation, i_agentvoice, i_handsfree, i_remember, i_computeruse, i_brain, i_dev, i_time, i_ui,
+            i_windows, i_browser, i_network, i_system, i_weather, i_calendar,
             i_inbox, i_threats, i_news, i_memory, i_vision, i_missions, i_dashboard]
 
 

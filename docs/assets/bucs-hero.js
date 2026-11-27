@@ -102,15 +102,27 @@
     const cg = g.createRadialGradient(cx, cy, 0, cx, cy, R * 0.34);
     cg.addColorStop(0, `rgba(126,234,255,${0.28 + breathe * 0.12})`); cg.addColorStop(1, "rgba(126,234,255,0)");
     g.fillStyle = cg; g.beginPath(); g.arc(cx, cy, R * 0.34, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = "rgba(126,234,255,0.8)"; g.lineWidth = 1.4;
-    g.beginPath();
-    for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 + Math.PI / 6, r = R * 0.16; g[i ? "lineTo" : "moveTo"](cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
-    g.closePath(); g.stroke();
-    g.fillStyle = "#e8fbff"; g.textAlign = "center"; g.textBaseline = "middle";
-    g.font = `700 ${Math.max(10, R * 0.075)}px Orbitron, "Share Tech Mono", monospace`;
-    g.fillText("YOU", cx, cy - R * 0.02);
-    g.fillStyle = "rgba(160,200,220,0.75)"; g.font = `${Math.max(8, R * 0.045)}px "Share Tech Mono", monospace`;
-    g.fillText("you approve", cx, cy + R * 0.075);
+    // a solid core: pulses and spokes pass UNDER it, so nothing ever crosses the label
+    const hr = Math.max(26, R * 0.2);
+    const hex = (r) => { g.beginPath(); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 + Math.PI / 6; g[i ? "lineTo" : "moveTo"](cx + Math.cos(a) * r, cy + Math.sin(a) * r); } g.closePath(); };
+    hex(hr); g.fillStyle = "rgba(3,14,24,0.96)"; g.fill();
+    g.strokeStyle = "rgba(126,234,255,0.9)"; g.lineWidth = 1.6; g.stroke();
+    hex(hr * 0.84); g.strokeStyle = `rgba(126,234,255,${0.18 + breathe * 0.2})`; g.lineWidth = 1; g.stroke();
+    g.textAlign = "center"; g.textBaseline = "middle";
+    let fs = Math.max(11, hr * 0.5);
+    g.font = `800 ${fs}px Orbitron, "Share Tech Mono", monospace`;
+    while (g.measureText("YOU").width > hr * 1.15 && fs > 9) { fs -= 1; g.font = `800 ${fs}px Orbitron, "Share Tech Mono", monospace`; }
+    g.shadowColor = "rgba(126,234,255,0.8)"; g.shadowBlur = 10;
+    g.fillStyle = "#f2fdff"; g.fillText("YOU", cx, cy + 1);
+    g.shadowBlur = 0;
+    // caption sits clear of the hexagon, on its own dark pill
+    const cap = "COMMANDER · YOU APPROVE", cfs = Math.max(8, R * 0.042);
+    g.font = `600 ${cfs}px "Share Tech Mono", monospace`;
+    const cw = g.measureText(cap).width + 14, chh = cfs + 8, cyy = cy + hr + chh * 0.5 + 8;
+    g.fillStyle = "rgba(3,14,24,0.9)"; g.strokeStyle = "rgba(126,234,255,0.35)"; g.lineWidth = 1;
+    g.beginPath(); if (g.roundRect) g.roundRect(cx - cw / 2, cyy - chh / 2, cw, chh, chh / 2); else g.rect(cx - cw / 2, cyy - chh / 2, cw, chh);
+    g.fill(); g.stroke();
+    g.fillStyle = "rgba(190,230,245,0.9)"; g.fillText(cap, cx, cyy + 0.5);
     // agents
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i], hot = hover === i, r = Math.max(5, R * (hot ? 0.07 : 0.055)) + n.glow * 3;
