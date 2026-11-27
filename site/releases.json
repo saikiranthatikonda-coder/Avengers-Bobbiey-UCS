@@ -1,15 +1,14 @@
 {
   "kind": "bucs-release",
-  "version": "8.8.0",
+  "version": "8.9.0",
   "date": "2026-11-27",
-  "commit": "5a8e388",
+  "commit": "0c2cd10",
   "notes": [
-    "Immersive India and Telangana satellite maps with nine modes (incl. LIVE), live weather, air quality, alerts and aircraft at every state and district",
-    "Disaster Response real-time tracking map: storm tracks, heatmap, time windows, follow-new, tour",
-    "BOB joins as the 10th agent; DOOM gate on self-written code; Privacy Shield; MapLibre 6.4.1 and python-dotenv 1.2.2 security upgrades"
+    "DOOM SENTINEL: live intrusion watch with burst alerts, code-integrity tamper detection, prompt-injection shield for every agent, DEFCON threat level",
+    "DOOM answers what's our DEFCON, any intrusions, is the code intact"
   ],
-  "url": "releases/bucs-8.8.0.zip",
-  "sha256": "a254a87b28a12556d4810cf5871f984280da63d107d81c8039ffc6901f173ee8",
-  "size": 1070537,
-  "sig": "BIp13LzKC_6BuxvUMwtVS8lQDQUkRu7zEoxmKk2vIb9u0ByPjle94LKitemcZNHyF6i4z4EofHAYCXCZrkBoCA"
+  "url": "releases/bucs-8.9.0.zip",
+  "sha256": "2dbe9df080a9e976cde19309dc5547e2d6f3777562b2c0c50d96394636f626ac",
+  "size": 1083500,
+  "sig": "TRE692kNqCcF9i731HGD_hYJvMWquivogsx5140ZxcAlplTPTrYWK2ajLeKhjawhf_tVNMThunFub3ogqSHEDg"
 }
